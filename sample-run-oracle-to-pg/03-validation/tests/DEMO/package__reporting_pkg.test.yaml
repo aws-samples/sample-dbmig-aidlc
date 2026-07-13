@@ -1,0 +1,18 @@
+object: REPORTING_PKG
+schema: DEMO
+type: function
+notes: >
+  get_top_books is an Oracle PIPELINED table function -> PostgreSQL RETURNS TABLE. Compared
+  by row count via COUNT(*) over the table function (Oracle TABLE(...) vs PG set-returning call).
+  ORDERS is empty so both return 0 rows. get_customer_stats is an OUT-parameter procedure (not asserted here).
+cases:
+  - id: c1
+    description: number of top-book rows (limit 5) -> 0 (no sales)
+    source_sql: "SELECT COUNT(*) FROM TABLE(demo.reporting_pkg.get_top_books(5))"
+    target_sql: "SELECT COUNT(*) FROM demo.reporting_pkg_get_top_books(5)"
+    compare: scalar
+  - id: c2
+    description: number of top-book rows (limit 10) -> 0
+    source_sql: "SELECT COUNT(*) FROM TABLE(demo.reporting_pkg.get_top_books(10))"
+    target_sql: "SELECT COUNT(*) FROM demo.reporting_pkg_get_top_books(10)"
+    compare: scalar

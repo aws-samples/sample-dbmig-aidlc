@@ -1,0 +1,46 @@
+-- engines/oracle-to-postgresql/checks/reconcile.sql.tmpl
+-- Equivalence checks used by the validation phase. These are TEMPLATES — the
+-- validation skill substitutes {schema}, {table}, {columns}, {key} per object.
+-- Run the ORACLE block against the source and the POSTGRES block against the
+-- target (via the dbmig drivers — oracledb / psycopg), then diff the results.
+
+-- ============================================================
+-- 1. ROW COUNT  (must match exactly)
+-- ============================================================
+-- ORACLE:
+SELECT COUNT(*) FROM {schema}.{table};
+-- POSTGRES:
+SELECT COUNT(*) FROM {schema}.{table};
+
+-- ============================================================
+-- 2. COLUMN CHECKSUM  (order-independent aggregate hash per column)
+--    Detects value-level drift after data load / conversion.
+-- ============================================================
+-- ORACLE (uses STANDARD_HASH; falls back to SUM/COUNT for numerics):
+SELECT '{column}' AS col,
+       COUNT({column}) AS non_nulls,
+       NVL(SUM(ORA_HASH(TO_CHAR({column}))),0) AS hash_sum
+FROM   {schema}.{table};
+-- POSTGRES (md5 -> numeric, summed; cast all columns to text first):
+SELECT '{column}' AS col,
+       COUNT({column}) AS non_nulls,
+       COALESCE(SUM(('x'||substr(md5({column}::text),1,15))::bit(60)::bigint),0) AS hash_sum
+FROM   {schema}.{table};
+
+-- ============================================================
+-- 3. AGGREGATE PARITY for numeric columns (tolerance-aware)
+-- ============================================================
+-- ORACLE:
+SELECT MIN({column}), MAX({column}), AVG({column}), SUM({column})
+FROM   {schema}.{table};
+-- POSTGRES:
+SELECT MIN({column}), MAX({column}), AVG({column}), SUM({column})
+FROM   {schema}.{table};
+
+-- ============================================================
+-- 4. KEYED ROW SAMPLE  (spot-check N rows by primary key, compare side by side)
+-- ============================================================
+-- ORACLE:
+SELECT {columns} FROM {schema}.{table} ORDER BY {key} FETCH FIRST {n} ROWS ONLY;
+-- POSTGRES:
+SELECT {columns} FROM {schema}.{table} ORDER BY {key} LIMIT {n};

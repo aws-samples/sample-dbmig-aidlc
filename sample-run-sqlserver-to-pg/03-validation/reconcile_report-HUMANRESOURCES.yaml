@@ -1,0 +1,27 @@
+schema: HUMANRESOURCES
+mode: silent
+results:
+- table: Department
+  source_rows: 16
+  target_rows: 16
+  status: match
+- table: Employee
+  source_rows: 290
+  target_rows: 290
+  status: match
+- table: EmployeeDepartmentHistory
+  source_rows: 296
+  target_rows: 296
+  status: match
+- table: EmployeePayHistory
+  source_rows: 316
+  target_rows: 316
+  status: match
+- table: JobCandidate
+  source_rows: 13
+  target_rows: 13
+  status: match
+- table: Shift
+  source_rows: 3
+  target_rows: 3
+  status: match

@@ -1,0 +1,15 @@
+object: CLEAR_SHOPPING_CART
+schema: DEMO
+type: procedure
+notes: >
+  Removes non-wishlist cart items for a customer. SHOPPING_CART_ITEMS is empty, so the delta is
+  zero on both engines. Verifies the DELETE predicate (is_wishlist_item = 0) runs identically.
+cases:
+  - id: c1
+    description: clear cart for customer 2 (net effect on their cart rows)
+    call_source: "BEGIN demo.clear_shopping_cart(2); END;"
+    call_target: "CALL demo.clear_shopping_cart(2)"
+    verify:
+      - name: cart_rows
+        source_sql: "SELECT COUNT(*) FROM demo.shopping_cart_items WHERE customer_id = 2"
+        target_sql: "SELECT COUNT(*) FROM demo.shopping_cart_items WHERE customer_id = 2"

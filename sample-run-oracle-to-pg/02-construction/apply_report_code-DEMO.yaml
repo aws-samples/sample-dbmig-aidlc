@@ -1,0 +1,5 @@
+results:
+- label: SET_BOOK_FEATURED
+  status: applied
+  error: null
+  pass: 1

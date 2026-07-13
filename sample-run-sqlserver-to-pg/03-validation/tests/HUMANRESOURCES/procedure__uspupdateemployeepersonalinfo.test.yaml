@@ -1,0 +1,15 @@
+object: uspUpdateEmployeePersonalInfo
+schema: HumanResources
+type: procedure
+notes: >
+  Updates an employee's personal info (no explicit COMMIT in source -> rolled back by the harness;
+  non-destructive and repeatable).
+cases:
+  - id: c1
+    description: update employee 1 national id; the NationalIDNumber transition must match
+    call_source: "EXEC HumanResources.uspUpdateEmployeePersonalInfo @BusinessEntityID=1, @NationalIDNumber=N'999999999', @BirthDate='1980-01-01', @MaritalStatus=N'S', @Gender=N'M'"
+    call_target: "CALL humanresources.uspupdateemployeepersonalinfo(1, '999999999', TIMESTAMP '1980-01-01', 'S', 'M')"
+    verify:
+      - name: employee1_nationalid
+        source_sql: "SELECT NationalIDNumber FROM HumanResources.Employee WHERE BusinessEntityID = 1"
+        target_sql: "SELECT nationalidnumber FROM humanresources.employee WHERE businessentityid = 1"

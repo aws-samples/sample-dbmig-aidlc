@@ -1,0 +1,10 @@
+object: vJobCandidate
+schema: HumanResources
+type: function
+notes: XML resume shredding (.value() default namespace -> xpath()). Compare row count.
+cases:
+  - id: c1
+    description: row count
+    source_sql: "SELECT COUNT(*) FROM HumanResources.vJobCandidate"
+    target_sql: "SELECT COUNT(*) FROM humanresources.vjobcandidate"
+    compare: scalar

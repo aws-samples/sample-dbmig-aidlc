@@ -1,0 +1,9 @@
+results:
+- label: vAdditionalContactInfo
+  status: applied
+  error: null
+  pass: 1
+- label: vStateProvinceCountryRegion
+  status: applied
+  error: null
+  pass: 1

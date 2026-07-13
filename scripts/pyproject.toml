@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dbmig-aidlc"
+version = "0.2.0"
+description = "AI-DLC database migration toolkit — Oracle/SQL Server to PostgreSQL/MySQL (LLM-driven conversion by Kiro)"
+readme = "../README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+# Minimum versions raised to the tested set; each floor is above any known
+# security-vulnerable release. pymysql must stay >=1.1.1 (1.1.0 → CVE-2024-36039).
+dependencies = [
+    "pyyaml>=6.0.3",
+    "oracledb>=3.4.2",
+    "psycopg[binary]>=3.3.4",
+    "pymysql>=1.1.2",
+    "python-tds>=1.17.1",
+    "certifi>=2024.7.4",
+    "pyopenssl>=26.0.0",  # <26.0.0 → CVE-2026-27448 (auth bypass) + CVE-2026-27459 (DTLS overflow)
+    "cryptography>=46.0.0",  # required by pyOpenSSL 26.x (and oracledb TLS backend)
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7.0"]
+
+[project.scripts]
+dbmig = "dbmig.cli:main"
+
+# The package lives in this directory (scripts/), so install from here:
+#   pip install -e scripts/
+[tool.setuptools]
+packages = [
+    "dbmig",
+    "dbmig.engines",
+    "dbmig.commands",
+    "dbmig.conversion",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

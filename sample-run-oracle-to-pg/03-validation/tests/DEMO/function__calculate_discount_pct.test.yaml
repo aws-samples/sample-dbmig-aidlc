@@ -1,0 +1,25 @@
+object: CALCULATE_DISCOUNT_PCT
+schema: DEMO
+type: function
+notes: Pure arithmetic (no data dependency); covers the zero-price guard and rounding.
+cases:
+  - id: c1
+    description: typical discount 100 -> 80
+    source_sql: "SELECT demo.calculate_discount_pct(100, 80) FROM dual"
+    target_sql: "SELECT demo.calculate_discount_pct(100, 80)"
+    compare: scalar
+  - id: c2
+    description: zero original price guard (no division by zero)
+    source_sql: "SELECT demo.calculate_discount_pct(0, 0) FROM dual"
+    target_sql: "SELECT demo.calculate_discount_pct(0, 0)"
+    compare: scalar
+  - id: c3
+    description: no discount
+    source_sql: "SELECT demo.calculate_discount_pct(50, 50) FROM dual"
+    target_sql: "SELECT demo.calculate_discount_pct(50, 50)"
+    compare: scalar
+  - id: c4
+    description: rounding to 2 decimals
+    source_sql: "SELECT demo.calculate_discount_pct(29.99, 19.99) FROM dual"
+    target_sql: "SELECT demo.calculate_discount_pct(29.99, 19.99)"
+    compare: scalar

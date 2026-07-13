@@ -1,0 +1,17 @@
+object: GET_CUSTOMER_LIFETIME_VALUE
+schema: DEMO
+type: function
+notes: >
+  Sums non-cancelled order totals. The source has no ORDERS rows, so both engines
+  return 0 for every customer — a valid equivalence result (COALESCE/NVL of empty SUM).
+cases:
+  - id: c1
+    description: customer 2 lifetime value (no orders -> 0)
+    source_sql: "SELECT demo.get_customer_lifetime_value(2) FROM dual"
+    target_sql: "SELECT demo.get_customer_lifetime_value(2)"
+    compare: scalar
+  - id: c2
+    description: missing customer -> 0
+    source_sql: "SELECT demo.get_customer_lifetime_value(9999) FROM dual"
+    target_sql: "SELECT demo.get_customer_lifetime_value(9999)"
+    compare: scalar

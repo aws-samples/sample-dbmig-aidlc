@@ -1,0 +1,17 @@
+object: GENERATE_SALES_REPORT
+schema: DEMO
+type: procedure
+notes: >
+  Read-only reporting procedure with OUT params (Oracle OUT -> PG OUT). It changes no data, so
+  the net effect is zero; this case confirms it executes identically on both engines over the
+  same date range. Oracle is called via an anonymous block with declared OUT variables; PG via
+  CALL with NULL placeholders for the OUT parameters.
+cases:
+  - id: c1
+    description: run report over a wide date range (no data change)
+    call_source: "DECLARE v_o NUMBER; v_r NUMBER; v_a NUMBER; BEGIN demo.generate_sales_report(TO_DATE('2020-01-01','YYYY-MM-DD'), TO_DATE('2030-01-01','YYYY-MM-DD'), v_o, v_r, v_a); END;"
+    call_target: "CALL demo.generate_sales_report(TIMESTAMP '2020-01-01', TIMESTAMP '2030-01-01', NULL, NULL, NULL)"
+    verify:
+      - name: orders_count
+        source_sql: "SELECT COUNT(*) FROM demo.orders"
+        target_sql: "SELECT COUNT(*) FROM demo.orders"

@@ -1,0 +1,20 @@
+object: PROCESS_CUSTOMER_OFFER
+schema: DEMO
+type: procedure
+notes: >
+  Mutating procedure (REJECT sets status=2, APPROVE sets status=1/STORE). The Oracle SOURCE
+  procedure issues an internal COMMIT, so the run-tests rollback cannot undo a change against a
+  real row (and re-runs would not be idempotent). To keep the equivalence test non-destructive
+  and repeatable, it targets a non-existent listing id: the UPDATE matches zero rows on both
+  engines, so the net effect is identical (no change) and the source data is never mutated.
+  The converted PG procedure intentionally omits COMMIT (caller controls the transaction).
+cases:
+  - id: c1
+    description: reject a non-existent listing -> zero rows affected on both engines
+    call_source: "BEGIN demo.process_customer_offer(999999, 'REJECT', 1, 'equivalence test'); END;"
+    call_target: "CALL demo.process_customer_offer(999999, 'REJECT', 1, 'equivalence test')"
+    verify:
+      - name: rejected_listings
+        source_sql: "SELECT COUNT(*) FROM demo.listings WHERE status = 2"
+        target_sql: "SELECT COUNT(*) FROM demo.listings WHERE status = 2"
+

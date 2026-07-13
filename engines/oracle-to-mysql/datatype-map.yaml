@@ -1,0 +1,126 @@
+# engines/oracle-to-mysql/datatype-map.yaml
+#
+# Oracle -> MySQL (Aurora MySQL) datatype mapping used as conversion context.
+# "notes" call out precision/behavioral differences the validation phase checks.
+
+mappings:
+  # Numbers
+  - oracle: NUMBER(p,0)            # p <= 2
+    mysql: tinyint
+    when: "p between 1 and 2, scale 0"
+  - oracle: NUMBER(p,0)            # 3 <= p <= 4
+    mysql: smallint
+    when: "p between 3 and 4, scale 0"
+  - oracle: NUMBER(p,0)            # 5 <= p <= 6
+    mysql: mediumint
+    when: "p between 5 and 6, scale 0"
+  - oracle: NUMBER(p,0)            # 7 <= p <= 9
+    mysql: int
+    when: "p between 7 and 9, scale 0"
+  - oracle: NUMBER(p,0)            # 10 <= p <= 18
+    mysql: bigint
+    when: "p between 10 and 18, scale 0"
+  - oracle: NUMBER(p,s)
+    mysql: decimal(p,s)
+    when: "scale > 0 or p > 18"
+    notes: "MySQL DECIMAL max precision 65; cap/round very large NUMBER precisions."
+  - oracle: NUMBER                 # unconstrained
+    mysql: decimal(38,10)
+    notes: "Oracle NUMBER is arbitrary precision; pick decimal(38,x) or double per use. Validate."
+  - oracle: FLOAT(b)
+    mysql: double
+  - oracle: BINARY_FLOAT
+    mysql: float
+  - oracle: BINARY_DOUBLE
+    mysql: double
+
+  # Character
+  - oracle: VARCHAR2(n)
+    mysql: varchar(n)
+    notes: "MySQL row/index length limits; for very large n use TEXT. utf8mb4 = up to 4 bytes/char."
+  - oracle: NVARCHAR2(n)
+    mysql: varchar(n)
+    notes: "Use utf8mb4 charset; no separate national type needed."
+  - oracle: CHAR(n)
+    mysql: char(n)
+  - oracle: NCHAR(n)
+    mysql: char(n)
+  - oracle: CLOB
+    mysql: longtext
+  - oracle: NCLOB
+    mysql: longtext
+  - oracle: LONG
+    mysql: longtext
+
+  # Binary
+  - oracle: BLOB
+    mysql: longblob
+  - oracle: RAW(n)
+    mysql: varbinary(n)
+  - oracle: LONG RAW
+    mysql: longblob
+
+  # Date / time
+  - oracle: DATE
+    mysql: datetime
+    notes: "Oracle DATE includes time to seconds -> datetime (NOT date), to avoid losing time."
+  - oracle: TIMESTAMP(p)
+    mysql: datetime(p)
+    notes: "MySQL fractional seconds precision p is 0-6."
+  - oracle: TIMESTAMP(p) WITH TIME ZONE
+    mysql: datetime(p)
+    notes: "MySQL has no tz-aware type; store UTC + handle tz in app, or use TIMESTAMP semantics. Validate."
+  - oracle: TIMESTAMP(p) WITH LOCAL TIME ZONE
+    mysql: timestamp(p)
+    notes: "MySQL TIMESTAMP stores UTC and converts to session tz — closest analog; verify behavior."
+  - oracle: INTERVAL YEAR TO MONTH
+    mysql: "int (months) or varchar"
+    notes: "No native interval type; model explicitly."
+  - oracle: INTERVAL DAY TO SECOND
+    mysql: "bigint (seconds) or time"
+    notes: "No native interval type; model explicitly."
+
+  # Rowid / misc
+  - oracle: ROWID
+    mysql: varchar(64)
+    notes: "No equivalent (BFILE/ROWID/UROWID unsupported); re-architect logic depending on ROWID."
+  - oracle: XMLTYPE
+    mysql: longtext
+    notes: "MySQL has limited XML functions (ExtractValue/UpdateXML); consider JSON instead."
+  - oracle: "SDO_GEOMETRY"
+    mysql: geometry
+    notes: "MySQL spatial types differ from Oracle Spatial; validate carefully."
+  - oracle: BOOLEAN              # PL/SQL only in Oracle <23c
+    mysql: tinyint(1)
+    notes: "MySQL BOOLEAN is an alias for tinyint(1); confirm source representation."
+
+# Identifier handling
+identifiers:
+  oracle_default_case: UPPER
+  mysql_quote: backtick
+  recommendation: >
+    Fold UPPER Oracle names to lower_case. On Linux, MySQL table names are
+    case-sensitive (lower_case_table_names) — be consistent. A MySQL schema IS a
+    database: the Oracle schema maps to a MySQL database.
+
+# Common gotchas validated in the testing phase
+gotchas:
+  - "Empty string '' is NULL in Oracle, but '' is NOT NULL in MySQL."
+  - "Oracle DATE arithmetic (date+1 = +1 day) differs from MySQL (use DATE_ADD/INTERVAL)."
+  - "MySQL default storage engine InnoDB; ensure FK support and row formats."
+  - "MySQL has no sequences object pre-8.0; use AUTO_INCREMENT (one per table) — multi-sequence logic needs redesign."
+  - "No packages; split into individual stored routines. No MERGE — use INSERT ... ON DUPLICATE KEY UPDATE."
+  - "MySQL is stricter on GROUP BY (only_full_group_by) and implicit casts than Oracle in some modes."
+  - "CLOB/BLOB -> LONGTEXT/LONGBLOB; watch max_allowed_packet for large values."
+  # --- learned from a real Oracle DEMO -> Aurora MySQL run ---
+  - "One routine PER FILE/unit: pymysql executes a unit in one cur.execute. A compound CREATE FUNCTION/PROCEDURE (BEGIN..END) is fine as one statement, but DO NOT put multiple routines in one file (the package-flatten target). The apply connection enables MULTI_STATEMENTS so a table unit's several deferred ALTER..ADD FOREIGN KEY statements apply together."
+  - "Stored PROCEDURE/FUNCTION parameters have NO DEFAULT values in MySQL: drop Oracle '... DEFAULT x' params (caller must pass) and note it."
+  - "RAISE_APPLICATION_ERROR(-n,'msg') -> SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='msg'."
+  - "PL/SQL PIPELINED table function -> a PROCEDURE that returns a result set (plain SELECT); 'FETCH FIRST n ROWS ONLY' -> 'LIMIT n' (LIMIT accepts a routine parameter)."
+  - "EXCEPTION WHEN NO_DATA_FOUND -> DECLARE CONTINUE HANDLER FOR NOT FOUND (set a default); SELECT..INTO with no row otherwise leaves the variable unset."
+  - "SYSDATE/SYSTIMESTAMP -> NOW(6); date arithmetic 'SYSDATE - n' -> DATE_SUB(NOW(6), INTERVAL n DAY); TRUNC(date) -> DATE(); RETURNING id INTO -> LAST_INSERT_ID(); REGEXP_LIKE -> REGEXP; REGEXP_REPLACE exists in MySQL 8."
+  - "A stored FUNCTION that modifies data needs log_bin_trust_function_creators=ON when binary logging is enabled (ERROR 1418 at CREATE). Aurora MySQL usually has log_bin OFF, so it is allowed; otherwise prefer a PROCEDURE."
+  - "Triggers must be created in the table's schema: qualify the trigger name (CREATE TRIGGER demo.t ... ON demo.tbl) or the default DB will mismatch (ERROR 1435 'Trigger in wrong schema'). A trigger BEFORE INSERT OR UPDATE -> two single-statement triggers (one per event); keep them single-statement so the ; splitter does not break BEGIN..END."
+  - "DDL auto-commits in MySQL (no transactional rollback). A unit that fails part-way leaves earlier statements committed, so a naive re-run hits 'duplicate' errors — drop the partial objects before retrying."
+  - "VARCHAR index length: utf8mb4 caps an index key at 3072 bytes, so varchar(>768) cannot be fully indexed -> use a prefix index (col(255)). Oracle Text (CTXSYS.CONTEXT) index -> MySQL FULLTEXT index."
+  - "Oracle identity-backing sequences (ISEQ$$_*) are NOT user objects -> map identity columns to AUTO_INCREMENT; migrate-data's reset_identity reseeds AUTO_INCREMENT after load."

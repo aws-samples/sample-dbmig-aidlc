@@ -1,0 +1,53 @@
+# dbmig-aidlc — migration scope/strategy (git-ignored).
+project: adventureworks
+
+run:
+  mode: silent
+
+scope:
+  # Self-contained set: HumanResources depends only on Person; the single
+  # Person.StateProvince -> Sales.SalesTerritory FK is dropped (Sales out of scope).
+  schemas:
+    - Person
+    - HumanResources
+  object_types:
+    - tables
+    - indexes
+    - constraints
+    - sequences
+    - views
+    - functions
+    - procedures
+    - triggers
+  include: []
+  exclude: []
+
+strategy:
+  mode: full
+  identifier_case: lower_case
+
+llm:
+  provider: kiro
+  model: kiro
+  max_tokens: 4096
+  max_retries: 3
+  batch_row_threshold: 100000
+  batch_max_units: 5
+
+testing:
+  data_load: framework
+  data_volume: full
+  sample_rows_per_table: 1000
+  equivalence:
+    reconcile_row_counts: true
+    column_checksums: true
+    query_parity: true
+    function_parity: true
+    procedure_parity: true
+    float_tolerance: 1e-9
+    normalize_whitespace: true
+    sort_unordered_results: true
+
+cutover:
+  require_rollback_plan: true
+  monitoring: true

@@ -1,0 +1,12 @@
+object: uspUpdateEmployeeHireInfo
+schema: HumanResources
+type: procedure
+# No executable equivalence case.
+# This procedure manages its own transaction (BEGIN TRANSACTION ... COMMIT, with ROLLBACK in CATCH)
+# and ALWAYS inserts an EmployeePayHistory row. Under the run-tests harness (which wraps each case in a
+# transaction and rolls back), the source's explicit ROLLBACK unbalances the harness transaction
+# (SQL Server error 266: "Transaction count ... mismatching number of BEGIN and COMMIT"), while the
+# COMMIT path would persist changes to the live source. It is therefore not net-effect testable this way.
+# The conversion itself is validated by a clean apply (see 02-construction/apply_report_code-*.yaml);
+# its logic mirrors uspUpdateEmployeeLogin (tested) plus an EmployeePayHistory insert.
+cases: []

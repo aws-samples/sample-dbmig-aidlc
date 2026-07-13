@@ -1,0 +1,104 @@
+# engines/oracle-to-postgresql/datatype-map.yaml
+#
+# Oracle -> PostgreSQL datatype mapping used during schema conversion.
+# "notes" call out precision/behavioral differences the validation phase checks.
+
+mappings:
+  # Numbers
+  - oracle: NUMBER(p,0)            # p <= 4
+    postgresql: smallint
+    when: "p between 1 and 4, scale 0"
+  - oracle: NUMBER(p,0)            # 5 <= p <= 9
+    postgresql: integer
+    when: "p between 5 and 9, scale 0"
+  - oracle: NUMBER(p,0)            # 10 <= p <= 18
+    postgresql: bigint
+    when: "p between 10 and 18, scale 0"
+  - oracle: NUMBER(p,s)
+    postgresql: numeric(p,s)
+    when: "scale > 0 or p > 18"
+  - oracle: NUMBER                 # no precision/scale
+    postgresql: numeric
+    notes: "Unconstrained NUMBER -> numeric (arbitrary precision). Watch performance vs bigint/double."
+  - oracle: FLOAT(b)
+    postgresql: double precision
+    notes: "Oracle binary-precision FLOAT maps to double precision; validate rounding."
+  - oracle: BINARY_FLOAT
+    postgresql: real
+  - oracle: BINARY_DOUBLE
+    postgresql: double precision
+
+  # Character
+  - oracle: VARCHAR2(n CHAR)
+    postgresql: varchar(n)
+    notes: "PostgreSQL length is in characters by default — matches CHAR semantics."
+  - oracle: VARCHAR2(n BYTE)
+    postgresql: varchar(n)
+    notes: "BYTE semantics differ under multibyte encodings; verify max length in UTF-8."
+  - oracle: NVARCHAR2(n)
+    postgresql: varchar(n)
+  - oracle: CHAR(n)
+    postgresql: char(n)
+    notes: "Both blank-pad; trailing-space comparison semantics differ slightly."
+  - oracle: NCHAR(n)
+    postgresql: char(n)
+  - oracle: CLOB
+    postgresql: text
+  - oracle: NCLOB
+    postgresql: text
+  - oracle: LONG
+    postgresql: text
+    notes: "Deprecated in Oracle; map to text."
+
+  # Binary
+  - oracle: BLOB
+    postgresql: bytea
+    notes: "bytea has practical size limits (~1GB) vs Oracle LOB; check large objects."
+  - oracle: RAW(n)
+    postgresql: bytea
+  - oracle: LONG RAW
+    postgresql: bytea
+
+  # Date / time
+  - oracle: DATE
+    postgresql: timestamp(0)
+    notes: "Oracle DATE includes time to seconds — map to timestamp, NOT date, to avoid losing time."
+  - oracle: TIMESTAMP(p)
+    postgresql: timestamp(p)
+  - oracle: TIMESTAMP(p) WITH TIME ZONE
+    postgresql: timestamptz(p)
+  - oracle: TIMESTAMP(p) WITH LOCAL TIME ZONE
+    postgresql: timestamptz(p)
+    notes: "Behavioral difference around session time zone; validate conversions."
+  - oracle: INTERVAL YEAR TO MONTH
+    postgresql: interval
+  - oracle: INTERVAL DAY TO SECOND
+    postgresql: interval
+
+  # Rowid / misc
+  - oracle: ROWID
+    postgresql: text
+    notes: "No direct equivalent; ctid is not stable. Re-architect logic depending on ROWID."
+  - oracle: UROWID
+    postgresql: text
+  - oracle: XMLTYPE
+    postgresql: xml
+  - oracle: "SDO_GEOMETRY"
+    postgresql: geometry
+    notes: "Requires PostGIS on the target."
+  - oracle: BOOLEAN              # PL/SQL only in Oracle <23c
+    postgresql: boolean
+    notes: "Oracle SQL had no BOOLEAN before 23c; often stored as NUMBER(1)/CHAR(1) — confirm source representation."
+
+# Identifier handling
+identifiers:
+  oracle_default_case: UPPER
+  postgresql_default_case: lower
+  recommendation: "Fold UPPER Oracle names to lower_case unquoted PG identifiers; avoid quoted mixed-case which forces quoting everywhere."
+
+# Common gotchas validated in the testing phase
+gotchas:
+  - "Empty string '' = NULL in Oracle, but '' is NOT NULL in PostgreSQL."
+  - "Oracle DATE arithmetic (date+1 = +1 day) differs from PG timestamp arithmetic (use interval)."
+  - "NUMBER default scale rounding vs numeric exactness."
+  - "Implicit type coercion is more permissive in Oracle than PostgreSQL."

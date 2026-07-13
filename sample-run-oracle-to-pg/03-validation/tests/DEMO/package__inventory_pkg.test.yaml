@@ -1,0 +1,27 @@
+object: INVENTORY_PKG
+schema: DEMO
+type: function
+notes: >
+  Function subprograms of inventory_pkg (reduce_inventory is a mutating procedure, tested
+  separately by net effect elsewhere). Real listing ids 1..56; low-stock thresholds.
+cases:
+  - id: c1
+    description: sufficient inventory check (listing 1, qty 5)
+    source_sql: "SELECT demo.inventory_pkg.has_sufficient_inventory(1, 5) FROM dual"
+    target_sql: "SELECT demo.inventory_pkg_has_sufficient_inventory(1, 5)"
+    compare: scalar
+  - id: c2
+    description: insufficient inventory check (listing 2, qty 1000)
+    source_sql: "SELECT demo.inventory_pkg.has_sufficient_inventory(2, 1000) FROM dual"
+    target_sql: "SELECT demo.inventory_pkg_has_sufficient_inventory(2, 1000)"
+    compare: scalar
+  - id: c3
+    description: low-stock count at threshold 5
+    source_sql: "SELECT demo.inventory_pkg.get_low_stock_count(5) FROM dual"
+    target_sql: "SELECT demo.inventory_pkg_get_low_stock_count(5)"
+    compare: scalar
+  - id: c4
+    description: low-stock count at threshold 100
+    source_sql: "SELECT demo.inventory_pkg.get_low_stock_count(100) FROM dual"
+    target_sql: "SELECT demo.inventory_pkg_get_low_stock_count(100)"
+    compare: scalar

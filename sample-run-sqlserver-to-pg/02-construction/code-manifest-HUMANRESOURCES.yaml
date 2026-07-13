@@ -1,0 +1,72 @@
+project: adventureworks
+schema: HUMANRESOURCES
+phase: construction-code
+generated_at: '2026-07-02T13:08:09Z'
+provider: kiro
+model: kiro
+unit_count: 9
+units:
+- name: uspUpdateEmployeeHireInfo
+  object_type: PROCEDURE
+  schema: HumanResources
+  prompt_file: code_prompts/HUMANRESOURCES/procedure__uspupdateemployeehireinfo.prompt.md
+  output_file: code/humanresources/procedure__uspupdateemployeehireinfo.sql
+  status: applied
+  last_error: null
+- name: uspUpdateEmployeeLogin
+  object_type: PROCEDURE
+  schema: HumanResources
+  prompt_file: code_prompts/HUMANRESOURCES/procedure__uspupdateemployeelogin.prompt.md
+  output_file: code/humanresources/procedure__uspupdateemployeelogin.sql
+  status: applied
+  last_error: null
+- name: uspUpdateEmployeePersonalInfo
+  object_type: PROCEDURE
+  schema: HumanResources
+  prompt_file: code_prompts/HUMANRESOURCES/procedure__uspupdateemployeepersonalinfo.prompt.md
+  output_file: code/humanresources/procedure__uspupdateemployeepersonalinfo.sql
+  status: applied
+  last_error: null
+- name: vEmployee
+  object_type: VIEW
+  schema: HumanResources
+  prompt_file: code_prompts/HUMANRESOURCES/view__vemployee.prompt.md
+  output_file: code/humanresources/view__vemployee.sql
+  status: applied
+  last_error: null
+- name: vEmployeeDepartment
+  object_type: VIEW
+  schema: HumanResources
+  prompt_file: code_prompts/HUMANRESOURCES/view__vemployeedepartment.prompt.md
+  output_file: code/humanresources/view__vemployeedepartment.sql
+  status: applied
+  last_error: null
+- name: vEmployeeDepartmentHistory
+  object_type: VIEW
+  schema: HumanResources
+  prompt_file: code_prompts/HUMANRESOURCES/view__vemployeedepartmenthistory.prompt.md
+  output_file: code/humanresources/view__vemployeedepartmenthistory.sql
+  status: applied
+  last_error: null
+- name: vJobCandidate
+  object_type: VIEW
+  schema: HumanResources
+  prompt_file: code_prompts/HUMANRESOURCES/view__vjobcandidate.prompt.md
+  output_file: code/humanresources/view__vjobcandidate.sql
+  status: applied
+  last_error: null
+- name: vJobCandidateEducation
+  object_type: VIEW
+  schema: HumanResources
+  prompt_file: code_prompts/HUMANRESOURCES/view__vjobcandidateeducation.prompt.md
+  output_file: code/humanresources/view__vjobcandidateeducation.sql
+  status: applied
+  last_error: null
+- name: vJobCandidateEmployment
+  object_type: VIEW
+  schema: HumanResources
+  prompt_file: code_prompts/HUMANRESOURCES/view__vjobcandidateemployment.prompt.md
+  output_file: code/humanresources/view__vjobcandidateemployment.sql
+  status: applied
+  last_error: null
+max_retries: 3

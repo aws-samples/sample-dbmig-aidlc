@@ -1,0 +1,73 @@
+# engines/oracle-to-postgresql/engine.yaml
+#
+# Engine-pair definition. The dbmig package and skills read this so orchestration
+# stays engine-agnostic. To add a new pair, copy this folder and edit the values.
+#
+# NOTE: this directory (engine.yaml, datatype-map.yaml, and the playbook
+# references) is LLM CONTEXT MATERIAL, not a rule engine. Schema conversion is
+# performed by the LLM (Kiro), which reads this content as context. dbmig injects
+# it into the conversion prompt bundles; it does not execute it as conversion rules.
+
+pair: oracle-to-postgresql
+
+source:
+  engine: oracle
+  display_name: Oracle Database
+  default_version: "19c"
+  # Connectivity is via the Python driver — NO native client tools required.
+  driver: oracledb           # thin mode; zero Oracle Client install
+  connect_fields: [host, port, service_name, sid, username, password]
+  ping_sql: "SELECT 1 FROM dual"
+  ddl_extraction: DBMS_METADATA.GET_DDL / GET_DEPENDENT_DDL
+  catalog: ALL_OBJECTS / ALL_TABLES / ALL_TAB_COLUMNS / ALL_CONSTRAINTS / ALL_SOURCE
+
+target:
+  engine: postgresql
+  display_name: PostgreSQL (Aurora PostgreSQL compatible)
+  default_version: "16"
+  driver: psycopg            # v3 with bundled libpq; no native psql install
+  connect_fields: [host, port, database, username, password, sslmode]
+  ping_sql: "SELECT 1"
+  ingestion: COPY protocol (psycopg cursor.copy)
+  catalog: information_schema / pg_catalog
+
+# How conversion works (LLM-driven; the LLM is Kiro).
+conversion:
+  mode: llm
+  provider: kiro             # dbmig prepares prompt bundles; Kiro converts. No API calls.
+  unit: object-unit          # table + indexes + constraints + FKs + triggers + comments/grants
+  code_objects_pass: separate # packages/procedures/functions/types converted in a later pass
+  context_material:
+    - skills/db-migration-construction/SKILL.md
+    - engines/oracle-to-postgresql/datatype-map.yaml
+    - engines/oracle-to-postgresql/checks/non-portable-constructs.md
+    - skills/oracle-to-postgresql-playbook/references/
+
+# dbmig commands that drive each phase.
+commands:
+  test_connection: "python -m dbmig test-connection --side both"
+  inventory:       "python -m dbmig inventory --schema <SCHEMA> --project <PROJECT>"
+  convert_schema:  "python -m dbmig convert-schema --schema <SCHEMA> --project <PROJECT>"
+  convert_code:    "python -m dbmig convert-code --schema <SCHEMA> --project <PROJECT>"
+  apply_schema:    "python -m dbmig apply-schema --schema <SCHEMA> --project <PROJECT>"
+  migrate_data:    "python -m dbmig migrate-data --schema <SCHEMA> --workers 8 --project <PROJECT>"
+  gen_tests:       "python -m dbmig gen-tests --schema <SCHEMA> --project <PROJECT>"
+  run_tests:       "python -m dbmig run-tests --schema <SCHEMA> --project <PROJECT>"
+  compare:         "python -m dbmig compare --schema <SCHEMA> --project <PROJECT>"
+
+# Order phases run in, and which skill owns each.
+phases:
+  - id: inception
+    skill: db-migration-inception
+    gate: "Approve assessment & migration plan"
+  - id: construction
+    skill: db-migration-construction
+    gate: "Approve converted schema + code"
+  - id: validation
+    skill: db-migration-validation
+    gate: "Approve equivalence test results"
+  - id: operations
+    skill: db-migration-operations
+    gate: "Approve cutover & rollback plan"
+
+playbook: oracle-to-postgresql-playbook

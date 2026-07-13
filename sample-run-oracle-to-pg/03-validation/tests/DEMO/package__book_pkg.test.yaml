@@ -1,0 +1,27 @@
+object: BOOK_PKG
+schema: DEMO
+type: function
+notes: >
+  Package flattened to demo.book_pkg_* on the target; Oracle calls use pkg.member syntax.
+  Function subprograms only (get_book_details is an OUT-parameter procedure). Real book ids 1..56.
+cases:
+  - id: c1
+    description: available store quantity for book 1
+    source_sql: "SELECT demo.book_pkg.get_available_quantity(1) FROM dual"
+    target_sql: "SELECT demo.book_pkg_get_available_quantity(1)"
+    compare: scalar
+  - id: c2
+    description: average store price for book 1
+    source_sql: "SELECT demo.book_pkg.get_avg_price(1) FROM dual"
+    target_sql: "SELECT demo.book_pkg_get_avg_price(1)"
+    compare: scalar
+  - id: c3
+    description: in-stock flag for book 1
+    source_sql: "SELECT demo.book_pkg.is_in_stock(1) FROM dual"
+    target_sql: "SELECT demo.book_pkg_is_in_stock(1)"
+    compare: scalar
+  - id: c4
+    description: available quantity for book 43
+    source_sql: "SELECT demo.book_pkg.get_available_quantity(43) FROM dual"
+    target_sql: "SELECT demo.book_pkg_get_available_quantity(43)"
+    compare: scalar

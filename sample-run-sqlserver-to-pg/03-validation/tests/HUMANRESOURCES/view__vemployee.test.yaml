@@ -1,0 +1,15 @@
+object: vEmployee
+schema: HumanResources
+type: function
+notes: Multi-join employee view (Person + HR). Compare row count and a targeted single value.
+cases:
+  - id: c1
+    description: row count
+    source_sql: "SELECT COUNT(*) FROM HumanResources.vEmployee"
+    target_sql: "SELECT COUNT(*) FROM humanresources.vemployee"
+    compare: scalar
+  - id: c2
+    description: job title for employee 1
+    source_sql: "SELECT MIN(JobTitle) FROM HumanResources.vEmployee WHERE BusinessEntityID = 1"
+    target_sql: "SELECT MIN(jobtitle) FROM humanresources.vemployee WHERE businessentityid = 1"
+    compare: scalar

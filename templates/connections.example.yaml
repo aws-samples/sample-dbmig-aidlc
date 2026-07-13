@@ -1,0 +1,49 @@
+# dbmig-aidlc — connection file
+#
+# Copy this to ./connections.yaml and fill in your details.
+# connections.yaml is git-ignored by default.
+#
+# The dbmig Python package connects directly with Python drivers — oracledb
+# (thin mode) and psycopg (v3) — so NO native client tools (sqlplus / psql) are
+# required.
+#
+# SECRETS: prefer environment-variable references (e.g. ${ORA_PASSWORD}) over
+# plaintext. The package expands ${VAR} from the environment at run time.
+# Do NOT commit real passwords.
+
+source:
+  engine: oracle              # oracle | sqlserver (mssql / sql-server)
+  version: "19c"
+  host: ${ORA_HOST}
+  port: 1521
+  # Provide ONE of service_name or sid
+  service_name: ${ORA_SERVICE} # e.g. ORCLPDB1
+  sid:                         # e.g. ORCL  (leave blank if using service_name)
+  username: ${ORA_USER}
+  password: ${ORA_PASSWORD}
+  # Encryption in transit (source): a source DB's transport security is your
+  # existing posture. Encryption is opt-in — set `protocol: tcps` to use TLS
+  # (Oracle TCPS / SQL Server encrypted session); otherwise plain TCP is used.
+  #   protocol: tcps          # uncomment to encrypt the source connection
+  # With tcps you may also set sslmode: verify-ca | verify-full to authenticate
+  # the server certificate. See SECURITY.md → "Encryption in transit".
+
+target:
+  engine: postgresql          # postgresql (Aurora PostgreSQL) | mysql / aurora-mysql (Aurora MySQL)
+  version: "16"
+  host: ${PG_HOST}
+  port: 5432                  # PostgreSQL 5432 | MySQL 3306
+  database: ${PG_DATABASE}    # e.g. appdb
+  username: ${PG_USER}
+  password: ${PG_PASSWORD}
+  # Schema search_path / default schema to apply objects into
+  default_schema: public
+  # Encryption in transit (target): sslmode = disable | require | verify-ca | verify-full
+  #   require (DEFAULT) — encrypt; no plaintext fallback. Aurora/RDS serve TLS by
+  #     default, so this needs no certificate management.
+  #   verify-ca / verify-full — also authenticate the server cert (and hostname for
+  #     verify-full). Provide the RDS CA bundle via ssl_ca or DBMIG_SSL_CA_FILE
+  #     (https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem) — RDS DB
+  #     certs are NOT in the default certifi store.
+  #   disable — explicit opt-out (plaintext).
+  sslmode: require

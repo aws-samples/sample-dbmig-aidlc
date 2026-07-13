@@ -1,0 +1,71 @@
+# engines/sqlserver-to-postgresql/engine.yaml
+#
+# Engine-pair definition for SQL Server -> PostgreSQL (Aurora PostgreSQL compatible).
+# This directory (engine.yaml, datatype-map.yaml, playbook references) is LLM CONTEXT
+# MATERIAL, not a rule engine — conversion is performed by the LLM (Kiro).
+
+pair: sqlserver-to-postgresql
+
+source:
+  engine: sqlserver
+  display_name: Microsoft SQL Server
+  default_version: "2019"
+  driver: pytds            # python-tds; pure-Python, no native client install
+  connect_fields: [host, port, database, username, password]
+  ping_sql: "SELECT 1"
+  ddl_extraction: reconstructed from INFORMATION_SCHEMA + sys.* catalogs
+  catalog: INFORMATION_SCHEMA / sys.objects / sys.sql_modules / sys.indexes
+  notes:
+    - "No DBMS_METADATA equivalent — the adapter reconstructs CREATE TABLE + constraints + indexes + triggers."
+    - "A SQL Server 'schema' (e.g. dbo) maps to a PostgreSQL schema; objects are [schema].[object]."
+    - "IDENTITY columns, CLUSTERED indexes, and T-SQL constructs need conversion."
+
+target:
+  engine: postgresql
+  display_name: PostgreSQL (Aurora PostgreSQL compatible)
+  default_version: "16"
+  driver: psycopg          # v3 with bundled libpq; no native psql install
+  connect_fields: [host, port, database, username, password, sslmode]
+  ping_sql: "SELECT 1"
+  ingestion: COPY protocol (psycopg cursor.copy)
+  catalog: information_schema / pg_catalog
+
+conversion:
+  mode: llm
+  provider: kiro
+  unit: object-unit          # table + indexes + constraints + FKs + triggers
+  code_objects_pass: separate # procedures/functions/views via OBJECT_DEFINITION
+  context_material:
+    - skills/db-migration-construction/SKILL.md
+    - engines/sqlserver-to-postgresql/datatype-map.yaml
+    - engines/sqlserver-to-postgresql/checks/non-portable-constructs.md
+    - skills/sqlserver-to-postgresql-playbook/references/
+
+commands:
+  test_connection: "python -m dbmig test-connection --side both"
+  inventory:       "python -m dbmig inventory --schema <SCHEMA> --project <PROJECT>"
+  convert_schema:  "python -m dbmig convert-schema --schema <SCHEMA> --project <PROJECT>"
+  convert_code:    "python -m dbmig convert-code --schema <SCHEMA> --project <PROJECT>"
+  apply_schema:    "python -m dbmig apply-schema --schema <SCHEMA> --project <PROJECT>"
+  migrate_data:    "python -m dbmig migrate-data --schema <SCHEMA> --workers 8 --project <PROJECT>"
+  gen_tests:       "python -m dbmig gen-tests --schema <SCHEMA> --project <PROJECT>"
+  run_tests:       "python -m dbmig run-tests --schema <SCHEMA> --project <PROJECT>"
+  compare:         "python -m dbmig compare --schema <SCHEMA> --project <PROJECT>"
+
+phases:
+  - id: inception
+    skill: db-migration-inception
+    gate: "Approve assessment & migration plan"
+  - id: construction
+    skill: db-migration-construction
+    gate: "Approve converted schema + code"
+  - id: validation
+    skill: db-migration-validation
+    gate: "Approve equivalence test results"
+  - id: operations
+    skill: db-migration-operations
+    gate: "Approve cutover & rollback plan"
+
+playbook: sqlserver-to-postgresql-playbook
+
+# Note: the source schema/owner is typically 'dbo' in SQL Server.

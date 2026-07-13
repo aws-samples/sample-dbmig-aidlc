@@ -1,0 +1,82 @@
+schema: HUMANRESOURCES
+mode: silent
+summary:
+  cases: 10
+  passed: 10
+  failed: 0
+  skipped: 0
+results:
+- object: HumanResources.uspUpdateEmployeeLogin
+  type: procedure
+  case: c1
+  status: pass
+  detail:
+    employee1_loginid:
+      source_delta: (True, 'test-login')
+      target_delta: (True, 'test-login')
+      match: true
+- object: HumanResources.uspUpdateEmployeePersonalInfo
+  type: procedure
+  case: c1
+  status: pass
+  detail:
+    employee1_nationalid:
+      source_delta: (True, '999999999')
+      target_delta: (True, '999999999')
+      match: true
+- object: HumanResources.vEmployee
+  type: function
+  case: c1
+  status: pass
+  detail:
+    source: '290'
+    target: '290'
+- object: HumanResources.vEmployee
+  type: function
+  case: c2
+  status: pass
+  detail:
+    source: Chief Executive Officer
+    target: Chief Executive Officer
+- object: HumanResources.vEmployeeDepartment
+  type: function
+  case: c1
+  status: pass
+  detail:
+    source: '290'
+    target: '290'
+- object: HumanResources.vEmployeeDepartment
+  type: function
+  case: c2
+  status: pass
+  detail:
+    source: Executive
+    target: Executive
+- object: HumanResources.vEmployeeDepartmentHistory
+  type: function
+  case: c1
+  status: pass
+  detail:
+    source: '296'
+    target: '296'
+- object: HumanResources.vJobCandidate
+  type: function
+  case: c1
+  status: pass
+  detail:
+    source: '13'
+    target: '13'
+- object: HumanResources.vJobCandidateEducation
+  type: function
+  case: c1
+  status: pass
+  detail:
+    source: '16'
+    target: '16'
+- object: HumanResources.vJobCandidateEmployment
+  type: function
+  case: c1
+  status: pass
+  detail:
+    source: '30'
+    target: '30'

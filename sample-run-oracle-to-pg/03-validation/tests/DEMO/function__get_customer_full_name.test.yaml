@@ -1,0 +1,20 @@
+object: GET_CUSTOMER_FULL_NAME
+schema: DEMO
+type: function
+notes: Concatenation of first/last name for real customer ids (1..3); 9999 exercises the 'Unknown Customer' path.
+cases:
+  - id: c1
+    description: customer 1 (Admin User)
+    source_sql: "SELECT demo.get_customer_full_name(1) FROM dual"
+    target_sql: "SELECT demo.get_customer_full_name(1)"
+    compare: scalar
+  - id: c2
+    description: customer 2 (John Doe)
+    source_sql: "SELECT demo.get_customer_full_name(2) FROM dual"
+    target_sql: "SELECT demo.get_customer_full_name(2)"
+    compare: scalar
+  - id: c3
+    description: missing id -> 'Unknown Customer'
+    source_sql: "SELECT demo.get_customer_full_name(9999) FROM dual"
+    target_sql: "SELECT demo.get_customer_full_name(9999)"
+    compare: scalar

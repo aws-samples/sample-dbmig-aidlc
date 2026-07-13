@@ -1,0 +1,23 @@
+object: ORDER_PKG
+schema: DEMO
+type: function
+notes: >
+  Read-only function subprograms (calculate_order_total, get_customer_order_count). The
+  mutating create_order/add_order_item/update_order_status are not asserted here. ORDERS is
+  empty in the source, so totals/counts are 0 on both engines — a valid equivalence result.
+cases:
+  - id: c1
+    description: order total for a non-existent order -> 0
+    source_sql: "SELECT demo.order_pkg.calculate_order_total(9999) FROM dual"
+    target_sql: "SELECT demo.order_pkg_calculate_order_total(9999)"
+    compare: scalar
+  - id: c2
+    description: order count for customer 2 -> 0 (no orders)
+    source_sql: "SELECT demo.order_pkg.get_customer_order_count(2) FROM dual"
+    target_sql: "SELECT demo.order_pkg_get_customer_order_count(2)"
+    compare: scalar
+  - id: c3
+    description: order count for customer 1 -> 0
+    source_sql: "SELECT demo.order_pkg.get_customer_order_count(1) FROM dual"
+    target_sql: "SELECT demo.order_pkg_get_customer_order_count(1)"
+    compare: scalar

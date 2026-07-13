@@ -1,0 +1,3 @@
+-- DEMO.BOOK_PKG (package spec) -> flattened.
+-- PostgreSQL has no packages: each subprogram becomes a standalone routine
+-- demo.book_pkg_<subprogram>. Implementations live in package_body__book_pkg.sql.

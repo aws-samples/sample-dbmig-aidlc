@@ -1,0 +1,16 @@
+The information and sample code contained in this repository (the "AWS Content") is provided
+to you "as is" for illustrative and educational purposes only, and represents current AWS
+product offerings and practices, which are subject to change without notice. You are responsible
+for making your own independent assessment of the AWS Content.
+
+The AWS Content is not part of, and is not covered by, any agreement between you and AWS, and is
+provided without warranties, representations, or conditions of any kind, whether express or
+implied. The responsibilities and liabilities of AWS to you are controlled by AWS agreements, and
+this document is not part of, nor does it modify, any agreement between you and AWS.
+
+You are responsible for testing, securing, and optimizing the AWS Content, such as sample code, based
+on your specific quality control practices and standards. This sample code is for development and
+testing purposes only, and must be independently reviewed and hardened before you deploy it anywhere.
+The playbook references under skills/<pair>-playbook/references/ are distilled from the
+corresponding AWS migration playbooks and are provided as reference only — test everything in a
+non-production environment first.

@@ -1,0 +1,2 @@
+-- DEMO.ORDER_PKG (package spec) -> flattened.
+-- Subprograms become demo.order_pkg_<subprogram>; see package_body__order_pkg.sql.

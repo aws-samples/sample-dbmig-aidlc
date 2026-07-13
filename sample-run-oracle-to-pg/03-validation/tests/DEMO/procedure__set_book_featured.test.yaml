@@ -1,0 +1,16 @@
+object: SET_BOOK_FEATURED
+schema: DEMO
+type: procedure
+notes: >
+  Sets is_featured on STORE listings (status 1) for a book. The seeded listings are of type
+  SYSTEM, so no rows match and the net effect is zero on both engines — verifying the WHERE
+  predicate (listing_type='STORE' AND status=1) is applied identically.
+cases:
+  - id: c1
+    description: feature book 1 across its STORE listings (net effect on featured sum)
+    call_source: "BEGIN demo.set_book_featured(1, 1); END;"
+    call_target: "CALL demo.set_book_featured(1, 1)"
+    verify:
+      - name: featured_sum
+        source_sql: "SELECT COALESCE(SUM(is_featured),0) FROM demo.listings WHERE book_id = 1 AND listing_type='STORE' AND status = 1"
+        target_sql: "SELECT COALESCE(SUM(is_featured),0) FROM demo.listings WHERE book_id = 1 AND listing_type='STORE' AND status = 1"

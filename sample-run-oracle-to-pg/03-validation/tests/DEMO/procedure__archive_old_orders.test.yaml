@@ -1,0 +1,15 @@
+object: ARCHIVE_OLD_ORDERS
+schema: DEMO
+type: procedure
+notes: >
+  Deletes delivered/cancelled orders older than N days. ORDERS is empty, so the net effect is
+  zero rows removed on both engines (delta 0). Verifies the flattened DELETE runs identically.
+cases:
+  - id: c1
+    description: archive orders older than 365 days (net effect on orders count)
+    call_source: "BEGIN demo.archive_old_orders(365); END;"
+    call_target: "CALL demo.archive_old_orders(365)"
+    verify:
+      - name: orders_count
+        source_sql: "SELECT COUNT(*) FROM demo.orders"
+        target_sql: "SELECT COUNT(*) FROM demo.orders"

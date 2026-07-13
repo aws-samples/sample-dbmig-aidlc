@@ -1,0 +1,20 @@
+object: GET_CONDITION_NAME
+schema: DEMO
+type: function
+notes: Lookup by real condition ids (1..4 exist); 9999 exercises the NO_DATA_FOUND -> 'Unknown' path.
+cases:
+  - id: c1
+    description: existing condition id 1
+    source_sql: "SELECT demo.get_condition_name(1) FROM dual"
+    target_sql: "SELECT demo.get_condition_name(1)"
+    compare: scalar
+  - id: c2
+    description: existing condition id 2
+    source_sql: "SELECT demo.get_condition_name(2) FROM dual"
+    target_sql: "SELECT demo.get_condition_name(2)"
+    compare: scalar
+  - id: c3
+    description: missing id -> 'Unknown'
+    source_sql: "SELECT demo.get_condition_name(9999) FROM dual"
+    target_sql: "SELECT demo.get_condition_name(9999)"
+    compare: scalar

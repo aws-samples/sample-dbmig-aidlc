@@ -1,0 +1,2 @@
+-- DEMO.INVENTORY_PKG (package spec) -> flattened.
+-- Subprograms become demo.inventory_pkg_<subprogram>; see package_body__inventory_pkg.sql.

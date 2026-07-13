@@ -1,0 +1,139 @@
+# engines/sqlserver-to-postgresql/datatype-map.yaml
+#
+# SQL Server -> PostgreSQL datatype mapping used as conversion context (not rules).
+# "notes" call out precision/behavioral differences the validation phase checks.
+
+mappings:
+  # Integers
+  - sqlserver: bit
+    postgresql: boolean
+    notes: "SQL Server bit is 0/1/NULL; map to boolean (or smallint if app expects 0/1)."
+  - sqlserver: tinyint
+    postgresql: smallint
+    notes: "SQL Server tinyint is 0-255 unsigned; PostgreSQL has no tinyint — smallint."
+  - sqlserver: smallint
+    postgresql: smallint
+  - sqlserver: int
+    postgresql: integer
+  - sqlserver: bigint
+    postgresql: bigint
+
+  # Exact / approximate numerics
+  - sqlserver: decimal(p,s)
+    postgresql: numeric(p,s)
+  - sqlserver: numeric(p,s)
+    postgresql: numeric(p,s)
+  - sqlserver: money
+    postgresql: numeric(19,4)
+    notes: "Map money/smallmoney to numeric(19,4); never float."
+  - sqlserver: smallmoney
+    postgresql: numeric(10,4)
+  - sqlserver: float(n)
+    postgresql: double precision
+  - sqlserver: real
+    postgresql: real
+
+  # Character
+  - sqlserver: char(n)
+    postgresql: char(n)
+  - sqlserver: varchar(n)
+    postgresql: varchar(n)
+  - sqlserver: varchar(max)
+    postgresql: text
+  - sqlserver: nchar(n)
+    postgresql: char(n)
+    notes: "Use UTF-8 database encoding; no separate national type in PostgreSQL."
+  - sqlserver: nvarchar(n)
+    postgresql: varchar(n)
+  - sqlserver: nvarchar(max)
+    postgresql: text
+  - sqlserver: text / ntext
+    postgresql: text
+    notes: "text/ntext are deprecated in SQL Server; map to PostgreSQL text."
+
+  # Binary
+  - sqlserver: binary(n)
+    postgresql: bytea
+  - sqlserver: varbinary(n)
+    postgresql: bytea
+  - sqlserver: varbinary(max)
+    postgresql: bytea
+  - sqlserver: image
+    postgresql: bytea
+    notes: "image is deprecated; map to bytea."
+
+  # Date / time
+  - sqlserver: date
+    postgresql: date
+  - sqlserver: time(p)
+    postgresql: time(p)
+  - sqlserver: datetime
+    postgresql: timestamp(3)
+    notes: "datetime ~3.33ms precision; timestamp(3) is close. Validate rounding."
+  - sqlserver: datetime2(p)
+    postgresql: timestamp(p)
+  - sqlserver: smalldatetime
+    postgresql: timestamp(0)
+  - sqlserver: datetimeoffset(p)
+    postgresql: timestamptz(p)
+
+  # Identifiers / misc
+  - sqlserver: uniqueidentifier
+    postgresql: uuid
+  - sqlserver: rowversion / timestamp
+    postgresql: bytea
+    notes: "SQL Server 'timestamp'/rowversion is a row-version binary, NOT a datetime — map to bytea or redesign with a trigger; do not map to PG timestamp."
+  - sqlserver: xml
+    postgresql: xml
+  - sqlserver: "sql_variant"
+    postgresql: text
+    notes: "No equivalent; widen to text or redesign."
+  - sqlserver: hierarchyid
+    postgresql: "ltree (traversal) — or bytea/varchar (storage-only)"
+    notes: >
+      No native equivalent. CHOOSE BY USAGE: (1) if any code traverses the tree
+      (OrganizationNode.GetAncestor()/GetLevel()/ToString(), IsDescendantOf), map to the
+      ltree extension (or a canonical text path like '/1/2/') so ancestor/descendant queries
+      become ltree operators (@>, <@) or LIKE, and the traversal procs convert to WITH
+      RECURSIVE; (2) if the column is only stored/round-tripped, bytea (opaque) or varchar is
+      enough. WARNING: mapping to opaque bytea/varchar BLOCKS any hierarchy-traversal code —
+      and AdventureWorks encodes the Employee management chain ONLY in OrganizationNode (no
+      ManagerID), so uspGetEmployeeManagers/uspGetManagerEmployees cannot convert unless you
+      pick ltree/path. See checks/non-portable-constructs.md.
+  - sqlserver: "geography / geometry"
+    postgresql: "geometry (PostGIS) — or bytea when PostGIS is unavailable"
+    notes: >
+      Spatial types/queries need the PostGIS extension. If PostGIS is not enabled
+      (e.g. a plain Aurora PostgreSQL without it), map to bytea to round-trip the
+      value as opaque bytes (no spatial operations) so the data still migrates and
+      reconciles; otherwise use PostGIS geometry/geography. Semantics differ — validate.
+
+# Identifier & schema handling
+identifiers:
+  sqlserver_quote: brackets ([name]) or double-quotes
+  postgresql_quote: double-quotes (folds unquoted to lower_case)
+  recommendation: >
+    Fold mixed-case SQL Server names to lower_case PostgreSQL identifiers (avoid
+    quoted mixed-case which forces quoting everywhere). SQL Server is typically
+    case-insensitive (collation-dependent); PostgreSQL is case-sensitive — verify
+    queries that rely on case-insensitive matching (use CITEXT or lower()).
+
+# Common gotchas validated in the testing phase
+gotchas:
+  - "IDENTITY columns -> GENERATED ... AS IDENTITY or sequences; reset after data load."
+  - "CLUSTERED indexes have no PostgreSQL equivalent (use CLUSTER command); PK stays a normal index."
+  - "GETDATE()->now()/CURRENT_TIMESTAMP, ISNULL->COALESCE, LEN->length, TOP n->LIMIT, + concat->||."
+  - "Default collation case-insensitivity differs; PostgreSQL is case-sensitive."
+  - "money/datetime rounding differences; rowversion is NOT a timestamp."
+  - "T-SQL procedures/funcs -> PL/pgSQL; @@IDENTITY/SCOPE_IDENTITY -> RETURNING/currval."
+  - "MERGE supported in modern PG (15+) else INSERT ... ON CONFLICT."
+  # --- learned from real AdventureWorks HumanResources + dbo runs ---
+  - "CHECK constraints must be IMMUTABLE: a CHECK using getdate()/dateadd() (e.g. age>=18, date<=today) is ILLEGAL in PostgreSQL. Keep the static bounds in the CHECK and enforce the dynamic part with a trigger or in the app."
+  - "INSTEAD OF triggers exist only on VIEWs in PostgreSQL. An INSTEAD OF trigger on a TABLE (e.g. make rows undeletable) -> BEFORE trigger that RAISE EXCEPTION (or RETURN NULL to skip)."
+  - "Result-set stored procedures (SELECT with no OUTPUT) -> RETURNS TABLE / RETURNS SETOF functions; callers use SELECT * FROM f(...) instead of EXEC. OPTION(MAXRECURSION n) -> a recursionlevel < n guard in the WITH RECURSIVE."
+  - "Ambient error functions (ERROR_NUMBER/ERROR_MESSAGE/...) are unreadable from a NESTED proc in PG: pass them as params from the caller's EXCEPTION block via GET STACKED DIAGNOSTICS. TRY/CATCH -> BEGIN..EXCEPTION."
+  - "Full-text search (CONTAINS/FREETEXT/CONTAINSTABLE/FREETEXTTABLE) has no equivalent: rebuild with to_tsvector/tsquery + ts_rank and a GIN index. Ranking/inflectional/thesaurus semantics differ — flag, don't claim equivalence."
+  - "XML .nodes()/.value()/CROSS APPLY -> xpath() (+ unnest/LATERAL for multi-node sets); pass the namespace array each call. Date text: CONVERT(datetime,REPLACE(v,'Z',''),101) -> replace(v,'Z','')::timestamp."
+  - "Equivalence-testing datetime: SQL Server 'datetime' rounds to ~3.33ms ticks; PG timestamp is exact (a -2ms expression yields .997 vs .998). Compare at second/date granularity, or use datetime2, for sub-second values."
+  - "Reserved/odd identifiers: a column named [Schema]/[User]/etc. or one containing a space ([Database Version]) must be double-quoted-and-lower-cased in PG."
+  - "Run inventory first: it now lists cross-schema dependencies (referenced schemas) — confirm every referenced schema is in migration scope before converting code, or those objects will be runtime-blocked."

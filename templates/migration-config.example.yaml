@@ -1,0 +1,83 @@
+# dbmig-aidlc — migration scope, strategy, and LLM settings
+#
+# Copy this to ./migration-config.yaml and adjust.
+# migration-config.yaml is git-ignored by default.
+
+project: my-migration          # default workspace name under migrations/<project>/
+
+# Run mode — how conversion/test FAILURES are handled.
+#   silent      (default) — record each failure to migrations/<project>/follow-up.yaml
+#                            and CONTINUE; never block. A human follows up later.
+#   interactive           — also prompt for input/correction and surface failures
+#                            via a non-zero exit so they are addressed now.
+# Override per command with --mode, or the DBMIG_MODE env var.
+run:
+  mode: silent
+
+# What to migrate
+scope:
+  # Oracle schemas (owners) to migrate.
+  schemas:
+    - APP
+  # Object types to include.
+  object_types:
+    - tables
+    - indexes
+    - constraints
+    - sequences
+    - views
+    - functions
+    - procedures
+    - packages
+    - triggers
+  include: []                  # e.g. ["ORDERS%", "CUST%"]
+  exclude: []                  # e.g. ["%_TMP", "%_BAK"]
+
+# Migration strategy
+strategy:
+  # schema_only | data_only | full
+  mode: full
+  # Target identifier case: lower_case (fold Oracle UPPER -> pg lower) | preserve
+  identifier_case: lower_case
+
+# LLM-driven conversion settings.
+#
+# The LLM is Kiro itself. With provider "kiro" the dbmig package does NOT call a
+# hosted API: convert-schema / convert-code extract object-units and write prompt
+# bundles, then the Kiro db-migration-construction skill performs the conversion
+# and writes the DDL, and apply-schema applies it. This keeps dbmig runnable
+# standalone for every deterministic step.
+llm:
+  provider: kiro               # kiro (default hand-off). No bedrock/anthropic backend ships.
+  model: kiro
+  max_tokens: 4096
+  # Error-retry loop: max apply attempts per unit before it is marked needs_human.
+  # On a failed apply, the PostgreSQL error is fed back to Kiro and the unit is
+  # re-converted and re-applied, up to this many attempts (minimizes human-in-the-loop).
+  max_retries: 3
+  # Tables with <= this many rows may be batched into one prompt (fewer round-trips).
+  batch_row_threshold: 100000
+  # Max object-units grouped into a single batch prompt.
+  batch_max_units: 5
+
+# Testing & validation
+testing:
+  # framework -> dbmig migrate-data does a one-time load (dev/test)
+  # dms       -> user runs AWS DMS externally; dbmig only tests what's loaded
+  data_load: framework
+  data_volume: sample          # full | sample
+  sample_rows_per_table: 1000
+  equivalence:
+    reconcile_row_counts: true
+    column_checksums: true
+    query_parity: true
+    function_parity: true
+    procedure_parity: true
+    float_tolerance: 1e-9
+    normalize_whitespace: true
+    sort_unordered_results: true
+
+# Cutover
+cutover:
+  require_rollback_plan: true
+  monitoring: true

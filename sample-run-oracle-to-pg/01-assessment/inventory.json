@@ -1,0 +1,222 @@
+{
+  "schema": "DEMO",
+  "object_counts": {
+    "FUNCTION": 5,
+    "INDEX": 33,
+    "PACKAGE": 5,
+    "PACKAGE BODY": 5,
+    "PROCEDURE": 5,
+    "SEQUENCE": 12,
+    "TABLE": 18,
+    "TRIGGER": 1
+  },
+  "tables": [
+    {
+      "name": "ADDRESSES",
+      "num_rows": 3,
+      "columns": 10
+    },
+    {
+      "name": "BOOKS",
+      "num_rows": 56,
+      "columns": 14
+    },
+    {
+      "name": "BOOKS_COVER",
+      "num_rows": 56,
+      "columns": 6
+    },
+    {
+      "name": "BOOK_TYPES",
+      "num_rows": 3,
+      "columns": 5
+    },
+    {
+      "name": "CONDITIONS",
+      "num_rows": 4,
+      "columns": 5
+    },
+    {
+      "name": "CUSTOMERS",
+      "num_rows": 3,
+      "columns": 16
+    },
+    {
+      "name": "DR$BOOKS_TEXT_IDX$I",
+      "num_rows": -1,
+      "columns": 6
+    },
+    {
+      "name": "DR$BOOKS_TEXT_IDX$K",
+      "num_rows": -1,
+      "columns": 2
+    },
+    {
+      "name": "DR$BOOKS_TEXT_IDX$N",
+      "num_rows": -1,
+      "columns": 2
+    },
+    {
+      "name": "DR$BOOKS_TEXT_IDX$U",
+      "num_rows": -1,
+      "columns": 1
+    },
+    {
+      "name": "GENRES",
+      "num_rows": 8,
+      "columns": 5
+    },
+    {
+      "name": "LISTINGS",
+      "num_rows": 56,
+      "columns": 16
+    },
+    {
+      "name": "ORDERS",
+      "num_rows": -1,
+      "columns": 18
+    },
+    {
+      "name": "ORDER_ITEMS",
+      "num_rows": -1,
+      "columns": 7
+    },
+    {
+      "name": "PASSWORD_RESET_TOKENS",
+      "num_rows": -1,
+      "columns": 5
+    },
+    {
+      "name": "PERSISTENT_LOGINS",
+      "num_rows": -1,
+      "columns": 4
+    },
+    {
+      "name": "PUBLISHERS",
+      "num_rows": 10,
+      "columns": 6
+    },
+    {
+      "name": "SHOPPING_CART_ITEMS",
+      "num_rows": -1,
+      "columns": 6
+    }
+  ],
+  "datatypes": {
+    "NUMBER": 58,
+    "VARCHAR2": 45,
+    "TIMESTAMP(6)": 21,
+    "DATE": 5,
+    "ROWID": 2,
+    "BLOB": 2,
+    "CHAR": 1
+  },
+  "code_units": [
+    {
+      "type": "PACKAGE BODY",
+      "name": "ORDER_PKG",
+      "lines": 70
+    },
+    {
+      "type": "PACKAGE BODY",
+      "name": "BOOK_PKG",
+      "lines": 47
+    },
+    {
+      "type": "PACKAGE BODY",
+      "name": "INVENTORY_PKG",
+      "lines": 47
+    },
+    {
+      "type": "PACKAGE BODY",
+      "name": "REPORTING_PKG",
+      "lines": 42
+    },
+    {
+      "type": "PROCEDURE",
+      "name": "PROCESS_CUSTOMER_OFFER",
+      "lines": 29
+    },
+    {
+      "type": "PACKAGE",
+      "name": "ORDER_PKG",
+      "lines": 26
+    },
+    {
+      "type": "PACKAGE BODY",
+      "name": "VALIDATION_PKG",
+      "lines": 26
+    },
+    {
+      "type": "PACKAGE",
+      "name": "REPORTING_PKG",
+      "lines": 21
+    },
+    {
+      "type": "PACKAGE",
+      "name": "BOOK_PKG",
+      "lines": 19
+    },
+    {
+      "type": "PROCEDURE",
+      "name": "ARCHIVE_OLD_ORDERS",
+      "lines": 18
+    },
+    {
+      "type": "PACKAGE",
+      "name": "INVENTORY_PKG",
+      "lines": 16
+    },
+    {
+      "type": "PROCEDURE",
+      "name": "GENERATE_SALES_REPORT",
+      "lines": 16
+    },
+    {
+      "type": "FUNCTION",
+      "name": "GET_CUSTOMER_FULL_NAME",
+      "lines": 13
+    },
+    {
+      "type": "FUNCTION",
+      "name": "CALCULATE_DISCOUNT_PCT",
+      "lines": 13
+    },
+    {
+      "type": "PROCEDURE",
+      "name": "SET_BOOK_FEATURED",
+      "lines": 13
+    },
+    {
+      "type": "FUNCTION",
+      "name": "GET_GENRE_NAME",
+      "lines": 12
+    },
+    {
+      "type": "FUNCTION",
+      "name": "GET_CONDITION_NAME",
+      "lines": 12
+    },
+    {
+      "type": "FUNCTION",
+      "name": "GET_CUSTOMER_LIFETIME_VALUE",
+      "lines": 11
+    },
+    {
+      "type": "PACKAGE",
+      "name": "VALIDATION_PKG",
+      "lines": 10
+    },
+    {
+      "type": "TRIGGER",
+      "name": "TRG_BOOK_SEARCH_TEXT",
+      "lines": 8
+    },
+    {
+      "type": "PROCEDURE",
+      "name": "CLEAR_SHOPPING_CART",
+      "lines": 7
+    }
+  ],
+  "cross_schema_dependencies": []
+}

@@ -1,0 +1,43 @@
+-- engines/oracle-to-mysql/checks/reconcile.sql.tmpl
+-- Equivalence checks for the validation phase. TEMPLATES — the validation skill
+-- substitutes {schema}, {table}, {column}, {columns}, {key}, {n} per object.
+-- Run the ORACLE block against the source and the MYSQL block against the target
+-- (via the dbmig drivers — oracledb / pymysql), then diff the results.
+
+-- ============================================================
+-- 1. ROW COUNT  (must match exactly)
+-- ============================================================
+-- ORACLE:
+SELECT COUNT(*) FROM {schema}.{table};
+-- MYSQL:
+SELECT COUNT(*) FROM `{schema}`.`{table}`;
+
+-- ============================================================
+-- 2. COLUMN CHECKSUM  (order-independent aggregate hash per column)
+-- ============================================================
+-- ORACLE:
+SELECT '{column}' AS col,
+       COUNT({column}) AS non_nulls,
+       NVL(SUM(ORA_HASH(TO_CHAR({column}))),0) AS hash_sum
+FROM   {schema}.{table};
+-- MYSQL (md5 -> first 15 hex digits -> integer, summed):
+SELECT '{column}' AS col,
+       COUNT(`{column}`) AS non_nulls,
+       COALESCE(SUM(CONV(SUBSTRING(MD5(CAST(`{column}` AS CHAR)),1,15),16,10)),0) AS hash_sum
+FROM   `{schema}`.`{table}`;
+
+-- ============================================================
+-- 3. AGGREGATE PARITY for numeric columns (tolerance-aware)
+-- ============================================================
+-- ORACLE:
+SELECT MIN({column}), MAX({column}), AVG({column}), SUM({column}) FROM {schema}.{table};
+-- MYSQL:
+SELECT MIN(`{column}`), MAX(`{column}`), AVG(`{column}`), SUM(`{column}`) FROM `{schema}`.`{table}`;
+
+-- ============================================================
+-- 4. KEYED ROW SAMPLE  (spot-check N rows by primary key)
+-- ============================================================
+-- ORACLE:
+SELECT {columns} FROM {schema}.{table} ORDER BY {key} FETCH FIRST {n} ROWS ONLY;
+-- MYSQL:
+SELECT {columns} FROM `{schema}`.`{table}` ORDER BY {key} LIMIT {n};

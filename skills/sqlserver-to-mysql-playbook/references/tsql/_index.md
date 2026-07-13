@@ -1,0 +1,26 @@
+# T-SQL Migration References — SQL Server → Aurora MySQL
+
+Distilled from the AWS *Microsoft SQL Server 2019 to Amazon Aurora MySQL Migration Playbook*, chapter "Migrating T-SQL features". One file per topic.
+
+- [collations.md](collations.md) — Character sets and collations: `NCHAR`/`NVARCHAR` → `CHARACTER SET` property; Aurora adds a table-level collation. (Assisted)
+- [cursors.md](cursors.md) — Cursors: Aurora supports only static, forward-only, read-only cursors (`FETCH NEXT`), inside stored routines, with `NOT FOUND` handlers. (Assisted)
+- [datetime.md](datetime.md) — Date/time functions: map `GETDATE`→`NOW`, `DATEDIFF`→`TIMESTAMPDIFF`, `DATEADD`→`DATE_ADD`, `CONVERT`→`DATE_FORMAT`. (Assisted)
+- [string-functions.md](string-functions.md) — String functions: mostly compatible; `CHARINDEX`→`LOCATE`, `REPLICATE`→`REPEAT`, `STR`→`FORMAT`; `STRING_SPLIT`/`STRING_AGG` unsupported. (Automatic)
+- [databases-schemas.md](databases-schemas.md) — Database/schema are synonymous; three-part names collapse to two-part; multi-DB+multi-schema needs multiple instances. (Manual)
+- [transactions.md](transactions.md) — Transactions: default isolation `REPEATABLE READ`; `BEGIN TRAN`→`START TRANSACTION`; no nested transactions. (Assisted)
+- [delete-update.md](delete-update.md) — `DELETE`/`UPDATE … FROM` joins unsupported; rewrite as subqueries (correlated per column for UPDATE). (Automatic)
+- [stored-procedures.md](stored-procedures.md) — Stored procedures: use `PROCEDURE`, drop `AS`/`@`; no table-valued params, `INSERT…EXEC`, `RETURN`, encryption, recompile. (Assisted)
+- [error-handling.md](error-handling.md) — Error handling: `TRY/CATCH`→`HANDLER` objects, `THROW`/`RAISERROR`→`SIGNAL`/`RESIGNAL`, error functions→`GET DIAGNOSTICS`. (Assisted)
+- [flow-control.md](flow-control.md) — Flow control: `IF` needs `THEN`/`END IF`, `WHILE` uses `DO…END WHILE`; no `BREAK`/`GOTO`/`WAITFOR` (use `SLEEP`). (Automatic)
+- [full-text-search.md](full-text-search.md) — Full-text: `CONTAINS`/`FREETEXT` → InnoDB `MATCH … AGAINST`; requires `FTS_DOC_ID`; full rewrite. (Manual)
+- [graph.md](graph.md) — Graph (NODE/EDGE/`MATCH`): no native equivalent in Aurora MySQL; re-model relationally or use Neptune. (Blocked)
+- [xml.md](xml.md) — JSON/XML: minimal XML (`ExtractValue`/`UpdateXML`, no XQuery); rich native `JSON` type with 25+ functions. (Manual)
+- [merge.md](merge.md) — `MERGE` unsupported; use `REPLACE` or `INSERT…ON DUPLICATE KEY UPDATE`, or constituent DML statements. (Manual)
+- [pivot.md](pivot.md) — `PIVOT`/`UNPIVOT` unsupported; rewrite with `CASE` conditional aggregation / `CROSS JOIN` of literals. (Manual)
+- [synonyms.md](synonyms.md) — Synonyms unsupported, no generic workaround; partial via views and stored routines. (Blocked)
+- [top-fetch.md](top-fetch.md) — `TOP`/`OFFSET…FETCH` → `LIMIT…OFFSET`; `WITH TIES` and `PERCENT` need manual workarounds. (Automatic)
+- [triggers.md](triggers.md) — Triggers: `FOR EACH ROW` only; `INSERTED`/`DELETED`→`NEW`/`OLD`; `INSTEAD OF`→`BEFORE`; no DDL/view triggers. (Manual)
+- [udf.md](udf.md) — UDFs: scalar only (remove `AS`, declare `DETERMINISTIC`); inline TVF→views, multi-statement TVF→stored procedures. (Manual)
+- [udt.md](udt.md) — User-defined types/table-valued params unsupported; use base types, temp tables, or CSV/XML/JSON string parsing. (Manual)
+- [identity-sequences.md](identity-sequences.md) — `IDENTITY`→`AUTO_INCREMENT` (re-seeded as `MAX+1` on restart); no `SEQUENCE` objects; no non-PK/compound auto enumerators. (Manual)
+- [managing-statistics.md](managing-statistics.md) — Statistics: index-only, density-only (no histograms), table-level `ANALYZE TABLE`; no column statistics. (Manual)

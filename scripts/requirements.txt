@@ -1,0 +1,24 @@
+# dbmig-aidlc — Python package dependencies (Python 3.9+)
+#
+# No native database client tools required (no sqlplus / psql).
+# Schema conversion is LLM-driven, where the LLM is Kiro itself — the package
+# prepares conversion prompt bundles and Kiro performs the conversion via the
+# db-migration-construction skill. The package therefore makes NO LLM API calls
+# and runs standalone.
+
+# Minimum versions are raised to the tested set; each floor is above any known
+# security-vulnerable release. Upgrades within these ranges are allowed — re-run
+# the test suite when bumping.
+pyyaml>=6.0.3
+oracledb>=3.4.2          # thin mode — connects to Oracle with zero native client install
+psycopg[binary]>=3.3.4   # psycopg3 with bundled libpq — no native PostgreSQL client needed
+pymysql>=1.1.2           # pure-Python MySQL/Aurora MySQL driver — no native client needed
+                         # (must stay >=1.1.1: 1.1.0 is vulnerable to CVE-2024-36039)
+python-tds>=1.17.1       # pure-Python SQL Server driver (import name: pytds) — no native client
+certifi>=2024.7.4        # CA bundle for verified TLS (verify-ca/verify-full, SQL Server tcps)
+pyopenssl>=26.0.0        # required by python-tds to encrypt SQL Server sessions (protocol: tcps)
+                         # (must stay >=26.0.0: <26.0.0 is vulnerable to CVE-2026-27448
+                         #  servername-callback auth bypass + CVE-2026-27459 DTLS cookie
+                         #  buffer overflow)
+cryptography>=46.0.0     # pyOpenSSL 26.x requires cryptography>=46; also the backend for
+                         #  oracledb thin-mode TLS — pinned explicitly for reproducible resolution

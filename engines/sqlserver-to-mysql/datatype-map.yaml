@@ -1,0 +1,132 @@
+# engines/sqlserver-to-mysql/datatype-map.yaml
+#
+# SQL Server -> MySQL (Aurora MySQL) datatype mapping used as conversion context.
+# "notes" call out precision/behavioral differences the validation phase checks.
+
+mappings:
+  # Integers
+  - sqlserver: bit
+    mysql: tinyint(1)
+    notes: "SQL Server bit (0/1/NULL) -> tinyint(1) (MySQL BOOLEAN alias)."
+  - sqlserver: tinyint
+    mysql: tinyint unsigned
+    notes: "SQL Server tinyint is 0-255 unsigned; MySQL tinyint is signed -> use UNSIGNED."
+  - sqlserver: smallint
+    mysql: smallint
+  - sqlserver: int
+    mysql: int
+  - sqlserver: bigint
+    mysql: bigint
+
+  # Exact / approximate numerics
+  - sqlserver: decimal(p,s)
+    mysql: decimal(p,s)
+    notes: "MySQL DECIMAL max precision 65."
+  - sqlserver: numeric(p,s)
+    mysql: decimal(p,s)
+  - sqlserver: money
+    mysql: decimal(19,4)
+  - sqlserver: smallmoney
+    mysql: decimal(10,4)
+  - sqlserver: float(n)
+    mysql: double
+  - sqlserver: real
+    mysql: float
+
+  # Character
+  - sqlserver: char(n)
+    mysql: char(n)
+  - sqlserver: varchar(n)
+    mysql: varchar(n)
+    notes: "Large n may need TEXT; MySQL row/index length limits apply (utf8mb4 = 4 bytes/char)."
+  - sqlserver: varchar(max)
+    mysql: longtext
+  - sqlserver: nchar(n)
+    mysql: char(n)
+    notes: "Use utf8mb4 charset; no separate national type."
+  - sqlserver: nvarchar(n)
+    mysql: varchar(n)
+  - sqlserver: nvarchar(max)
+    mysql: longtext
+  - sqlserver: text / ntext
+    mysql: longtext
+    notes: "Deprecated in SQL Server."
+
+  # Binary
+  - sqlserver: binary(n)
+    mysql: binary(n)
+  - sqlserver: varbinary(n)
+    mysql: varbinary(n)
+  - sqlserver: varbinary(max)
+    mysql: longblob
+  - sqlserver: image
+    mysql: longblob
+    notes: "Deprecated."
+
+  # Date / time
+  - sqlserver: date
+    mysql: date
+  - sqlserver: time(p)
+    mysql: time(p)
+    notes: "MySQL fractional seconds precision 0-6."
+  - sqlserver: datetime
+    mysql: datetime(3)
+    notes: "datetime ~3.33ms precision; validate rounding."
+  - sqlserver: datetime2(p)
+    mysql: datetime(p)
+    notes: "Cap precision at 6 (MySQL max)."
+  - sqlserver: smalldatetime
+    mysql: datetime
+  - sqlserver: datetimeoffset(p)
+    mysql: datetime(p)
+    notes: "MySQL has no tz-aware type; store UTC + offset, or use TIMESTAMP semantics. Validate."
+
+  # Identifiers / misc
+  - sqlserver: uniqueidentifier
+    mysql: char(36)
+    notes: "MySQL has no native UUID type; char(36) (or binary(16) with UUID_TO_BIN)."
+  - sqlserver: rowversion / timestamp
+    mysql: binary(8)
+    notes: "SQL Server 'timestamp'/rowversion is a binary row-version, NOT a datetime — do NOT map to MySQL TIMESTAMP; redesign optimistic-concurrency logic."
+  - sqlserver: xml
+    mysql: longtext
+    notes: "Consider JSON; MySQL has rich JSON support but limited XML."
+  - sqlserver: "sql_variant"
+    mysql: longtext
+    notes: "No equivalent; widen to text or redesign."
+  - sqlserver: hierarchyid
+    mysql: varchar(255)
+    notes: "No equivalent; redesign."
+  - sqlserver: "geography / geometry"
+    mysql: geometry
+    notes: "MySQL spatial types differ from SQL Server; validate."
+
+# Identifier & schema handling
+identifiers:
+  sqlserver_quote: brackets ([name]) or double-quotes
+  mysql_quote: backtick
+  recommendation: >
+    Fold mixed-case SQL Server names to lower_case. A MySQL schema IS a database:
+    the SQL Server schema (e.g. dbo) maps to a MySQL database. On Linux, MySQL table
+    names are case-sensitive (lower_case_table_names) — be consistent. SQL Server is
+    typically case-insensitive (collation-dependent); verify case-sensitive lookups.
+
+# Common gotchas validated in the testing phase
+gotchas:
+  - "IDENTITY -> AUTO_INCREMENT (one per table); SCOPE_IDENTITY()/@@IDENTITY -> LAST_INSERT_ID()."
+  - "No CLUSTERED index concept; PK is a normal index (InnoDB clusters on PK physically)."
+  - "GETDATE()->NOW(), ISNULL->IFNULL/COALESCE, LEN->CHAR_LENGTH, TOP n->LIMIT, + concat->CONCAT()."
+  - "No MERGE -> INSERT ... ON DUPLICATE KEY UPDATE; no sequences pre-8.0 -> AUTO_INCREMENT."
+  - "T-SQL procedures/functions/triggers -> MySQL stored programs; TRY/CATCH -> DECLARE HANDLER."
+  - "money/datetime rounding; rowversion is NOT a timestamp; bit vs tinyint(1)."
+  - "Case-insensitivity differs; choose collation (e.g. utf8mb4_0900_ai_ci) to match app expectations."
+  - "CLR, Service Broker, linked servers, full-text search, columnstore -> redesign / AWS services."
+  # --- learned from a real AdventureWorks Person+Sales -> Aurora MySQL run ---
+  - "uniqueidentifier -> char(36); NEWID() DEFAULT -> DEFAULT (UUID()) (MySQL 8 expression default needs parentheses). bit DEFAULT ((0)) -> tinyint(1) DEFAULT 0."
+  - "datetime -> datetime(3) with DEFAULT CURRENT_TIMESTAMP(3) (GETDATE()); MySQL 8 allows multiple CURRENT_TIMESTAMP-default columns per table."
+  - "AUTO_INCREMENT must be the LEADING column of some key. When IDENTITY is the 2nd PK column (e.g. EmailAddress(businessentityid, emailaddressid), SalesOrderDetail) add an extra KEY(identitycol)."
+  - "Computed/persisted columns (e.g. SalesOrderHeader.SalesOrderNumber/TotalDue, SalesOrderDetail.LineTotal, Customer.AccountNumber) -> migrate as STORED plain columns (load the value), or a MySQL GENERATED column if the expression is portable."
+  - "Reserved words as identifiers ([Group], etc.) -> backtick-quote and lower-case (`group`)."
+  - "Namespaced-XML views/queries: MySQL ExtractValue/UpdateXML do NOT support XML namespaces, so SQL Server XML .value() views over namespaced documents (AdventureWorks IndividualSurvey/StoreSurvey) cannot be reproduced -> flag/skip (unlike PostgreSQL xpath() which takes a namespace array)."
+  - "A SQL Server schema maps to a MySQL DATABASE: Person/Sales -> databases person/sales; cross-database joins/FKs use db-qualified names and work. geography -> longblob (opaque); xml -> longtext."
+  - "tinyint is signed in MySQL but 0-255 in SQL Server -> use tinyint UNSIGNED for tinyint columns (ExpMonth, Status, RevisionNumber, TaxType)."

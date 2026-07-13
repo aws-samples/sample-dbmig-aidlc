@@ -1,0 +1,16 @@
+object: uspUpdateEmployeeLogin
+schema: HumanResources
+type: procedure
+notes: >
+  Updates an employee's login/org-node/title. The SQL Server source has no explicit COMMIT, so the
+  run-tests transaction rollback undoes it on both engines -> non-destructive and repeatable.
+  hierarchyid parameter -> text on the target.
+cases:
+  - id: c1
+    description: update employee 1 login; the LoginID transition must match on both engines
+    call_source: "DECLARE @o hierarchyid = hierarchyid::Parse(N'/2/'); EXEC HumanResources.uspUpdateEmployeeLogin @BusinessEntityID=1, @OrganizationNode=@o, @LoginID=N'test-login', @JobTitle=N'Test Title', @HireDate='2010-01-01', @CurrentFlag=1"
+    call_target: "CALL humanresources.uspupdateemployeelogin(1, '/2/', 'test-login', 'Test Title', TIMESTAMP '2010-01-01', true)"
+    verify:
+      - name: employee1_loginid
+        source_sql: "SELECT LoginID FROM HumanResources.Employee WHERE BusinessEntityID = 1"
+        target_sql: "SELECT loginid FROM humanresources.employee WHERE businessentityid = 1"

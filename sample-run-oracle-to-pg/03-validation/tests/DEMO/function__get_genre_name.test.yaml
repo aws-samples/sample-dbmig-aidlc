@@ -1,0 +1,20 @@
+object: GET_GENRE_NAME
+schema: DEMO
+type: function
+notes: Lookup by real genre ids (1..8 exist); 9999 exercises the NO_DATA_FOUND -> 'Unknown' path.
+cases:
+  - id: c1
+    description: existing genre id 1
+    source_sql: "SELECT demo.get_genre_name(1) FROM dual"
+    target_sql: "SELECT demo.get_genre_name(1)"
+    compare: scalar
+  - id: c2
+    description: existing genre id 3
+    source_sql: "SELECT demo.get_genre_name(3) FROM dual"
+    target_sql: "SELECT demo.get_genre_name(3)"
+    compare: scalar
+  - id: c3
+    description: missing id -> 'Unknown'
+    source_sql: "SELECT demo.get_genre_name(9999) FROM dual"
+    target_sql: "SELECT demo.get_genre_name(9999)"
+    compare: scalar

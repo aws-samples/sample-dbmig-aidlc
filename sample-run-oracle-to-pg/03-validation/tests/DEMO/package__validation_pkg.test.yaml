@@ -1,0 +1,47 @@
+object: VALIDATION_PKG
+schema: DEMO
+type: function
+notes: >
+  Pure input->output validators (no data dependency) — strong equivalence cases covering the
+  regex conversions (REGEXP_LIKE -> ~, REGEXP_REPLACE with global 'g' flag) and range checks.
+cases:
+  - id: c1
+    description: valid email
+    source_sql: "SELECT demo.validation_pkg.is_valid_email('john.doe@example.com') FROM dual"
+    target_sql: "SELECT demo.validation_pkg_is_valid_email('john.doe@example.com')"
+    compare: scalar
+  - id: c2
+    description: invalid email (no domain)
+    source_sql: "SELECT demo.validation_pkg.is_valid_email('not-an-email') FROM dual"
+    target_sql: "SELECT demo.validation_pkg_is_valid_email('not-an-email')"
+    compare: scalar
+  - id: c3
+    description: valid 13-digit ISBN
+    source_sql: "SELECT demo.validation_pkg.is_valid_isbn('9780385534635') FROM dual"
+    target_sql: "SELECT demo.validation_pkg_is_valid_isbn('9780385534635')"
+    compare: scalar
+  - id: c4
+    description: valid 10-char ISBN with X check digit
+    source_sql: "SELECT demo.validation_pkg.is_valid_isbn('097522980X') FROM dual"
+    target_sql: "SELECT demo.validation_pkg_is_valid_isbn('097522980X')"
+    compare: scalar
+  - id: c5
+    description: invalid ISBN (too short)
+    source_sql: "SELECT demo.validation_pkg.is_valid_isbn('123') FROM dual"
+    target_sql: "SELECT demo.validation_pkg_is_valid_isbn('123')"
+    compare: scalar
+  - id: c6
+    description: valid price
+    source_sql: "SELECT demo.validation_pkg.is_valid_price(49.99) FROM dual"
+    target_sql: "SELECT demo.validation_pkg_is_valid_price(49.99)"
+    compare: scalar
+  - id: c7
+    description: invalid price (zero)
+    source_sql: "SELECT demo.validation_pkg.is_valid_price(0) FROM dual"
+    target_sql: "SELECT demo.validation_pkg_is_valid_price(0)"
+    compare: scalar
+  - id: c8
+    description: invalid price (at upper bound 10000)
+    source_sql: "SELECT demo.validation_pkg.is_valid_price(10000) FROM dual"
+    target_sql: "SELECT demo.validation_pkg_is_valid_price(10000)"
+    compare: scalar

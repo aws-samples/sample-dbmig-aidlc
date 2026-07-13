@@ -1,0 +1,24 @@
+# dbmig-aidlc — connection file (git-ignored). Passwords come from env vars
+# (${ORA_PASSWORD} / ${PG_PASSWORD}) sourced from Secrets Manager at run time —
+# never written to disk.
+
+source:
+  engine: oracle
+  version: "19c"
+  host: <ORACLE_RDS_ENDPOINT>   # masked; e.g. <name>.<id>.<region>.rds.amazonaws.com
+  port: 1521
+  service_name: ORCL
+  sid:
+  username: admin
+  password: ${ORA_PASSWORD}
+
+target:
+  engine: postgresql
+  version: "17"
+  host: <AURORA_PG_CLUSTER_ENDPOINT>   # masked; e.g. <cluster>.cluster-<id>.<region>.rds.amazonaws.com
+  port: 5432
+  database: demo            # new database created for this migration
+  username: postgres
+  password: ${PG_PASSWORD}
+  default_schema: demo
+  sslmode: require

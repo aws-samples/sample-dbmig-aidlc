@@ -1,0 +1,3 @@
+-- DEMO.REPORTING_PKG (package spec) -> flattened.
+-- The PL/SQL RECORD/TABLE types and PIPELINED function are re-expressed as a
+-- set-returning function (RETURNS TABLE). See package_body__reporting_pkg.sql.

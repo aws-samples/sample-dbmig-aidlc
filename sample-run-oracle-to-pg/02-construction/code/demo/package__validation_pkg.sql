@@ -1,0 +1,2 @@
+-- DEMO.VALIDATION_PKG (package spec) -> flattened.
+-- Subprograms become demo.validation_pkg_<subprogram>; see package_body__validation_pkg.sql.

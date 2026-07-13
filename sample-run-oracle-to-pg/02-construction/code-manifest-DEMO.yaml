@@ -1,0 +1,149 @@
+project: oracle-demo
+schema: DEMO
+phase: construction-code
+generated_at: '2026-07-02T12:06:38Z'
+provider: kiro
+model: kiro
+unit_count: 20
+units:
+- name: CALCULATE_DISCOUNT_PCT
+  object_type: FUNCTION
+  schema: DEMO
+  prompt_file: code_prompts/DEMO/function__calculate_discount_pct.prompt.md
+  output_file: code/demo/function__calculate_discount_pct.sql
+  status: applied
+  last_error: null
+- name: GET_CONDITION_NAME
+  object_type: FUNCTION
+  schema: DEMO
+  prompt_file: code_prompts/DEMO/function__get_condition_name.prompt.md
+  output_file: code/demo/function__get_condition_name.sql
+  status: applied
+  last_error: null
+- name: GET_CUSTOMER_FULL_NAME
+  object_type: FUNCTION
+  schema: DEMO
+  prompt_file: code_prompts/DEMO/function__get_customer_full_name.prompt.md
+  output_file: code/demo/function__get_customer_full_name.sql
+  status: applied
+  last_error: null
+- name: GET_CUSTOMER_LIFETIME_VALUE
+  object_type: FUNCTION
+  schema: DEMO
+  prompt_file: code_prompts/DEMO/function__get_customer_lifetime_value.prompt.md
+  output_file: code/demo/function__get_customer_lifetime_value.sql
+  status: applied
+  last_error: null
+- name: GET_GENRE_NAME
+  object_type: FUNCTION
+  schema: DEMO
+  prompt_file: code_prompts/DEMO/function__get_genre_name.prompt.md
+  output_file: code/demo/function__get_genre_name.sql
+  status: applied
+  last_error: null
+- name: BOOK_PKG
+  object_type: PACKAGE
+  schema: DEMO
+  prompt_file: code_prompts/DEMO/package__book_pkg.prompt.md
+  output_file: code/demo/package__book_pkg.sql
+  status: applied
+  last_error: null
+- name: INVENTORY_PKG
+  object_type: PACKAGE
+  schema: DEMO
+  prompt_file: code_prompts/DEMO/package__inventory_pkg.prompt.md
+  output_file: code/demo/package__inventory_pkg.sql
+  status: applied
+  last_error: null
+- name: ORDER_PKG
+  object_type: PACKAGE
+  schema: DEMO
+  prompt_file: code_prompts/DEMO/package__order_pkg.prompt.md
+  output_file: code/demo/package__order_pkg.sql
+  status: applied
+  last_error: null
+- name: REPORTING_PKG
+  object_type: PACKAGE
+  schema: DEMO
+  prompt_file: code_prompts/DEMO/package__reporting_pkg.prompt.md
+  output_file: code/demo/package__reporting_pkg.sql
+  status: applied
+  last_error: null
+- name: VALIDATION_PKG
+  object_type: PACKAGE
+  schema: DEMO
+  prompt_file: code_prompts/DEMO/package__validation_pkg.prompt.md
+  output_file: code/demo/package__validation_pkg.sql
+  status: applied
+  last_error: null
+- name: BOOK_PKG
+  object_type: PACKAGE BODY
+  schema: DEMO
+  prompt_file: code_prompts/DEMO/package_body__book_pkg.prompt.md
+  output_file: code/demo/package_body__book_pkg.sql
+  status: applied
+  last_error: null
+- name: INVENTORY_PKG
+  object_type: PACKAGE BODY
+  schema: DEMO
+  prompt_file: code_prompts/DEMO/package_body__inventory_pkg.prompt.md
+  output_file: code/demo/package_body__inventory_pkg.sql
+  status: applied
+  last_error: null
+- name: ORDER_PKG
+  object_type: PACKAGE BODY
+  schema: DEMO
+  prompt_file: code_prompts/DEMO/package_body__order_pkg.prompt.md
+  output_file: code/demo/package_body__order_pkg.sql
+  status: applied
+  last_error: null
+- name: REPORTING_PKG
+  object_type: PACKAGE BODY
+  schema: DEMO
+  prompt_file: code_prompts/DEMO/package_body__reporting_pkg.prompt.md
+  output_file: code/demo/package_body__reporting_pkg.sql
+  status: applied
+  last_error: null
+- name: VALIDATION_PKG
+  object_type: PACKAGE BODY
+  schema: DEMO
+  prompt_file: code_prompts/DEMO/package_body__validation_pkg.prompt.md
+  output_file: code/demo/package_body__validation_pkg.sql
+  status: applied
+  last_error: null
+- name: ARCHIVE_OLD_ORDERS
+  object_type: PROCEDURE
+  schema: DEMO
+  prompt_file: code_prompts/DEMO/procedure__archive_old_orders.prompt.md
+  output_file: code/demo/procedure__archive_old_orders.sql
+  status: applied
+  last_error: null
+- name: CLEAR_SHOPPING_CART
+  object_type: PROCEDURE
+  schema: DEMO
+  prompt_file: code_prompts/DEMO/procedure__clear_shopping_cart.prompt.md
+  output_file: code/demo/procedure__clear_shopping_cart.sql
+  status: applied
+  last_error: null
+- name: GENERATE_SALES_REPORT
+  object_type: PROCEDURE
+  schema: DEMO
+  prompt_file: code_prompts/DEMO/procedure__generate_sales_report.prompt.md
+  output_file: code/demo/procedure__generate_sales_report.sql
+  status: applied
+  last_error: null
+- name: PROCESS_CUSTOMER_OFFER
+  object_type: PROCEDURE
+  schema: DEMO
+  prompt_file: code_prompts/DEMO/procedure__process_customer_offer.prompt.md
+  output_file: code/demo/procedure__process_customer_offer.sql
+  status: applied
+  last_error: null
+- name: SET_BOOK_FEATURED
+  object_type: PROCEDURE
+  schema: DEMO
+  prompt_file: code_prompts/DEMO/procedure__set_book_featured.prompt.md
+  output_file: code/demo/procedure__set_book_featured.sql
+  status: applied
+  last_error: null
+max_retries: 3
