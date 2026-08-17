@@ -1,0 +1,100 @@
+# engines/sqlserver-to-mysql/app/app-config.yaml
+#
+# Application-layer facts for SQL Server → MySQL, used by the optional app-modernization
+# module. Same shape as every other pair's app/app-config.yaml.
+
+pair: sqlserver-to-mysql
+source_engine: sqlserver
+target_engine: mysql
+
+source:
+  jdbc:
+    url_pattern: "jdbc:sqlserver://<host>:<port>;databaseName=<database>;encrypt=true"
+    driver_class: "com.microsoft.sqlserver.jdbc.SQLServerDriver"
+    maven: {group: "com.microsoft.sqlserver", artifact: "mssql-jdbc"}
+    hibernate_dialect: "org.hibernate.dialect.SQLServerDialect"
+    default_port: 1433
+  dotnet: {provider: "Microsoft.Data.SqlClient"}
+  python: {driver: "pyodbc / pymssql"}
+  nodejs: {driver: "mssql / tedious"}
+
+target:
+  jdbc:
+    url_pattern: "jdbc:mysql://<host>:<port>/<database>?useSSL=true&requireSSL=true&serverTimezone=UTC"
+    driver_class: "com.mysql.cj.jdbc.Driver"
+    maven: {group: "com.mysql", artifact: "mysql-connector-j"}
+    hibernate_dialect: "org.hibernate.dialect.MySQLDialect"
+    default_port: 3306
+    schema_selector: "database-in-url"
+    notes: >
+      A SQL Server SCHEMA (dbo, Sales, Person) becomes a MySQL DATABASE, so a single SQL Server
+      database with several schemas becomes several MySQL databases. Cross-schema queries become
+      cross-database queries with qualified names, and the app's default database must be chosen
+      deliberately. Set serverTimezone explicitly or timestamps shift.
+  dotnet:
+    provider: "MySql.Data.MySqlClient (or MySqlConnector)"
+    conn_pattern: "Server=<host>;Port=<port>;Database=<database>;Uid=<user>;Pwd=<pw>;SslMode=Required;"
+  python: {driver: "PyMySQL / mysqlclient"}
+  nodejs: {driver: "mysql2"}
+
+bind_parameters:
+  source_named: "@name"
+  target_named: "?  (positional) or :name via the framework"
+  change_required: true
+  notes: >
+    SQL Server @name → MySQL positional ?. Note MySQL's connector also accepts @name as a
+    *user variable*, which is NOT a bind parameter — a mechanical find/replace that leaves @name
+    in place can silently read an unset session variable (NULL) instead of binding a value.
+
+result_set:
+  identifier_case:
+    source_returns: "as declared (commonly PascalCase)"
+    target_returns: "as written in the query"
+    impact: >
+      MySQL echoes the label as written, so PascalCase lookups may survive if the SQL preserves
+      the case. Table-name resolution, however, depends on lower_case_table_names and the host
+      filesystem — a Windows-developed app moving to Linux MySQL breaks on case. Standardise on
+      lower case and alias columns explicitly.
+  count_return_type:
+    source: int
+    target: BIGINT
+    impact: "COUNT(*) is BIGINT — widen Java int to long / .NET Int32 to Int64."
+  boolean_representation:
+    source: "bit (0/1)"
+    target: "tinyint(1)"
+    impact: >
+      bit → tinyint(1) keeps 0/1 semantics, so most comparison code survives. Connectors often
+      surface tinyint(1) as boolean — verify how the driver maps it before changing app code.
+
+errors:
+  source_style: "error number via SqlException.Number"
+  target_style: "MySQL error number via getErrorCode(), plus SQLSTATE"
+  impact: >
+    Map SQL Server numbers to MySQL numbers/SQLSTATEs. Custom RAISERROR/THROW numbers become
+    SIGNAL SQLSTATE '45000', which is a single generic class — distinguishing several custom
+    errors needs distinct SQLSTATEs or MESSAGE_TEXT matching. Check the conversion log.
+  common:
+    unique_violation: "1062 / 23000   (was 2627 / 2601)"
+    foreign_key_violation: "1452 / 1451   (was 547)"
+    deadlock: "1213   (was 1205)"
+    data_too_long: "1406   (was 8152)"
+    user_defined: "45000   (was 50000+)"
+
+identity:
+  source_pattern: "IDENTITY + SCOPE_IDENTITY() / OUTPUT INSERTED.id"
+  target_pattern: "AUTO_INCREMENT + LAST_INSERT_ID() / getGeneratedKeys()"
+  impact: >
+    MySQL has no OUTPUT/RETURNING clause, so an insert that returned generated values inline must
+    become an insert followed by LAST_INSERT_ID() or getGeneratedKeys(). Multi-row inserts return
+    only the FIRST generated id — code relying on OUTPUT for a batch must be redesigned.
+
+routines:
+  package_flattening: false
+  impact: >
+    Procedure names generally survive, and MySQL procedures return result sets naturally (closer
+    to SQL Server than PostgreSQL is). The breaking changes are: no table-valued parameters
+    (use JSON or a temporary table), no parameter defaults, EXEC becomes CALL, and MySQL FUNCTIONs
+    return only a scalar.
+  transaction_ownership: >
+    Where an internal transaction was removed the caller owns it; note MySQL DDL auto-commits, so
+    a routine mixing DDL with DML is not atomic.

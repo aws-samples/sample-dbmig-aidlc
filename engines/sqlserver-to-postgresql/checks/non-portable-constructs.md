@@ -89,3 +89,65 @@ Write a **non-destructive** case (target a non-existent key so the mutation matc
 engines) or leave `cases: []` and note it. Also: passing a `hierarchyid` argument to `EXEC` needs a
 declared variable — `DECLARE @o hierarchyid = hierarchyid::Parse(N'/2/'); EXEC … @node=@o` — an inline
 `CAST(...)` is rejected.
+
+## 13. Partitioning: SQL Server never rejects an out-of-range row — PostgreSQL does
+SQL Server partitions via a **partition function + partition scheme**
+(`CREATE PARTITION FUNCTION pf (int) AS RANGE LEFT FOR VALUES (100,200)` →
+`CREATE PARTITION SCHEME ps AS PARTITION pf TO (fg1,fg2,fg3)` → `CREATE TABLE ... ON ps(col)`).
+Neither object exists in PostgreSQL: the boundaries become `PARTITION OF ... FOR VALUES FROM/TO`
+and the filegroup list is dropped entirely.
+
+- **N boundary values always produce N+1 partitions**, so a SQL Server partitioned table
+  *inherently* has a catch-all at both ends and **cannot reject a row for being out of range**.
+  Converting naively therefore **introduces a runtime failure that did not exist in the source**:
+  PostgreSQL raises `23514 no partition of relation ... found for row`. The first partition must
+  start at `MINVALUE`, the last must end at `MAXVALUE`, **and** add
+  `CREATE TABLE t_default PARTITION OF t DEFAULT;` as a backstop. This is the single most
+  important rule here — it converts cleanly and fails in production.
+- **`RANGE LEFT` vs `RANGE RIGHT` changes which partition owns the boundary value.** PostgreSQL
+  `FOR VALUES FROM (a) TO (b)` is always inclusive-lower / exclusive-upper, which matches
+  **`RANGE RIGHT`**. For `RANGE LEFT` (the default) the boundary belongs to the *left* partition,
+  so bounds must be shifted by one increment or rows land in the wrong partition — a silent
+  data-placement error, not an error message. Check which was used before mapping.
+- **Unique indexes/PK must include the partitioning column** (PostgreSQL:
+  `unique constraint on partitioned table must include all partitioning columns`). SQL Server
+  permits a non-aligned unique index; PostgreSQL does not. Adding the column **weakens uniqueness**
+  to per-partition — mark it inline and get sign-off.
+- Partition names are schema-global in PostgreSQL; SQL Server does not name partitions at all
+  (they are numbered), so generate names and keep them unique across the schema, ≤63 bytes.
+- `$PARTITION.pf(col)`, `SWITCH`/`MERGE`/`SPLIT RANGE` have no equivalent —
+  `ALTER TABLE ... DETACH/ATTACH PARTITION` covers the common `SWITCH` cases.
+
+## 14. Views: implicit coercion, and views load after functions
+Views are converted in the **stored-code pass** and applied **after functions**, because a view
+that calls a scalar/table-valued function cannot be created before it exists.
+
+- **SQL Server coerces types silently in comparisons and joins (using datatype precedence);
+  PostgreSQL refuses** with `operator does not exist: integer = character varying`. Add explicit
+  `CAST`s. Note SQL Server's precedence converts the *string* side to the numeric type, so
+  `CAST(textcol AS numeric)` reproduces its behaviour — but it will now **error** on a
+  non-numeric value that SQL Server silently coerced. That makes it a data-quality question, not
+  a syntax one; if dirty values are possible, cast the numeric side to `text` and flag the change.
+- Keep the view's explicit column list, lower-cased consistently with the body; a
+  quoted-uppercase outer alias over a lower-cased inner query fails to resolve.
+- `TOP n` → `LIMIT n` (and `TOP n WITH TIES` → `FETCH FIRST n ROWS WITH TIES`);
+  `ISNULL` → `COALESCE`; `+` string concat → `||` (wrap operands in `COALESCE` to keep
+  SQL Server's `CONCAT_NULL_YIELDS_NULL OFF` behaviour if it was set);
+  `CROSS APPLY`/`OUTER APPLY` → `CROSS JOIN LATERAL`/`LEFT JOIN LATERAL ... ON true`.
+- `WITH SCHEMABINDING` has no equivalent — drop it (PostgreSQL always tracks the dependency).
+- `WITH CHECK OPTION` is supported; `INSTEAD OF` triggers on views are supported (on **views**;
+  see item 2 for the table case).
+
+## 15. Table types and table-valued parameters
+`CREATE TYPE x AS TABLE (...)` used as a `READONLY` table-valued parameter has no PostgreSQL
+equivalent. Options, in order of preference:
+
+1. **An array of a composite type** — `CREATE TYPE x AS (...)` then a parameter of `x[]`, expanded
+   with `unnest($1)`. Closest to the original shape and keeps set-based logic.
+2. **A `jsonb` parameter** expanded with `jsonb_to_recordset` — easiest for application clients
+   that already send JSON.
+3. A temporary table populated by the caller — most faithful to the T-SQL idiom, but changes the
+   call protocol.
+
+Either way the **caller contract changes**: clients that bind a TVP must be updated. Flag every
+occurrence. `MERGE` driven by a TVP is doubly affected — see the `MERGE` guidance.

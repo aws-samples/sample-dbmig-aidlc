@@ -454,3 +454,11 @@ Common environment variables:
   backups first. Keep the source intact and reachable through a soak period.
 - The playbook references are distilled from the AWS *Oracle to Aurora PostgreSQL Migration
   Playbook* and are reference only — **test everything in a non-production environment first.**
+
+## Optional: convert the application too
+
+After this migration, application code still speaks the source dialect. The opt-in
+**app-modernization** module converts it — driven by this migration's own artifacts
+(conversion log, validation carry-forwards) and the pair's `engines/oracle-to-postgresql/app/` rules,
+with a gated change plan before any edit and mirrored backups (never `.bak` files).
+Start it explicitly: *"convert my application to work with the migrated database"*.

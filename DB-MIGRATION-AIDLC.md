@@ -64,6 +64,15 @@ movement: an enforced foreign key would dictate load order, and a value-maintain
 target from the source. Deferral keeps the migrated data byte-for-byte faithful, then restores
 full referential integrity and behavior once the data is in place.
 
+### After the database: the optional application phase
+
+The same AI-DLC loop extends to the application layer as a **separate, opt-in module**
+(`app-modernization-orchestrator`): Inception (inventory + gated change plan) → Construction
+(edits + mirrored backups) → Validation (build/tests) → Operations (app cutover feeding the DB
+runbook). It never starts automatically — completing a database migration only makes it
+*available*. Its change plan is derived from the migration's own artifacts, so every app edit
+traces to the DB decision that caused it.
+
 ## AI-DLC vocabulary, mapped
 
 AI-DLC deliberately renames Agile rituals to reflect its AI-driven cadence. The equivalents

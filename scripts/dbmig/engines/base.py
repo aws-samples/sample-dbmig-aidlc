@@ -331,6 +331,12 @@ class TargetEngine(Engine, ABC):
     role = "target"
 
     @abstractmethod
+    def table_exists(self, schema: str, table: str):
+        """Return True/False if the engine can check the catalog, else None
+        (= cannot verify). Used by apply-schema's post-apply verification to
+        detect DDL that applied cleanly into the WRONG schema/database."""
+        return None
+
     def ensure_schema(self, schema: str) -> None:
         ...
 

@@ -164,15 +164,52 @@ def run(args) -> int:
         return 0
 
     console.info(f"Applying {phase_label} for {len(work)} unit(s) to the target ...")
+    misplaced_warning = None
     try:
         if schema:
             target.ensure_schema(schema)
         results = target.apply_units(work)
+        # Post-apply verification (schema pass only): a unit whose DDL is qualified
+        # with the WRONG schema/database applies cleanly and reports success — the
+        # failure only surfaces later, at the data load. Check the catalog now.
+        # (Learned from a real oracle->mysql run where DDL qualified with the
+        # connection's database name landed every table outside the derived schema.)
+        if schema and not args.code:
+            applied_names = [r["label"] for r in results if r["status"] == "applied"]
+            if applied_names:
+                found, missing, unknown = 0, [], False
+                for name in applied_names:
+                    ok = target.table_exists(schema, name.lower())
+                    if ok is None:
+                        unknown = True
+                        break
+                    if ok:
+                        found += 1
+                    else:
+                        missing.append(name)
+                if not unknown and found == 0:
+                    misplaced_warning = (
+                        f"apply reported {len(applied_names)} unit(s) applied, but NONE of "
+                        f"their tables exist in target schema '{schema}'. The DDL is almost "
+                        f"certainly qualified with a different schema/database (e.g. the "
+                        f"connection's database name). The target schema is derived from the "
+                        f"SOURCE schema, lower-cased: qualify objects with '{schema}'.")
+                elif not unknown and missing:
+                    misplaced_warning = (
+                        f"{len(missing)} applied unit(s) have no table in target schema "
+                        f"'{schema}': {', '.join(missing[:5])}"
+                        f"{' …' if len(missing) > 5 else ''} — check the DDL's schema "
+                        f"qualification.")
     except Exception as exc:  # noqa: BLE001
         console.err(f"apply failed: {exc}")
         return 1
     finally:
         target.close()
+
+    if misplaced_warning:
+        console.err(f"SCHEMA MISMATCH: {misplaced_warning}")
+        followup.record(phase="construction", kind="schema_mismatch",
+                        obj=f"schema {schema}", detail=misplaced_warning)
 
     status_by_name = {r["label"]: r for r in results}
     retry_dir = _retry_dir(ws, args.code)

@@ -57,6 +57,7 @@ read the active engine pair's definition at run time.
 | `db-migration-validation` | Data load (or AWS DMS hand-off), reconciliation, and LLM-generated equivalence testing. |
 | `db-migration-operations` | Cutover runbook, rollback plan, monitoring. |
 | `<pair>-playbook` (×4) | **Knowledge base.** AWS migration playbooks distilled into granular per-topic references the converter consults. |
+| `app-modernization-*` (×5) | **Optional module** (orchestrator + Inception/Construction/Validation/Operations): conforms *application code* to a completed migration. Opt-in only; never auto-starts. |
 
 ### 2.2 The toolkit layer (the "hands") — `scripts/dbmig/`
 
@@ -282,6 +283,33 @@ In both cases there are **zero changes** to the CLI, prompt builder, data migrat
 reconciliation code — they all operate through the adapter interface.
 
 ---
+
+## 9a. The optional application-modernization module
+
+A database migration leaves the *application* speaking the old dialect. A separate, **opt-in**
+module (`app-modernization-orchestrator` + one skill per AI-DLC phase) conforms application
+code to a completed migration: embedded SQL, datasource/ORM configuration, entity mappings,
+stored-routine call sites, error codes, result-set typing.
+
+Design points, mirroring the DB side:
+
+- **Contract-driven, not generic.** Inception derives an *app contract* from the migration's own
+  artifacts (conversion log, code manifest, validation carry-forwards) — the app is conformed to
+  what *this* migration did, not to a dialect pair in the abstract.
+- **Gate before any edit.** Inception produces a per-site change plan (current vs proposed,
+  mechanical vs behavioural, risk); nothing is edited until it is approved.
+- **Mirrored backups.** Originals are copied to
+  `migrations/<project>/05-application/backup/<timestamp>/<relative-path>` — never `.bak` files
+  beside the sources.
+- **Per-pair seam.** Application rules live in `engines/<pair>/app/` (`app-config.yaml` +
+  `app-sql-rules.md`, one identical schema across pairs), so a new pair needs no skill changes.
+  They are deliberately *not* under the playbook: the playbook's `references/*/_index.md` files
+  are injected into DB-schema conversion prompts, where app rules would be noise.
+- **Like-for-like only.** The app keeps its architecture and framework; this is not refactoring.
+
+Proven on a Java/Spring Boot/JPA app (Oracle→PostgreSQL, Oracle→MySQL) and a .NET/EF Core app
+(SQL Server→PostgreSQL, SQL Server→MySQL), each validated by live queries against the migrated
+target.
 
 ## 10. Security & safety
 

@@ -175,6 +175,13 @@ class MySQLEngine(TargetEngine):
     def bulk_insert(self, schema, table, columns, rows):
         return copy_rows(self.connection, schema, table, columns, rows)
 
+    def table_exists(self, schema, table):
+        with self.connection.cursor() as cur:
+            cur.execute(
+                "SELECT COUNT(*) FROM information_schema.tables "
+                "WHERE table_schema = %s AND table_name = %s", (schema, table))
+            return cur.fetchone()[0] > 0
+
     def get_row_count(self, schema, table):
         return row_count(self.connection, schema, table)
 

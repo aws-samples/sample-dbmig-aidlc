@@ -270,12 +270,33 @@ class SQLServerEngine(SourceEngine):
     _TYPE_DESC = {"P": "PROCEDURE", "FN": "FUNCTION", "IF": "FUNCTION",
                   "TF": "FUNCTION", "V": "VIEW"}
 
+    # Dependency tiers for load ordering (lower is created first).
+    #
+    # ``ORDER BY o.type`` sorts by SQL Server's *type code*, which alphabetically
+    # yields FN, IF, P, TF, V — loading PROCEDUREs (P) before table-valued functions
+    # (TF) and views (V), even though procedures routinely reference both. That
+    # produces "Invalid object name" failures that are pure sequencing artifacts
+    # rather than conversion defects. Order by dependency instead:
+    #   scalar/inline functions -> table-valued functions -> views -> procedures.
+    # ``apply_units`` still retries across passes (engines/_common.multipass_apply),
+    # so this is an optimisation for the common case, not a correctness requirement.
+    _TYPE_TIERS = {"FN": 1, "IF": 2, "TF": 3, "V": 4, "P": 5}
+
+    # Emitted once and reused by both code-object queries below. Built from the
+    # trusted module constant above, never from user input.
+    _TYPE_ORDER_SQL = (
+        "CASE o.type " + " ".join(f"WHEN '{t}' THEN {n}"
+                                  for t, n in sorted(_TYPE_TIERS.items(),
+                                                     key=lambda kv: kv[1]))
+        + " ELSE 99 END, o.name"
+    )
+
     def list_callables(self, schema: str) -> List[Tuple[str, str]]:
         _, rows = self.fetch(
             "SELECT o.type, o.name FROM sys.objects o "  # nosec B608
             "JOIN sys.schemas s ON o.schema_id = s.schema_id "
             f"WHERE s.name = {_lit(schema)} AND o.type IN ('P','FN','IF','TF','V') "
-            "ORDER BY o.type, o.name")
+            f"ORDER BY {self._TYPE_ORDER_SQL}")
         return [(self._TYPE_DESC.get(t.strip(), t.strip()), n) for t, n in rows]
 
     def code_object_ddl(self, schema: str, object_type: str, name: str) -> str:
@@ -289,7 +310,7 @@ class SQLServerEngine(SourceEngine):
             "JOIN sys.objects o ON m.object_id = o.object_id "
             "JOIN sys.schemas s ON o.schema_id = s.schema_id "
             f"WHERE s.name = {_lit(schema)} AND o.type IN ('P','FN','IF','TF','V') "
-            "ORDER BY o.type, o.name")
+            f"ORDER BY {self._TYPE_ORDER_SQL}")
         out = []
         for t, name, definition in rows:
             if (definition or "").strip():

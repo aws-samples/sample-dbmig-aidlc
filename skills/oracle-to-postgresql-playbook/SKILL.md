@@ -101,3 +101,4 @@ then fall back to the general references. See `customer-specific/_index.md`.
 ## Cross-references
 - Datatype mapping table: `engines/oracle-to-postgresql/datatype-map.yaml`
 - Equivalence-testing methodology: `engines/oracle-to-postgresql/checks/equivalence-spec.md`
+- Application-layer conversion rules (embedded SQL, drivers/ORM, error codes) for this pair: `engines/oracle-to-postgresql/app/` — used by the optional `app-modernization-orchestrator` module, not by DB-schema conversion.

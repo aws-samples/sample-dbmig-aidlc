@@ -10,7 +10,7 @@ Oracle → Aurora PostgreSQL conversion references distilled from the AWS Oracle
 - [temporary-tables.md](temporary-tables.md) — Oracle GLOBAL temp tables vs PostgreSQL session-local temp tables; reversed ON COMMIT default.
 - [triggers.md](triggers.md) — Oracle inline-body triggers vs PostgreSQL function+trigger model; no system/DB-event triggers in PostgreSQL.
 - [tablespaces-and-data-files.md](tablespaces-and-data-files.md) — Tablespace/data-file concepts; Aurora auto-manages files under /rdsdbdata/tablespaces/.
-- [user-defined-types.md](user-defined-types.md) — Oracle OBJECT types vs PostgreSQL composite/enum/range/array types; no AS OBJECT or CREATE OR REPLACE TYPE.
+- [user-defined-types.md](user-defined-types.md) — Oracle OBJECT types vs PostgreSQL composite/enum/range/array types; no AS OBJECT or CREATE OR REPLACE TYPE; constructor calls become `ROW(...)` and attribute access needs parentheses `(col).attr`. **Create types before anything referencing them.** Automatic for the DDL — but **collection use inside PL/SQL is Manual**, see `../sql-plsql/collections-and-bulk-operations.md`.
 - [unused-columns-and-alter-table.md](unused-columns-and-alter-table.md) — Oracle SET UNUSED/DROP UNUSED vs PostgreSQL DROP COLUMN + VACUUM FULL.
 - [virtual-columns.md](virtual-columns.md) — Oracle virtual columns vs PostgreSQL 12+ generated columns, or views/functions/triggers + expression indexes.
 

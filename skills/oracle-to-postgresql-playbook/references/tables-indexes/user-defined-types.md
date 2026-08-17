@@ -3,8 +3,21 @@
 > Source: AWS Oracle→Aurora PostgreSQL Migration Playbook
 > URL: https://docs.aws.amazon.com/dms/latest/oracle-to-aurora-postgresql-migration-playbook/chap-oracle-aurora-pg.tables.udt.html
 
-**Conversion category:** Automatic (four-star feature compatibility, four-star automation)
+**Conversion category:** **Automatic for the type declaration; Manual for collection use in PL/SQL.**
+(The AWS playbook rates this Automatic / four-star, which is accurate for `CREATE TYPE` DDL —
+but that rating covers only the declaration. In real migrations the cost sits in the PL/SQL that
+*consumes* the types: nested-table returns, accumulate-and-return loops, `BULK COLLECT`/`FORALL`,
+and associative arrays. Do not carry the four-star rating into an effort estimate for a schema
+with collection-heavy PL/SQL.)
 **SCT automation:** User-Defined Types action code index. PostgreSQL doesn't support the `FORALL` statement, the `DEFAULT` option, or collection-type constructors.
+
+> **Collections in PL/SQL → see
+> [`../sql-plsql/collections-and-bulk-operations.md`](../sql-plsql/collections-and-bulk-operations.md).**
+> This file covers types as **DDL**. The companion file covers the harder half — mapping
+> `TABLE OF <object>` to `RETURNS SETOF`, scalar collections to array domains, the
+> accumulate-then-`RETURN NEXT` rewrite and its row-boundary hazard, collection methods,
+> `BULK COLLECT`/`FORALL`, associative arrays, `SYS_REFCURSOR`, and the fact that PostgreSQL
+> cannot build arrays of anonymous records.
 
 ## Oracle
 Oracle UDTs are `OBJECT TYPES`, managed via PL/SQL and built on/extending built-in types. `CREATE TYPE` supports: object types, varying array (varray) types, nested table types, incomplete types, and SQLJ object types (Java class mapped to a SQL UDT).
@@ -110,4 +123,15 @@ SELECT a.EMP_ID, (a.EMP_PHONE).PHONE_NUM FROM EMPLOYEES a;
 - Replace Oracle `CREATE OR REPLACE TYPE ... AS OBJECT (...)` with PostgreSQL `CREATE TYPE ... AS (...)` (composite). Drop `OR REPLACE` and `AS OBJECT`.
 - Constructor calls (e.g. `EMP_PHONE_NUM('...')`) become `ROW(...)`; attribute access requires parentheses: `(col).attr`.
 - PostgreSQL lacks collection-type constructors, the `FORALL` statement, and the `DEFAULT` option for types.
-- Oracle varray/nested-table collection types map best to PostgreSQL **array** types or composite types depending on use.
+- Oracle varray/nested-table collection types do **not** map to a single PostgreSQL type. The
+  mapping depends on the element type and on how the collection is used:
+  `TABLE OF <object_type>` → a function returning `SETOF <composite>` (no collection type is
+  created at all); `TABLE OF <scalar>` / `VARRAY(n) OF <scalar>` → `CREATE DOMAIN ... AS <scalar>[]`;
+  `INDEX BY` associative arrays → no equivalent, restructure.
+  Full rules, rewrite patterns and hazards:
+  [`../sql-plsql/collections-and-bulk-operations.md`](../sql-plsql/collections-and-bulk-operations.md).
+- **Create types before anything that references them.** A function, view or table whose
+  signature or column list uses a composite type cannot compile until the type exists; loading
+  types late produces large numbers of `type "x" does not exist` errors that are pure ordering
+  artifacts, not conversion defects. The toolkit orders the stored-code pass
+  types → functions → views → packages → procedures → package bodies for this reason.

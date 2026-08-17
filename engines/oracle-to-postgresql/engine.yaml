@@ -41,6 +41,11 @@ conversion:
     - skills/db-migration-construction/SKILL.md
     - engines/oracle-to-postgresql/datatype-map.yaml
     - engines/oracle-to-postgresql/checks/non-portable-constructs.md
+    # Partitioning rules that fail at RUNTIME (missing DEFAULT partition) or silently
+    # change semantics (partition key added to PK/UNIQUE). Always injected because,
+    # unlike a syntax error, nothing later in the pipeline surfaces them. The full
+    # partitioning treatment stays in the playbook reference, loaded on demand.
+    - engines/oracle-to-postgresql/checks/partitioning.md
     - skills/oracle-to-postgresql-playbook/references/
 
 # dbmig commands that drive each phase.

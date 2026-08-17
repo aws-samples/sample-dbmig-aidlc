@@ -48,6 +48,11 @@ objects `db.table`; cross-database joins, views, and foreign keys all work with 
 The deferred FK + multi-statement apply (see the framework's MULTI_STATEMENTS support) applies a
 table's several `ALTER ... ADD FOREIGN KEY` statements together.
 
+**Do NOT qualify DDL with the connection's `database:` value** — the target database is derived
+from the **source schema name** (lower-cased); the connection's database is only the login
+default. Wrongly-qualified DDL applies cleanly and only fails at the data load. The conversion
+prompt states the exact target database, and `apply-schema` cross-checks the catalog afterwards.
+
 ## 7. T-SQL programmable objects
 `IDENTITY`→`AUTO_INCREMENT`; `SCOPE_IDENTITY()`/`@@IDENTITY`→`LAST_INSERT_ID()`;
 `GETDATE()`→`NOW()`; `ISNULL`→`IFNULL`/`COALESCE`; `LEN`→`CHAR_LENGTH`; `TOP n`→`LIMIT n`;
@@ -61,3 +66,71 @@ In a partial migration, foreign keys to out-of-scope schemas (e.g.
 `SalesOrderHeader → Purchasing.ShipMethod`, `SalesPerson → HumanResources.Employee`,
 `* → Production.Product`) are **omitted and flagged**, not enforced. Run `inventory` first — it
 reports cross-schema dependencies so you can confirm scope before converting.
+
+## 9. Partitioning: SQL Server cannot reject an out-of-range row — MySQL can
+SQL Server's **partition function + partition scheme** pair has no MySQL equivalent; both collapse
+into an inline `PARTITION BY RANGE (col) (PARTITION ... VALUES LESS THAN ...)` clause, and the
+filegroup list is dropped.
+
+- **N boundaries always yield N+1 partitions in SQL Server**, so the source table has a catch-all
+  at each end and can never reject a row for being out of range. Converting naively therefore
+  **introduces a runtime failure the source did not have**:
+  `ERROR 1526 (HY000): Table has no partition for value`. Always end with
+  `PARTITION pmax VALUES LESS THAN (MAXVALUE)`. MySQL has **no `DEFAULT` partition** (that is
+  PostgreSQL), and `LIST` partitioning has no catch-all at all — every value must be enumerated.
+- **`RANGE LEFT` (SQL Server default) vs `RANGE RIGHT` decides which partition owns the boundary
+  value.** MySQL `VALUES LESS THAN (v)` is exclusive of `v`, matching **`RANGE RIGHT`**. For
+  `RANGE LEFT`, shift the bound by one increment or rows land in the neighbouring partition —
+  silent misplacement, no error.
+- **Every unique key, including the PRIMARY KEY, must contain all partitioning columns**
+  (`ERROR 1503`). SQL Server allows a non-aligned unique index; MySQL does not. Adding the column
+  **weakens uniqueness** to per-partition — mark it and get sign-off.
+- **Partitioned InnoDB tables cannot participate in foreign keys at either end** (`ERROR 1506`).
+  For a heavily-referenced fact table this often decides the design: drop the partitioning, or drop
+  the FKs and enforce integrity in the application. Never discard a constraint silently — and note
+  this pair already omits FKs to non-migrated schemas (item 8), so keep the two cases distinct in
+  the conversion log.
+- `SWITCH`/`MERGE`/`SPLIT RANGE` → `ALTER TABLE ... EXCHANGE PARTITION` covers some `SWITCH` cases;
+  `$PARTITION.pf()` has no equivalent.
+
+## 10. Views: MySQL coerces types too — which is more dangerous, not less
+Views are converted in the **stored-code pass** and applied **after functions**, since a view that
+calls a function cannot be created first.
+
+- Both SQL Server and MySQL coerce silently across types, so a mismatched join **will not error**
+  on either side — but they use **different rules**: MySQL converts a non-numeric string to `0`
+  rather than raising. A join that "worked" in SQL Server can therefore return *different rows* in
+  MySQL with no diagnostic. Add explicit `CAST`s where the source relied on coercion and treat it
+  as a data-quality finding; this is exactly the class of difference the equivalence tests exist
+  to catch, so include such joins in a query-parity case.
+- MySQL views have real restrictions: **no subquery in the `FROM` clause of a view** in older
+  versions, `WITH` (CTE) needs 8.0+, and a view cannot reference a temporary table or a variable.
+  `CROSS APPLY`/`OUTER APPLY` → `JOIN LATERAL` (MySQL 8.0.14+) or a rewritten join.
+- `TOP n` → `LIMIT n`; `ISNULL` → `IFNULL`; `+` concat → `CONCAT()`;
+  `WITH SCHEMABINDING` → drop. `WITH CHECK OPTION` is supported.
+- MySQL has no `INSTEAD OF` triggers, so a non-updatable view that SQL Server made writable that
+  way must be handled in the application.
+- Keep the explicit column list, lower-cased consistently with the body.
+
+## 11. Table types and table-valued parameters
+`CREATE TYPE x AS TABLE (...)` passed as a `READONLY` TVP has no MySQL equivalent, and MySQL has
+**no arrays and no composite types** to fall back on (unlike PostgreSQL). Options:
+
+1. **A `JSON` parameter** expanded with `JSON_TABLE(...)` (MySQL 8.0+) — the closest to set-based.
+2. **A `TEMPORARY TABLE`** the caller populates before `CALL` — most faithful to the T-SQL idiom.
+
+Both change the **caller contract**: any client binding a TVP must be rewritten. Flag every
+occurrence. A `MERGE` driven by a TVP is affected twice, since `MERGE` itself becomes
+`INSERT ... ON DUPLICATE KEY UPDATE` (item 7).
+
+## 12. CHECK constraints calling getdate() are rejected — SEMANTIC CHANGE
+MySQL 8 CHECK constraints cannot reference non-deterministic functions
+(`ERROR 3814: An expression of a check constraint ... contains disallowed function: now`).
+SQL Server CHECKs like `[BirthDate] <= dateadd(year,(-18),getdate())` therefore have no
+direct port (PostgreSQL, by contrast, accepts `now()` in CHECK). Options:
+1. Keep only the deterministic part of the constraint and DROP the now()-relative bound —
+   mark it inline and record a semantic change for sign-off (the rule is no longer enforced
+   by the database); enforce it in the application or a BEFORE trigger if load-bearing.
+2. Rewrite as a `BEFORE INSERT/UPDATE` trigger that SIGNALs on violation — preserves
+   enforcement at the cost of trigger machinery.
+Never drop the whole constraint silently: static bounds (e.g. `>= '1930-01-01'`) still port.

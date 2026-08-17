@@ -9,6 +9,8 @@ from __future__ import annotations
 import datetime as _dt
 from typing import List
 
+import yaml
+
 from .. import config, console, engines, followup as fu
 from ..connections import load_pair
 from ..conversion import naming, prompt_builder
@@ -136,6 +138,7 @@ def run(args) -> int:
         "units": manifest_units,
     }
     manifest_path = config.resolve_manifest(ws, "code-manifest", args.schema, for_write=True)
+    _warn_if_reusing_workspace(manifest_path, console, yaml)
     write_manifest(manifest_path, manifest)
 
     console.heading("Code conversion prepared")
@@ -150,3 +153,30 @@ def run(args) -> int:
             "bundle, writes the output_file, and sets status 'converted'. Code "
             "objects often need iterative review — convert, apply, test, refine.")
     return 0
+
+
+def _warn_if_reusing_workspace(manifest_path, console, yaml):
+    """Warn when regenerating a manifest that shows prior progress.
+
+    Reusing a --project across runs silently mixes artifacts (and follow-up items)
+    from different runs/targets in one workspace — seen in a real workspace where a
+    June run's test failures sat beside an August run's reports. The README's
+    convention is a unique project per run (e.g. date-stamped); this warning makes
+    the reuse visible instead of silent."""
+    if not manifest_path.exists():
+        return
+    try:
+        prev = yaml.safe_load(manifest_path.read_text()) or {}
+    except Exception:
+        return
+    units = prev.get("units") or []
+    progressed = [u for u in units
+                  if u.get("status") not in (None, "pending")
+                  or u.get("post_status") not in (None, "pending")]
+    if progressed:
+        console.warn(
+            f"overwriting existing manifest {manifest_path.name} in which "
+            f"{len(progressed)}/{len(units)} unit(s) had progressed (converted/applied). "
+            f"If this is a NEW run (different target or a re-run), prefer a fresh "
+            f"--project name — reusing one mixes runs' artifacts and follow-up items "
+            f"in a single workspace. Generated at: {prev.get('generated_at', '?')}.")

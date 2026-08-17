@@ -29,6 +29,30 @@ client tools), then drives the migration through four phases. You approve at eac
 The entry point is the `db-migration-orchestrator` skill, which runs the intake interview
 and routes between phases.
 
+## Optional: application modernization (separate, opt-in module)
+
+After a database migration, the **application** still speaks the old dialect — embedded SQL,
+datasource/ORM configuration, stored-routine call sites, error codes, result-set typing. An
+optional module converts the application to match, driven by the migration's own artifacts
+(its conversion log and validation carry-forwards) rather than generic rules.
+
+**Like-for-like only.** The application keeps its architecture, framework and behaviour — the
+module changes only what the database migration invalidated. It is *not* application refactoring:
+no monolith-to-microservices decomposition, framework/language upgrades, ORM swaps, or general
+cleanup — those are separate engagements.
+
+- **Opt-in only — it never starts automatically.** Ask for it explicitly, e.g. *"convert my
+  application to work with the migrated database"*. The `app-modernization-orchestrator` skill
+  then asks for the application directory and which `migrations/<project>/` workspace to conform to.
+- **Same AI-DLC phases, same gates**: Inception (inventory + **change plan**) → Construction →
+  Validation (build/test) → Operations (app cutover). **Nothing is edited before the change plan
+  is approved** — every proposed edit is previewed per site (current vs proposed code, risk class).
+- **Backups are a mirrored tree**, `migrations/<project>/05-application/backup/<timestamp>/…`,
+  never `.bak` files scattered beside the originals.
+- **Engine-pair extensible**: per-pair app rules live in `engines/<pair>/app/`
+  (`app-config.yaml` + `app-sql-rules.md`), so new pairs need no skill changes. All four current
+  pairs ship with app rules.
+
 ## How it maps to AI-DLC
 
 AI-DLC positions AI as the central collaborator that **plans and executes while humans make
@@ -125,12 +149,17 @@ dbmig-aidlc/
 │   ├── db-migration-construction/       # schema + PL/SQL conversion
 │   ├── db-migration-validation/         # data load + equivalence testing
 │   ├── db-migration-operations/         # cutover, rollback, monitoring
+│   ├── app-modernization-orchestrator/  # OPTIONAL app-code module — entry (opt-in, gated)
+│   ├── app-modernization-inception/     #   Inception: scan + classify impacted app sites
+│   ├── app-modernization-construction/  #   Construction: apply approved edits + mirrored backups
+│   ├── app-modernization-validation/    #   Validation: compile, fix, test, verification matrix
+│   ├── app-modernization-operations/    #   Operations: app cutover plan feeding the DB runbook
 │   ├── oracle-to-postgresql-playbook/   # AWS playbook → granular references
 │   ├── oracle-to-mysql-playbook/        # AWS playbook → granular references
 │   ├── sqlserver-to-postgresql-playbook/ # AWS playbook → granular references
 │   └── sqlserver-to-mysql-playbook/     # AWS playbook → granular references
 ├── engines/
-│   ├── oracle-to-postgresql/            # engine.yaml, datatype-map.yaml, checks/
+│   ├── oracle-to-postgresql/            # engine.yaml, datatype-map.yaml, checks/, app/
 │   ├── oracle-to-mysql/                 # engine.yaml, datatype-map.yaml, checks/
 │   ├── sqlserver-to-postgresql/         # engine.yaml, datatype-map.yaml, checks/
 │   └── sqlserver-to-mysql/              # engine.yaml, datatype-map.yaml, checks/
@@ -203,6 +232,12 @@ python -m dbmig convert-schema  --schema Person --project "$PROJECT"
 A single project can hold several schemas — manifests and inventories are schema-scoped
 (`manifest-<SCHEMA>.yaml`, `inventory-<SCHEMA>.yaml`), so `--project` is the whole run and `--schema`
 selects the schema within it.
+
+Two guardrails learned from real runs: `convert-schema`/`convert-code` **warn when regenerating a
+manifest that already shows progress** (reusing a `--project` across runs mixes artifacts and
+follow-up items silently), and `apply-schema` **cross-checks the catalog after applying** — DDL
+qualified with the wrong schema/database applies "successfully" into the wrong namespace and is
+reported as `SCHEMA MISMATCH` instead of surfacing later at the data load.
 
 ## Security & safety notes
 

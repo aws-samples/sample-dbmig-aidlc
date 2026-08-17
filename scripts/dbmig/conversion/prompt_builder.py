@@ -103,7 +103,8 @@ def _target_display(target: str) -> str:
         "PostgreSQL (Aurora PostgreSQL compatible)"
 
 
-def _instruction(source_disp: str, target: str, *, code: bool = False) -> str:
+def _instruction(source_disp: str, target: str, *, code: bool = False,
+                 target_schema: Optional[str] = None) -> str:
     if target == "mysql":
         tdisp = "MySQL (Aurora MySQL)"
         idrule = ("Fold UPPERCASE identifiers to lower_case; MySQL quotes identifiers with "
@@ -112,17 +113,28 @@ def _instruction(source_disp: str, target: str, *, code: bool = False) -> str:
         tdisp = "PostgreSQL"
         idrule = ("Fold UPPERCASE identifiers to lower_case unquoted PostgreSQL identifiers "
                   "unless quoting is required.")
+    # State the exact target schema so the converter never has to infer it. Inferring
+    # it from the connection's database/catalog name is the natural mistake — and wrong:
+    # the framework derives the target schema (MySQL: the target DATABASE) from the
+    # SOURCE schema name, lower-cased. DDL qualified with anything else applies cleanly
+    # into the wrong namespace and only fails later, at the data load.
+    qual = ""
+    if target_schema:
+        noun = "database" if target == "mysql" else "schema"
+        qual = (f" Qualify every created object with the target {noun} `{target_schema}` "
+                f"(derived from the source schema — do NOT use the connection's "
+                f"database/catalog name for qualification).")
     if code:
         return (f"Convert the following {source_disp} stored code object to {tdisp} "
                 f"(procedural SQL — e.g. PL/pgSQL). Return only valid {tdisp}, ready to "
                 f"execute. Packages/modules have no direct equivalent: map each routine to "
                 f"its own function/procedure. Note any construct that needs human review in "
-                f"a SQL comment.")
+                f"a SQL comment.{qual}")
     return (f"Convert the following {source_disp} object unit to {tdisp} DDL. "
             f"Return only valid {tdisp} DDL, ready to execute. Do not include explanation "
             f"outside SQL comments. Preserve table and column intent; choose appropriate "
             f"{tdisp} types, index types, and constraint forms based on the whole unit. "
-            f"{idrule}")
+            f"{idrule}{qual}")
 
 
 def _read(repo_root: Path, rel: str, limit: Optional[int] = None) -> str:
@@ -277,7 +289,8 @@ def build_unit_prompt(units, repo_root: Optional[Path] = None,
 
     return (
         f"{context}\n\n"
-        f"=== TASK ===\n{_instruction(src_disp, _target_engine(pair), code=False)}\n\n"
+        f"=== TASK ===\n"
+        f"{_instruction(src_disp, _target_engine(pair), code=False, target_schema=(units[0].schema or '').lower() or None)}\n\n"
         f"{source_block}\n"
     )
 
@@ -289,7 +302,8 @@ def build_code_prompt(code_obj, repo_root: Optional[Path] = None,
     context = build_context(root, for_code=True, pair=pair)
     return (
         f"{context}\n\n"
-        f"=== TASK ===\n{_instruction(_source_display(pair), _target_engine(pair), code=True)}\n\n"
+        f"=== TASK ===\n"
+        f"{_instruction(_source_display(pair), _target_engine(pair), code=True, target_schema=(code_obj.schema or '').lower() or None)}\n\n"
         f"--- SOURCE ({code_obj.object_type}) — {code_obj.schema}.{code_obj.name} ---\n"
         f"{code_obj.source_ddl}\n"
     )

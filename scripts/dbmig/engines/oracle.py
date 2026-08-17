@@ -241,16 +241,58 @@ def object_unit_ddl(conn, schema: str, table: str) -> Dict[str, str]:
 
 # ---- code objects (separate conversion pass) ------------------------------
 
+# Object types extracted for the stored-code conversion pass.
+#
+# VIEW is included deliberately: a view is DDL, but converting it needs the same
+# context as PL/SQL (it embeds Oracle expressions — NVL, DECODE, ROWNUM, (+) joins,
+# implicit casts) and it depends on the functions it calls, so it belongs in this
+# pass rather than with table object-units.
 CODE_OBJECT_TYPES = [
-    "PACKAGE", "PACKAGE BODY", "PROCEDURE", "FUNCTION", "TYPE", "TYPE BODY",
+    "TYPE", "TYPE BODY", "FUNCTION", "VIEW", "PACKAGE", "PROCEDURE",
+    "PACKAGE BODY",
 ]
+
+# Dependency tiers for load ordering (lower tier is created first).
+#
+# Ordering alone removes whole classes of "does not exist" failures that are pure
+# sequencing artifacts rather than conversion defects:
+#   * types first     — a function/view signature referencing a composite type
+#                       cannot compile before the type exists;
+#   * functions before views — views call functions;
+#   * package bodies last   — a body may reference any other routine, view or type.
+# ``apply_units`` still retries across passes (see engines/_common.multipass_apply),
+# so this is an optimisation for the common case, not a correctness requirement:
+# genuinely mutually-recursive objects still resolve on a later pass.
+CODE_OBJECT_TIERS = {
+    "TYPE": 1,
+    "TYPE BODY": 2,
+    "FUNCTION": 3,
+    "VIEW": 4,
+    "PACKAGE": 5,          # spec before body, and before routines that call it
+    "PROCEDURE": 6,
+    "PACKAGE BODY": 7,     # bodies reference everything else
+}
+
+
+def code_object_tier(object_type: str) -> int:
+    """Dependency tier for an object type; unknown types load last."""
+    return CODE_OBJECT_TIERS.get((object_type or "").upper(), 99)
 
 
 def build_list_code_objects_sql() -> str:
-    """SELECT for PL/SQL code objects. The IN-list is built from the trusted
-    module constant CODE_OBJECT_TYPES (not user input); owner is a bind (:o)."""
+    """SELECT for stored-code objects, ordered by dependency tier.
+
+    The IN-list and the CASE arms are built from the trusted module constants
+    CODE_OBJECT_TYPES / CODE_OBJECT_TIERS (never user input); owner is a bind (:o).
+    """
     placeholders = ", ".join(f"'{t}'" for t in CODE_OBJECT_TYPES)
-    return f"SELECT object_type, object_name FROM all_objects WHERE owner = :o AND object_type IN ({placeholders}) ORDER BY object_type, object_name"  # nosec B608
+    arms = " ".join(
+        f"WHEN '{t}' THEN {code_object_tier(t)}" for t in CODE_OBJECT_TYPES)
+    return (
+        f"SELECT object_type, object_name FROM all_objects "  # nosec B608
+        f"WHERE owner = :o AND object_type IN ({placeholders}) "
+        f"ORDER BY CASE object_type {arms} ELSE 99 END, object_name"
+    )
 
 
 def list_code_objects(conn, schema: str) -> List[Tuple[str, str]]:
@@ -270,6 +312,7 @@ _DDL_TYPE_MAP = {
     "TYPE BODY": "TYPE_BODY",
     "PROCEDURE": "PROCEDURE",
     "FUNCTION": "FUNCTION",
+    "VIEW": "VIEW",
 }
 
 

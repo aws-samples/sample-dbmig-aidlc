@@ -1,0 +1,98 @@
+# engines/oracle-to-mysql/app/app-config.yaml
+#
+# Application-layer facts for Oracle → MySQL, used by the optional app-modernization
+# module. Same shape as every other pair's app/app-config.yaml — the app skills are
+# engine-agnostic and read whichever pair is active.
+
+pair: oracle-to-mysql
+source_engine: oracle
+target_engine: mysql
+
+source:
+  jdbc:
+    url_pattern: "jdbc:oracle:thin:@//<host>:<port>/<service>"
+    driver_class: "oracle.jdbc.OracleDriver"
+    maven: {group: "com.oracle.database.jdbc", artifact: "ojdbc17"}
+    hibernate_dialect: "org.hibernate.dialect.OracleDialect"
+    default_port: 1521
+  dotnet: {provider: "Oracle.ManagedDataAccess.Client"}
+  python: {driver: "oracledb"}
+  nodejs: {driver: "oracledb"}
+
+target:
+  jdbc:
+    url_pattern: "jdbc:mysql://<host>:<port>/<database>?sslMode=REQUIRED&serverTimezone=UTC"
+    driver_class: "com.mysql.cj.jdbc.Driver"
+    maven: {group: "com.mysql", artifact: "mysql-connector-j"}
+    hibernate_dialect: "org.hibernate.dialect.MySQLDialect"
+    default_port: 3306
+    # MySQL has no schema-inside-database concept: the DATABASE *is* the schema.
+    schema_selector: "database-in-url"
+    notes: >
+      An Oracle schema becomes a MySQL database — and it is the LOWER-CASED SOURCE SCHEMA name
+      (DEMO -> demo), NOT the database name from the migration's connections.yaml, which is only
+      the login default. Point the app URL at the derived database. sslMode=REQUIRED is the
+      Connector/J 8.0.13+ property (supersedes useSSL/requireSSL). Set serverTimezone explicitly —
+      the connector otherwise infers it and shifts timestamps.
+  dotnet:
+    provider: "MySql.Data.MySqlClient  (or MySqlConnector)"
+    conn_pattern: "Server=<host>;Port=<port>;Database=<database>;Uid=<user>;Pwd=<pw>;SslMode=Required;"
+  python: {driver: "PyMySQL / mysqlclient"}
+  nodejs: {driver: "mysql2"}
+
+bind_parameters:
+  source_named: ":name"
+  target_named: ":name"          # JPA keeps :name; the raw connector uses ?
+  target_positional: "?"
+  change_required: false
+
+result_set:
+  identifier_case:
+    source_returns: UPPER
+    target_returns: "as declared (see lower_case_table_names)"
+    impact: >
+      MySQL returns column labels as written in the query, so UPPERCASE lookups may keep working
+      if the SQL is uppercase — but table-name case sensitivity depends on the server's
+      lower_case_table_names and on the host filesystem. Standardise on lower case and alias
+      columns explicitly rather than relying on either engine's default.
+  count_return_type:
+    source: NUMBER
+    target: BIGINT
+    impact: "COUNT(*) is BIGINT — widen Java int to long / .NET Int32 to Int64."
+  boolean_representation:
+    note: "0/1 flags map to tinyint; TINYINT(1) is what the connector reports as boolean."
+
+errors:
+  source_style: "ORA-#####  via SQLException.getErrorCode()"
+  target_style: "MySQL error number via getErrorCode(), plus a 5-char SQLSTATE"
+  impact: >
+    MySQL exposes both a numeric error code and a SQLSTATE. Application code branching on
+    ORA-nnnnn must switch to the MySQL error number or SQLSTATE. Custom Oracle errors raised with
+    RAISE_APPLICATION_ERROR become SIGNAL SQLSTATE '45000' (the generic user-defined class), so
+    distinguishing several custom errors requires either distinct SQLSTATEs or matching on
+    MESSAGE_TEXT — check the migration's conversion log for the scheme actually used.
+  common:
+    unique_violation: "1062 (SQLSTATE 23000)"
+    foreign_key_violation: "1452 / 1451 (SQLSTATE 23000)"
+    no_partition_for_value: "1526"
+    user_defined: "45000"
+
+identity:
+  source_pattern: "SELECT seq.NEXTVAL FROM DUAL | RETURNING id INTO"
+  target_pattern: "AUTO_INCREMENT + LAST_INSERT_ID() / JDBC getGeneratedKeys()"
+  impact: >
+    MySQL has no sequences and no RETURNING clause. A pre-fetch of a sequence value must become
+    an insert followed by LAST_INSERT_ID() or getGeneratedKeys(). JPA
+    @GeneratedValue(strategy = IDENTITY) is the correct mapping for AUTO_INCREMENT.
+
+routines:
+  package_flattening: true
+  flattened_name_pattern: "<package>_<subprogram>"
+  impact: >
+    Package calls must be renamed to the flattened routine. MySQL FUNCTIONs can only return a
+    scalar, so any Oracle function that returned a collection or ref cursor became a PROCEDURE —
+    its call sites must change from a query to CALL plus result-set consumption, which is a caller
+    contract change, not a rename.
+  transaction_ownership: >
+    Where an internal COMMIT was removed, the caller now owns the transaction. Note also that
+    MySQL DDL auto-commits, so a routine mixing DDL and DML cannot be rolled back as a unit.

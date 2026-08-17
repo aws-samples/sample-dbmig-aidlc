@@ -99,3 +99,4 @@ then fall back to the general references. See `customer-specific/_index.md`.
 ## Cross-references
 - Datatype mapping: `engines/oracle-to-mysql/datatype-map.yaml`
 - Equivalence-testing methodology: `engines/oracle-to-mysql/checks/equivalence-spec.md`
+- Application-layer conversion rules (embedded SQL, drivers/ORM, error codes) for this pair: `engines/oracle-to-mysql/app/` — used by the optional `app-modernization-orchestrator` module, not by DB-schema conversion.

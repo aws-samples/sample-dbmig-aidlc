@@ -67,3 +67,80 @@ MySQL — validate NOT NULL columns and comparisons.
 An Oracle schema maps to a MySQL **database** (here `DEMO` → database `demo`, lower-cased).
 Qualify objects `demo.<obj>`. On Linux, table-name case sensitivity depends on
 `lower_case_table_names` — be consistent (lower-case).
+
+**Do NOT qualify DDL with the connection's `database:` value.** The target database is derived
+from the **source schema name** (lower-cased), not from `connections.yaml` — the connection's
+database is only the login default. This mistake was made in a real run: DDL qualified with the
+connection database applied cleanly (14/14 "success") into the wrong database, and the failure
+only surfaced at the data load ("target table demo.x not found"). The conversion prompt now
+states the exact target database, and `apply-schema` cross-checks the catalog after applying —
+but write the DDL correctly in the first place: qualify with the lower-cased source schema.
+
+## 11. Collections have no MySQL type — redesign, don't translate
+MySQL has **no composite types, no arrays, no domains, and no set-returning functions**. Every
+Oracle collection construct therefore needs a structural redesign, and the mapping is different
+from the PostgreSQL one (do not reuse `SETOF`/`CREATE DOMAIN`/`RETURN NEXT` advice here — none of
+those exist in MySQL).
+
+| Oracle | MySQL |
+|---|---|
+| `TYPE t IS OBJECT (...)` | no equivalent → separate columns, a row in a temp table, or a `JSON` object |
+| `TYPE tab IS TABLE OF <object>` + `FUNCTION ... RETURN tab` | a **PROCEDURE** that produces a result set (plain trailing `SELECT`), or writes to a `TEMPORARY TABLE` the caller reads |
+| `TYPE arr IS TABLE OF <scalar>` / `VARRAY(n)` | a `JSON` array column/variable, or a one-column `TEMPORARY TABLE` |
+| `TYPE t IS TABLE OF x INDEX BY ...` (associative) | `TEMPORARY TABLE` with a key column, or a `JSON` object |
+| `coll(i)` | `JSON_EXTRACT(j, CONCAT('$[', i-1, ']'))` (**0-based** — Oracle is 1-based) or a keyed temp-table row |
+| `coll.COUNT` | `JSON_LENGTH(j)` or `SELECT COUNT(*)` from the temp table |
+| `TABLE(coll)` in a `FROM` clause | `JSON_TABLE(j, '$[*]' COLUMNS (...))` (MySQL 8.0+) |
+| `x MEMBER OF coll` | `JSON_CONTAINS(j, CAST(x AS JSON))` |
+| `coll.EXTEND; coll(n) := v` | `JSON_ARRAY_APPEND(j, '$', v)` or `INSERT` into the temp table |
+| `BULK COLLECT` + `FORALL` | **one set-based statement** (`UPDATE t JOIN src ON ...`) — same advice as any target |
+
+**A returning-function becomes a procedure — that is a caller contract change.** A MySQL FUNCTION
+can only return a single scalar, so an Oracle function returning a collection *must* become a
+PROCEDURE. Callers can no longer use it in a `SELECT` list or a `FROM` clause; they must `CALL` it
+and consume a result set. Flag every occurrence for the application team.
+
+**Accumulate-then-return loops** become `INSERT` into a `TEMPORARY TABLE` inside the loop, with a
+final `SELECT` from it. As with any rewrite of this shape, ensure **one inserted row per Oracle
+element** — a misplaced boundary changes result cardinality silently, with no error.
+
+`JSON_TABLE` requires MySQL 8.0+; confirm the Aurora MySQL version before relying on it.
+
+## 12. Partitioning
+MySQL partitioning is *closer* to Oracle than PostgreSQL's is — it uses the same
+`VALUES LESS THAN` upper-bound syntax, so the two-sided-bound rewrite PostgreSQL needs does
+**not** apply. The traps are different:
+
+- **Add a `MAXVALUE` catch-all partition — a RUNTIME failure otherwise.** Oracle routes
+  out-of-range keys to a catch-all; MySQL raises
+  `ERROR 1526 (HY000): Table has no partition for value ...` on insert. MySQL has **no `DEFAULT`
+  partition** (that is PostgreSQL); the equivalent is a final
+  `PARTITION pmax VALUES LESS THAN (MAXVALUE)`. For `LIST` partitioning there is no catch-all at
+  all — every value must be enumerated, so Oracle's automatic-list partitioning has no analogue.
+- **Every unique key, including the PRIMARY KEY, must contain all partitioning columns.**
+  `ERROR 1503`. Same shape as the PostgreSQL restriction, and the same consequence: adding the
+  partition column **weakens uniqueness** to per-partition-key. Mark it and get sign-off.
+- **Partitioned InnoDB tables cannot participate in foreign keys — at either end.** `ERROR 1506`.
+  This is stricter than PostgreSQL and often decisive: either drop the partitioning, or drop the
+  FK and enforce referential integrity in the application. Surface it as a design decision, never
+  silently discard the constraint.
+- Partition names are scoped **per table** in MySQL (as in Oracle), so the schema-global name
+  collisions that affect PostgreSQL do not apply here.
+- Subpartitions may only be `HASH`/`KEY` beneath `RANGE`/`LIST`. `INTERVAL`, `REFERENCE` and
+  virtual-column partitioning have no equivalent.
+
+## 13. Views
+Views are converted in the **stored-code pass** and load **after functions** (views call
+functions). Points that bite on MySQL specifically:
+
+- **MySQL views cannot contain a subquery in the `FROM` clause** in older versions and, more
+  importantly, a view's `SELECT` cannot reference a **derived table** with a parameter — rewrite
+  Oracle inline views accordingly. `WITH` (CTE) inside a view requires MySQL 8.0+.
+- Oracle's **implicit numeric↔varchar coercion** is *permitted* by MySQL, unlike PostgreSQL — so
+  a type-mismatched join will not error. That is more dangerous, not less: MySQL coerces with its
+  own rules (a non-numeric string becomes `0`), so results can differ silently from Oracle. Add
+  explicit `CAST`s where the source relied on coercion and treat it as a data-quality finding.
+- `CREATE FORCE VIEW` has no MySQL equivalent; a view over a missing object fails at creation,
+  which surfaces pre-existing rot in the source schema. Expect some views to be dead code.
+- `ROWNUM` → `LIMIT`; `(+)` outer joins → ANSI `LEFT JOIN`; `DUAL` exists in MySQL (harmless).
+- Keep the explicit column list, lower-cased consistently with the body.

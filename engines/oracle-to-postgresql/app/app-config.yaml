@@ -1,0 +1,121 @@
+# engines/oracle-to-postgresql/app/app-config.yaml
+#
+# Application-layer facts for this engine pair, used by the optional
+# app-modernization module (skills/app-modernization-orchestrator).
+#
+# This file is the EXTENSIBILITY SEAM: the app skills are engine-agnostic and read
+# whichever pair's app/ directory is active, exactly as the schema-conversion skills
+# read engines/<pair>/datatype-map.yaml. To support a new pair, add
+# engines/<new-pair>/app/ with these two files — no skill changes required.
+
+pair: oracle-to-postgresql
+source_engine: oracle
+target_engine: postgresql
+
+# ---- connectivity / framework configuration -------------------------------
+# Keys are grouped by ecosystem. Only the groups relevant to the detected stack
+# are applied; the rest are ignored.
+source:
+  jdbc:
+    url_pattern: "jdbc:oracle:thin:@//<host>:<port>/<service>"
+    driver_class: "oracle.jdbc.OracleDriver"
+    maven: {group: "com.oracle.database.jdbc", artifact: "ojdbc17"}
+    hibernate_dialect: "org.hibernate.dialect.OracleDialect"
+    default_port: 1521
+  dotnet:
+    provider: "Oracle.ManagedDataAccess.Client"
+    conn_pattern: "Data Source=<host>:<port>/<service>;User Id=<user>;Password=<pw>;"
+  python:
+    driver: "oracledb"
+  nodejs:
+    driver: "oracledb"
+
+target:
+  jdbc:
+    url_pattern: "jdbc:postgresql://<host>:<port>/<database>?currentSchema=<schema>"
+    driver_class: "org.postgresql.Driver"
+    maven: {group: "org.postgresql", artifact: "postgresql"}
+    hibernate_dialect: "org.hibernate.dialect.PostgreSQLDialect"
+    default_port: 5432
+    # PostgreSQL needs the schema stated explicitly; Oracle implied it from the user.
+    schema_selector: "currentSchema"
+    notes: >
+      Prefer sslmode=require in the URL for Aurora/RDS. Hibernate 6 auto-detects the
+      dialect, so the explicit dialect property may simply be removed rather than swapped.
+  dotnet:
+    provider: "Npgsql"
+    conn_pattern: "Host=<host>;Port=<port>;Database=<database>;Username=<user>;Password=<pw>;SearchPath=<schema>;SSL Mode=Require"
+  python:
+    driver: "psycopg"
+  nodejs:
+    driver: "pg"
+
+# ---- bind-parameter style -------------------------------------------------
+# Only relevant where the app builds SQL text itself (JDBC uses ? in both engines,
+# so most Java apps need no change here).
+bind_parameters:
+  source_named: ":name"
+  target_named: ":name"          # JDBC/JPA keep :name; raw libpq uses $1
+  target_positional: "$1"
+  change_required: false
+  notes: "JPA/JDBC ? and :name are unchanged. Raw psycopg/libpq uses %s or $n."
+
+# ---- result-set / driver behaviour the app layer must absorb ---------------
+result_set:
+  identifier_case:
+    source_returns: UPPER
+    target_returns: lower
+    impact: >
+      rs.getX("COL") / reader["COL"] lookups that relied on Oracle's UPPERCASE
+      metadata fail or return null when the target folds to lower case. Prefer
+      column aliases in the query, or lower-case the lookup keys.
+  count_return_type:
+    source: NUMBER
+    target: bigint
+    impact: >
+      COUNT(*) returns bigint. Java code assigning to int, or .NET casting to Int32,
+      throws or truncates. Use long / Int64, or cast in SQL.
+  boolean_representation:
+    note: >
+      0/1 flags mapped to smallint on the target keep working; only a change to the
+      native boolean type would require app edits (see the migration's conversion log).
+
+# ---- error handling -------------------------------------------------------
+errors:
+  source_style: "ORA-#####  (SQLException.getErrorCode() returns the numeric code)"
+  target_style: "5-character SQLSTATE  (SQLException.getSQLState())"
+  impact: >
+    Any catch block branching on getErrorCode() == 20001 must switch to
+    getSQLState().equals("<mapped SQLSTATE>"). The mapping actually used is recorded
+    in the migration's conversion log — read it, do not guess.
+  common:
+    unique_violation: "23505"
+    foreign_key_violation: "23503"
+    not_null_violation: "23502"
+    no_data_found: "P0002"
+    too_many_rows: "P0003"
+    user_defined_hint: >
+      RAISE EXCEPTION ... USING ERRCODE = '<code>'. Avoid the P0 class for custom
+      codes — it is reserved for PL/pgSQL. This framework maps ORA-200nn to U00nn.
+
+# ---- generated keys / identity -------------------------------------------
+identity:
+  source_pattern: "SELECT seq.NEXTVAL FROM DUAL  |  RETURNING id INTO"
+  target_pattern: "INSERT ... RETURNING id  |  JDBC getGeneratedKeys()"
+  impact: >
+    A pre-fetch of the sequence value must become a RETURNING clause or
+    getGeneratedKeys(). JPA @GeneratedValue(strategy = IDENTITY) works against
+    GENERATED ... AS IDENTITY columns.
+
+# ---- stored-routine call shape -------------------------------------------
+routines:
+  package_flattening: true
+  flattened_name_pattern: "<package>_<subprogram>"
+  impact: >
+    Oracle package calls (PKG.PROC) have no target equivalent; the migration flattens
+    them to schema-level routines. Every call site must be renamed. JDBC escape syntax
+    "{ call p(?) }" works against a PostgreSQL PROCEDURE; a routine converted to a
+    FUNCTION must instead be invoked as "SELECT * FROM f(?)".
+  transaction_ownership: >
+    Procedures that lost their internal COMMIT now require the caller to commit.
+    Check for @Transactional / explicit commit at every such call site.

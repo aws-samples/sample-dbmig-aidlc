@@ -12,7 +12,7 @@ A complete, real end-to-end migration captured for reference. Every file here wa
 | **Scope** | Schemas **`Person`** + **`HumanResources`** — a self-contained set (`HumanResources` depends only on `Person`) |
 | **Region / profile** | `us-east-1` (workshop account) |
 | **Project workspace** | `migrations/adventureworks/` (archived verbatim into this folder) |
-| **Credentials** | AWS Secrets Manager (`MMA-secret-sqlserver-admin`, `MMA-secret-aurora-admin`), injected as env vars at run time — never written to any artifact here |
+| **Credentials** | AWS Secrets Manager, injected as env vars at run time — never written to any artifact here |
 
 **Objects:** 19 tables (Person 13, HR 6), 8 views (Person 2, HR 6), 3 stored procedures, 2 triggers.
 

@@ -12,7 +12,7 @@ no hand-editing of results after the fact.
 | **Target** | Amazon Aurora PostgreSQL 17.7 — a **new database `demo`** created for this run |
 | **Region / profile** | `us-east-1` (workshop account) |
 | **Project workspace** | `migrations/oracle-demo/` (archived verbatim into this folder) |
-| **Credentials** | AWS Secrets Manager (`MMA-secret-oracle-admin`, `MMA-secret-aurora-admin`), injected as env vars at run time — never written to any artifact here |
+| **Credentials** | AWS Secrets Manager, injected as env vars at run time — never written to any artifact here |
 
 Source schema inventory: **18 "tables"** of which 4 are Oracle Text index internal tables
 (`DR$BOOKS_TEXT_IDX$*`, auto-excluded) → **14 user tables**, plus **33 indexes, 12 sequences,

@@ -32,6 +32,32 @@ connection engines and defined under `engines/<pair>/` with knowledge in
 5. **Safety.** Treat any write to the target (DDL apply, data load, cutover) as a gated action.
    Confirm before destructive operations. Never echo secret values.
 
+## Optional module — application modernization (never auto-starts)
+
+A **separate, optional** module updates *application code* to match a completed database
+migration: embedded SQL, datasource/ORM configuration, entity mappings, stored-routine call
+sites, error handling and result-set typing.
+
+**Like-for-like only:** the application keeps its architecture, framework and behaviour — only
+what the database migration invalidated is changed. This is **not** application refactoring
+(no monolith→microservices, framework/language upgrades, ORM swaps, or general cleanup); such
+requests are separate engagements outside this module.
+
+**It must never start on its own.** Finishing a database migration is **not** a trigger — at
+most, mention that the module exists. Invoke **`app-modernization-orchestrator`** only when the
+user explicitly asks to convert, migrate or update *application code*.
+
+When invoked it asks for the **application directory** and the **`migrations/<project>/`
+workspace** of the migration to conform to (offering the available candidates if the user does
+not know), then runs the same AI-DLC phases with the same gate discipline:
+Inception (inventory + **change plan**) → Construction (apply edits) → Validation (build/test)
+→ Operations (app cutover). Two rules are absolute: **nothing is edited before the change plan is
+approved**, and backups go into a **mirrored `05-application/backup/<timestamp>/` tree — never
+`.bak` files beside the originals**.
+
+Per-pair application rules live in `engines/<pair>/app/` (`app-config.yaml`, `app-sql-rules.md`),
+so the module extends to new engine pairs without changing any skill.
+
 ## Determinism vs. intelligence
 
 The `dbmig` Python package (`scripts/dbmig/`, run as `python -m dbmig <command>`) does all

@@ -1,0 +1,99 @@
+# engines/sqlserver-to-postgresql/app/app-config.yaml
+#
+# Application-layer facts for SQL Server → PostgreSQL, used by the optional
+# app-modernization module. Same shape as every other pair's app/app-config.yaml.
+
+pair: sqlserver-to-postgresql
+source_engine: sqlserver
+target_engine: postgresql
+
+source:
+  jdbc:
+    url_pattern: "jdbc:sqlserver://<host>:<port>;databaseName=<database>;encrypt=true"
+    driver_class: "com.microsoft.sqlserver.jdbc.SQLServerDriver"
+    maven: {group: "com.microsoft.sqlserver", artifact: "mssql-jdbc"}
+    hibernate_dialect: "org.hibernate.dialect.SQLServerDialect"
+    default_port: 1433
+  dotnet:
+    provider: "Microsoft.Data.SqlClient (or System.Data.SqlClient)"
+    conn_pattern: "Server=<host>,<port>;Database=<database>;User Id=<user>;Password=<pw>;Encrypt=True;"
+  python: {driver: "pyodbc / pymssql"}
+  nodejs: {driver: "mssql / tedious"}
+
+target:
+  jdbc:
+    url_pattern: "jdbc:postgresql://<host>:<port>/<database>?currentSchema=<schema>&sslmode=require"
+    driver_class: "org.postgresql.Driver"
+    maven: {group: "org.postgresql", artifact: "postgresql"}
+    hibernate_dialect: "org.hibernate.dialect.PostgreSQLDialect"
+    default_port: 5432
+    schema_selector: "currentSchema"
+    notes: >
+      SQL Server's dbo (or a named schema) becomes a PostgreSQL schema inside the database, so the
+      schema moves to currentSchema while databaseName becomes the URL path.
+  dotnet:
+    provider: "Npgsql"
+    conn_pattern: "Host=<host>;Port=<port>;Database=<database>;Username=<user>;Password=<pw>;SearchPath=<schema>;SSL Mode=Require"
+  python: {driver: "psycopg"}
+  nodejs: {driver: "pg"}
+
+bind_parameters:
+  source_named: "@name"
+  target_named: ":name"
+  target_positional: "$1"
+  change_required: true
+  notes: >
+    This pair DOES require bind-style changes in raw-SQL code. SQL Server uses @name; PostgreSQL
+    drivers use :name (JDBC/JPA), $n (libpq) or %s (psycopg). JDBC positional ? is unchanged, and
+    Dapper's @name is rewritten to :name by Npgsql in most cases — verify rather than assume.
+
+result_set:
+  identifier_case:
+    source_returns: "as declared (commonly PascalCase)"
+    target_returns: lower
+    impact: >
+      SQL Server preserves the declared case, which is usually PascalCase (OrderId). PostgreSQL
+      folds unquoted identifiers to lower case, so reader["OrderId"] / rs.getX("OrderId") returns
+      nothing. Either alias explicitly in the query or lower-case the lookup keys. This is the
+      most common runtime break in this pair because it compiles cleanly.
+  count_return_type:
+    source: int
+    target: bigint
+    impact: "COUNT(*) becomes bigint — widen Java int to long / .NET Int32 to Int64."
+  boolean_representation:
+    source: "bit (0/1)"
+    target: "boolean"
+    impact: >
+      If bit mapped to boolean, code comparing == 1 or binding 0/1 must switch to true/false.
+      If it mapped to smallint, existing 0/1 code keeps working. Check the conversion log.
+
+errors:
+  source_style: "error number via SqlException.Number / SQLServerException.getErrorCode()"
+  target_style: "5-character SQLSTATE via getSQLState()"
+  impact: >
+    Branching on SQL Server error numbers (2627/2601 unique, 547 FK, 1205 deadlock) must move to
+    SQLSTATE. RAISERROR/THROW custom numbers (50000+) become RAISE EXCEPTION with an ERRCODE —
+    take the mapping from the migration's conversion log.
+  common:
+    unique_violation: "23505   (was 2627 / 2601)"
+    foreign_key_violation: "23503   (was 547)"
+    not_null_violation: "23502   (was 515)"
+    deadlock: "40P01   (was 1205)"
+    string_data_right_truncation: "22001  (was 8152)"
+
+identity:
+  source_pattern: "SCOPE_IDENTITY() / @@IDENTITY / OUTPUT INSERTED.id"
+  target_pattern: "INSERT ... RETURNING id / getGeneratedKeys()"
+  impact: >
+    SCOPE_IDENTITY() has no equivalent; use RETURNING or getGeneratedKeys(). An OUTPUT clause
+    becomes RETURNING. JPA @GeneratedValue(IDENTITY) works against GENERATED ... AS IDENTITY.
+
+routines:
+  package_flattening: false      # SQL Server has no packages
+  impact: >
+    Procedure names generally survive. The real changes are: a procedure returning a result set
+    (SQL Server's implicit behaviour) must become a function RETURNS TABLE or use a refcursor;
+    table-valued parameters have no equivalent (use an array of a composite type, or jsonb);
+    and EXEC becomes CALL. Multiple result sets from one procedure need redesign.
+  transaction_ownership: >
+    A procedure whose internal BEGIN TRANSACTION/COMMIT was removed leaves the caller responsible.

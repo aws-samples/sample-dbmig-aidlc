@@ -165,3 +165,11 @@ Aurora PostgreSQL surfaced these practical points:
 > Reference only — the playbook references are distilled from the AWS *Microsoft SQL Server
 > 2019 to Amazon Aurora PostgreSQL Migration Playbook*. Test everything in a non-production
 > environment first.
+
+## Optional: convert the application too
+
+After this migration, application code still speaks the source dialect. The opt-in
+**app-modernization** module converts it — driven by this migration's own artifacts
+(conversion log, validation carry-forwards) and the pair's `engines/sqlserver-to-postgresql/app/` rules,
+with a gated change plan before any edit and mirrored backups (never `.bak` files).
+Start it explicitly: *"convert my application to work with the migrated database"*.

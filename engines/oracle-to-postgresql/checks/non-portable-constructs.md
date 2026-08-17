@@ -41,6 +41,32 @@ context, so keep it prescriptive.
   `<package>_<subprogram>` (see `checks/package-naming.md` for collision handling).
 - **`PIPELINED` table functions** (`RETURN … PIPELINED` / `PIPE ROW`) → a set-returning function
   `RETURNS TABLE(...)` with `RETURN QUERY`.
+- **Collection accumulate-then-return → `RETURN NEXT`.** The Oracle idiom
+  (`coll.EXTEND; coll(i).field := …; i := i+1; … RETURN coll;`) becomes a single row variable
+  reset per element (`rec := NULL::type`), field assignments, then `RETURN NEXT rec;`, ending with
+  a bare `RETURN;`.
+  **Hazard — silently wrong row counts:** there must be **exactly one `RETURN NEXT` per source
+  element**, including across `IF`/`CASE` branches. Guessing the row boundary from "a run of field
+  assignments" has split one Oracle element into three rows. This compiles cleanly and no syntax
+  check catches it, so compare result **cardinality** against the source.
+- **`TABLE OF <object>` is not a type on the target** → the *function* returns
+  `SETOF <composite>` (or `RETURNS TABLE(...)`); `TABLE OF`/`VARRAY` of a **scalar** →
+  `CREATE DOMAIN … AS <scalar>[]`. Map the collection type consistently in return types,
+  **parameters** and local declarations.
+- **PostgreSQL cannot build an array of an anonymous record** — a hard blocker, not a syntax
+  issue. Oracle code that prefetches rows into a collection of a `%ROWTYPE`/ad-hoc record and then
+  index-matches in a loop must be replaced by the query it was caching (`FOR rec IN SELECT …`).
+  That is logic-equivalent and usually faster — the "optimisation" was hand-rolled caching the
+  planner already does.
+- **`coll.COUNT` → `cardinality(coll)`, but guard NULL:** `cardinality(NULL)` is NULL, so write
+  `FOR i IN 1..COALESCE(cardinality(coll), 0)`. Also `coll(i)`→`coll[i]`, `TABLE(coll)`→`unnest(coll)`,
+  `x MEMBER OF coll`→`x = ANY(coll)`, `.EXTEND`/`.TRIM`→drop.
+- **`BULK COLLECT` + `FORALL`** → collapse the pair into one set-based DML statement
+  (`UPDATE t SET … FROM unnest(recs) s WHERE …`), which is what the Oracle code was emulating.
+  PostgreSQL has no `FORALL`. If a collection is genuinely needed, `SELECT array_agg(t) INTO recs`
+  — with an explicit `ORDER BY` when the loop order mattered.
+  > Full rules, rewrite patterns and a review checklist:
+  > `skills/oracle-to-postgresql-playbook/references/sql-plsql/collections-and-bulk-operations.md`
 - **`SELECT … INTO`** raises `NO_DATA_FOUND` in Oracle; plain PL/pgSQL `SELECT INTO` does **not**. Use
   `SELECT … INTO STRICT` (raises `NO_DATA_FOUND`/`TOO_MANY_ROWS`) when the Oracle code relied on it.
 - **`DETERMINISTIC`** → `IMMUTABLE`; `PARALLEL_ENABLE` → `PARALLEL SAFE`.
@@ -61,9 +87,53 @@ context, so keep it prescriptive.
   a `COMMIT` are not net-effect testable via the harness — test them against a non-existent key or flag
   for manual review.
 
+## Views
+
+Views are converted in the **stored-code pass** (not with table object-units) because they embed
+Oracle expressions and depend on the functions they call. They are loaded **after functions** for
+that reason.
+
+- **Implicit type coercion is the top view failure.** Oracle silently coerces across types in
+  comparisons and joins; PostgreSQL refuses with
+  `operator does not exist: numeric = character varying`. Oracle's rule is that comparing
+  `VARCHAR2` with `NUMBER` converts the **string to a number**, so reproduce that explicitly:
+  `CAST(a.col AS numeric) = b.col`. Look up the real column types before choosing a direction —
+  and note the join was type-mismatched in Oracle too, so this is a **data-quality** finding.
+  If the text column can hold non-numeric values, casting to `numeric` turns silent Oracle
+  behaviour into a runtime error; cast the numeric side to `text` instead and flag the risk.
+- **Keep the explicit column list, folded to lower case.** Oracle emits
+  `CREATE VIEW v ("COL1","COL2") AS …`. The list pins output names, so preserve it — but fold it
+  consistently with the body. A quoted-uppercase outer alias over a lower-cased inner query fails
+  to resolve, confusingly.
+- **`CREATE FORCE VIEW` hides broken references.** Oracle compiles a view whose dependencies are
+  missing or invalid; PostgreSQL validates at creation. Conversion therefore **surfaces
+  pre-existing rot in the source schema** — a view may reference a function that does not exist
+  anywhere. That is an improvement, but budget for it, and expect some views to be dead code
+  worth deleting rather than migrating. Do not invent a missing dependency silently; flag it.
+- **Function overload resolution needs explicit casts.** `function f(character varying) does not
+  exist` usually means `f` exists with a different parameter type because an argument comes from
+  another converted function whose return type mapped differently. Check the real signature and
+  cast at the call site; expect cascades, since one function's return-type choice changes every
+  caller's resolution.
+- Drop `FORCE`, `EDITIONABLE`/`NONEDITIONABLE`, and `WITH READ ONLY` (use privileges instead).
+  `WITH CHECK OPTION` is supported.
+
 ## Triggers
 
 - Oracle row triggers with inline bodies → a PL/pgSQL trigger **function** + a `CREATE TRIGGER` binding.
   A `BEFORE INSERT/UPDATE` trigger that derives a column (e.g. a search string) maps cleanly to setting
   `NEW.col`. Foreign keys **and** triggers should be applied **after** the data load (`--post-data`) so
   they neither force load order nor rewrite the rows being loaded.
+- **The return value depends on the timing — getting it wrong silently deletes rows.**
+  `BEFORE … FOR EACH ROW` must `RETURN NEW` (returning `NULL` **cancels the row**, so the insert or
+  update is discarded with no error). `AFTER …` and `FOR EACH STATEMENT` triggers `RETURN NULL`.
+  No syntax check catches this; it presents as missing data.
+- Emit `DROP TRIGGER IF EXISTS <name> ON <table>;` before `CREATE TRIGGER` — there is no
+  `CREATE OR REPLACE TRIGGER` in older PostgreSQL, so re-running a script otherwise fails with
+  `trigger already exists`.
+- Event/reference mapping: `:NEW.`/`:OLD.` → `NEW.`/`OLD.`; `INSERTING`/`UPDATING`/`DELETING` →
+  `TG_OP = 'INSERT'`/`'UPDATE'`/`'DELETE'`. `WHEN (cond)` and `UPDATE OF col1, col2` are both
+  supported. Oracle allows one trigger across multiple events with per-event column lists — split
+  into separate PostgreSQL triggers when the semantics require it.
+- On a **partitioned** table a row trigger declared on the parent is cloned to every partition, so
+  `pg_trigger` counts will exceed the source count. Reconcile parent declarations, not catalog rows.

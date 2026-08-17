@@ -419,6 +419,96 @@ CREATE TRIGGER some_trigger AFTER UPDATE ON tst_part
 
 ## Conversion notes
 
+### Mechanical rule: `VALUES LESS THAN` → two-sided bounds
+
+Oracle range partitions declare only an **upper** bound; PostgreSQL requires **both**. Carry the
+previous partition's bound forward as the next partition's lower bound, starting at `MINVALUE`:
+
+```sql
+-- Oracle (upper bound only, implicitly starting where the previous one ended)
+PARTITION BY RANGE ("C_TRIP_DATE")
+ (PARTITION "P18" VALUES LESS THAN (TO_DATE(' 2019-01-01 00:00:00', ...)),
+  PARTITION "P19" VALUES LESS THAN (TO_DATE(' 2020-01-01 00:00:00', ...)))
+
+-- PostgreSQL (explicit FROM ... TO ...; note FROM is inclusive, TO is exclusive)
+CREATE TABLE t (...) PARTITION BY RANGE (c_trip_date);
+CREATE TABLE p18 PARTITION OF t FOR VALUES FROM (MINVALUE)              TO ('2019-01-01 00:00:00');
+CREATE TABLE p19 PARTITION OF t FOR VALUES FROM ('2019-01-01 00:00:00') TO ('2020-01-01 00:00:00');
+CREATE TABLE t_default PARTITION OF t DEFAULT;   -- always; see below
+```
+
+The first partition must start at `MINVALUE`, not at the first data value — otherwise rows older
+than the earliest bound have nowhere to go. Oracle's `MAXVALUE` upper partition becomes
+`TO (MAXVALUE)`.
+
+### Always add a `DEFAULT` partition — this is a *runtime* failure
+
+Oracle range partitioning routes NULL and out-of-range keys to a catch-all; PostgreSQL
+**rejects the insert** with `SQLSTATE 23514 — no partition of relation "t" found for row`.
+Without a `DEFAULT` partition the application starts failing *after* go-live, on data the
+migration never saw — the worst failure class, because nothing in the conversion or a schema
+diff reveals it.
+
+```sql
+CREATE TABLE t_default PARTITION OF t DEFAULT;
+```
+
+Add one to **every** partitioned table, including list-partitioned ones (Oracle's automatic list
+partitioning has no equivalent, so new values would otherwise be rejected).
+
+### PK / UNIQUE on a partitioned table must include the partition key
+
+PostgreSQL cannot create a unique index spanning partitions unless it contains every
+partitioning column:
+
+```
+ERROR:  unique constraint on partitioned table must include all partitioning columns
+```
+
+Oracle supports a **global** unique index that excludes the partition key; PostgreSQL does not.
+Options, in order of preference:
+
+1. **Add the partition key to the constraint** — mechanical and keeps a usable key, but it
+   **weakens uniqueness** from global to per-partition-key-value. This is a *semantic change*:
+   two rows that Oracle would have rejected can now both exist in different partitions.
+2. Enforce global uniqueness in the application, or via a separate mechanism.
+3. Drop the constraint if it existed only to create an index.
+
+**Never apply option 1 silently.** Annotate every occurrence inline (`-- NOTE:`) and have a
+reviewer sign it off.
+
+Related: `DEFERRABLE` unique constraints are **not supported on partitioned tables**, so
+Oracle's deferred-to-`COMMIT` uniqueness checking becomes per-statement checking — another
+behaviour change to flag.
+
+### Partition names are schema-global in PostgreSQL
+
+Oracle scopes partition names **per table**, so two tables may each have a partition named
+`P3M239_19`. PostgreSQL partitions are ordinary relations in the schema, so identical names
+collide:
+
+```
+ERROR:  relation "p3m239_19" already exists
+```
+
+Track emitted partition names **globally** across the schema and disambiguate on collision by
+prefixing the parent table name, then truncating to PostgreSQL's **63-byte** identifier limit
+(watch for truncation itself creating a new collision).
+
+### Row triggers clone to every partition — expect inflated catalog counts
+
+A `FOR EACH ROW` trigger declared on a partitioned parent is **cloned onto every partition**.
+In one migration 175 declared triggers produced **668** rows in `pg_trigger`. This is correct
+behaviour, but it means:
+
+- trigger counts will **not** match the Oracle source, so a naive count-based reconciliation
+  reports a false mismatch;
+- compare **parent declarations**, not raw catalog rows (`pg_dump` re-emits only the parent
+  declarations, which is the right granularity);
+- the same cloning applies to indexes and foreign keys declared on the parent.
+
+### Built-in support by Oracle partition type
+
 - Built-in PostgreSQL support by Oracle partition type:
 
   | Oracle table partition type | Built-in PostgreSQL support |
