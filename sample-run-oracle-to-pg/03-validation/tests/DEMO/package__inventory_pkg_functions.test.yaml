@@ -1,0 +1,73 @@
+object: INVENTORY_PKG_FUNCTIONS
+schema: DEMO
+type: function
+notes: >
+  Scalar companion to package__inventory_pkg.test.yaml (which covers the mutating
+  reduce_inventory via net-effect probes). These are the package's two read-only functions,
+  flattened to demo.inventory_pkg_*. Real LISTINGS rows are used: id 1 (quantity 25),
+  id 2 (quantity 3), id 3 (quantity 10).
+  has_sufficient_inventory relies on SELECT ... INTO, which raises NO_DATA_FOUND in Oracle for
+  a missing listing; the converted body uses SELECT ... INTO STRICT so the same exception
+  surfaces instead of silently returning NULL. Cases h5/h6 pin that behaviour.
+  get_low_stock_count filters listing_type = 'STORE' AND status = 1, and no 'STORE' rows exist
+  in the migrated data, so it exercises the COUNT-over-empty-set path (must be 0, not NULL) and
+  the PLS_INTEGER -> bigint mapping.
+cases:
+  # ---- has_sufficient_inventory ----
+  - id: h1
+    description: listing 1 has quantity 25 — requesting 5 is sufficient (1)
+    source_sql: "SELECT DEMO.INVENTORY_PKG.HAS_SUFFICIENT_INVENTORY(1, 5) FROM dual"
+    target_sql: "SELECT demo.inventory_pkg_has_sufficient_inventory(1, 5)"
+    compare: scalar
+  - id: h2
+    description: boundary — requesting exactly the available quantity 25 is sufficient (1)
+    source_sql: "SELECT DEMO.INVENTORY_PKG.HAS_SUFFICIENT_INVENTORY(1, 25) FROM dual"
+    target_sql: "SELECT demo.inventory_pkg_has_sufficient_inventory(1, 25)"
+    compare: scalar
+  - id: h3
+    description: boundary — one more than available (26) is insufficient (0)
+    source_sql: "SELECT DEMO.INVENTORY_PKG.HAS_SUFFICIENT_INVENTORY(1, 26) FROM dual"
+    target_sql: "SELECT demo.inventory_pkg_has_sufficient_inventory(1, 26)"
+    compare: scalar
+  - id: h4
+    description: real listing 2 has quantity 3 — requesting 10 is insufficient (0)
+    source_sql: "SELECT DEMO.INVENTORY_PKG.HAS_SUFFICIENT_INVENTORY(2, 10) FROM dual"
+    target_sql: "SELECT demo.inventory_pkg_has_sufficient_inventory(2, 10)"
+    compare: scalar
+  - id: h5
+    description: real listing 3 has quantity 10 — requesting 0 is trivially sufficient (1)
+    source_sql: "SELECT DEMO.INVENTORY_PKG.HAS_SUFFICIENT_INVENTORY(3, 0) FROM dual"
+    target_sql: "SELECT demo.inventory_pkg_has_sufficient_inventory(3, 0)"
+    compare: scalar
+  - id: h6
+    description: NULL quantity — the >= comparison against NULL must behave identically
+    source_sql: "SELECT DEMO.INVENTORY_PKG.HAS_SUFFICIENT_INVENTORY(1, NULL) FROM dual"
+    target_sql: "SELECT demo.inventory_pkg_has_sufficient_inventory(1, NULL)"
+    compare: scalar
+
+  # ---- get_low_stock_count ----
+  - id: l1
+    description: default threshold 5 — COUNT over an empty STORE/status=1 set must be 0
+    source_sql: "SELECT DEMO.INVENTORY_PKG.GET_LOW_STOCK_COUNT(5) FROM dual"
+    target_sql: "SELECT demo.inventory_pkg_get_low_stock_count(5)"
+    compare: scalar
+  - id: l2
+    description: default-argument path — called with no argument, must use DEFAULT 5 on both
+    source_sql: "SELECT DEMO.INVENTORY_PKG.GET_LOW_STOCK_COUNT FROM dual"
+    target_sql: "SELECT demo.inventory_pkg_get_low_stock_count()"
+    compare: scalar
+  - id: l3
+    description: threshold 0 — boundary, still 0
+    source_sql: "SELECT DEMO.INVENTORY_PKG.GET_LOW_STOCK_COUNT(0) FROM dual"
+    target_sql: "SELECT demo.inventory_pkg_get_low_stock_count(0)"
+    compare: scalar
+  - id: l4
+    description: very large threshold 1000 — would match every STORE listing if any existed
+    source_sql: "SELECT DEMO.INVENTORY_PKG.GET_LOW_STOCK_COUNT(1000) FROM dual"
+    target_sql: "SELECT demo.inventory_pkg_get_low_stock_count(1000)"
+    compare: scalar
+  - id: l5
+    description: NULL threshold — `quantity <= NULL` matches nothing, count must be 0 on both
+    source_sql: "SELECT DEMO.INVENTORY_PKG.GET_LOW_STOCK_COUNT(NULL) FROM dual"
+    target_sql: "SELECT demo.inventory_pkg_get_low_stock_count(NULL)"
+    compare: scalar

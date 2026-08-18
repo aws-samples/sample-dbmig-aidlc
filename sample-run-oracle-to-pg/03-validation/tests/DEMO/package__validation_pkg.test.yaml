@@ -2,46 +2,117 @@ object: VALIDATION_PKG
 schema: DEMO
 type: function
 notes: >
-  Pure input->output validators (no data dependency) — strong equivalence cases covering the
-  regex conversions (REGEXP_LIKE -> ~, REGEXP_REPLACE with global 'g' flag) and range checks.
+  Package flattened to demo.validation_pkg_*. All three routines are pure (no table access),
+  so inputs are real values drawn from the data: ISBNs from BOOKS (9780385534635,
+  9780525620785, 9780765387561), emails from CUSTOMERS (admin@bobsusedbooks.com,
+  john.doe@example.com), and prices from LISTINGS (10.95, 6.5).
+  is_valid_isbn is the critical case: Oracle REGEXP_REPLACE strips EVERY non-[0-9X]
+  character, while PostgreSQL replaces only the FIRST match unless the 'g' flag is given.
+  Cases i3/i4 feed input containing MULTIPLE separators, so a missing 'g' would leave
+  leftover characters, change LENGTH(), and flip the 1/0 result — the flag is proven, not assumed.
 cases:
-  - id: c1
-    description: valid email
-    source_sql: "SELECT demo.validation_pkg.is_valid_email('john.doe@example.com') FROM dual"
+  # ---- is_valid_email : REGEXP_LIKE(x,p) -> x ~ p ----
+  - id: e1
+    description: real customer email admin@bobsusedbooks.com -> valid (1)
+    source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_EMAIL('admin@bobsusedbooks.com') FROM dual"
+    target_sql: "SELECT demo.validation_pkg_is_valid_email('admin@bobsusedbooks.com')"
+    compare: scalar
+  - id: e2
+    description: real customer email with dots in local part -> valid (1)
+    source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_EMAIL('john.doe@example.com') FROM dual"
     target_sql: "SELECT demo.validation_pkg_is_valid_email('john.doe@example.com')"
     compare: scalar
-  - id: c2
-    description: invalid email (no domain)
-    source_sql: "SELECT demo.validation_pkg.is_valid_email('not-an-email') FROM dual"
+  - id: e3
+    description: malformed — no @ -> invalid (0)
+    source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_EMAIL('not-an-email') FROM dual"
     target_sql: "SELECT demo.validation_pkg_is_valid_email('not-an-email')"
     compare: scalar
-  - id: c3
-    description: valid 13-digit ISBN
-    source_sql: "SELECT demo.validation_pkg.is_valid_isbn('9780385534635') FROM dual"
+  - id: e4
+    description: malformed — single-char TLD fails the {2,} quantifier -> invalid (0)
+    source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_EMAIL('a@b.c') FROM dual"
+    target_sql: "SELECT demo.validation_pkg_is_valid_email('a@b.c')"
+    compare: scalar
+  - id: e5
+    description: NULL email — regex against NULL must yield the same result on both engines
+    source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_EMAIL(NULL) FROM dual"
+    target_sql: "SELECT demo.validation_pkg_is_valid_email(NULL)"
+    compare: scalar
+
+  # ---- is_valid_isbn : REGEXP_REPLACE needs the 'g' flag in PostgreSQL ----
+  - id: i1
+    description: real 13-digit ISBN from BOOKS -> valid (1)
+    source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_ISBN('9780385534635') FROM dual"
     target_sql: "SELECT demo.validation_pkg_is_valid_isbn('9780385534635')"
     compare: scalar
-  - id: c4
-    description: valid 10-char ISBN with X check digit
-    source_sql: "SELECT demo.validation_pkg.is_valid_isbn('097522980X') FROM dual"
-    target_sql: "SELECT demo.validation_pkg_is_valid_isbn('097522980X')"
+  - id: i2
+    description: real 13-digit ISBN 9780525620785 -> valid (1)
+    source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_ISBN('9780525620785') FROM dual"
+    target_sql: "SELECT demo.validation_pkg_is_valid_isbn('9780525620785')"
     compare: scalar
-  - id: c5
-    description: invalid ISBN (too short)
-    source_sql: "SELECT demo.validation_pkg.is_valid_isbn('123') FROM dual"
-    target_sql: "SELECT demo.validation_pkg_is_valid_isbn('123')"
+  - id: i3
+    description: >
+      CRITICAL 'g'-flag case — hyphenated ISBN with 4 separators. All must be stripped to
+      leave 13 digits; without the 'g' flag PostgreSQL removes only the first hyphen and
+      LENGTH() becomes 16, returning 0 instead of 1.
+    source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_ISBN('978-0-3855-34635') FROM dual"
+    target_sql: "SELECT demo.validation_pkg_is_valid_isbn('978-0-3855-34635')"
     compare: scalar
-  - id: c6
-    description: valid price
-    source_sql: "SELECT demo.validation_pkg.is_valid_price(49.99) FROM dual"
-    target_sql: "SELECT demo.validation_pkg_is_valid_price(49.99)"
+  - id: i4
+    description: >
+      second 'g'-flag case — 10-char ISBN with spaces and hyphens plus a trailing X
+      check digit; only global replacement yields the 10 that makes this valid.
+    source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_ISBN('0-306 40615 X') FROM dual"
+    target_sql: "SELECT demo.validation_pkg_is_valid_isbn('0-306 40615 X')"
     compare: scalar
-  - id: c7
-    description: invalid price (zero)
-    source_sql: "SELECT demo.validation_pkg.is_valid_price(0) FROM dual"
+  - id: i5
+    description: wrong length (12 digits) -> invalid (0)
+    source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_ISBN('978038553463') FROM dual"
+    target_sql: "SELECT demo.validation_pkg_is_valid_isbn('978038553463')"
+    compare: scalar
+  - id: i6
+    description: all separators, no digits -> invalid (0)
+    source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_ISBN('---- ----') FROM dual"
+    target_sql: "SELECT demo.validation_pkg_is_valid_isbn('---- ----')"
+    compare: scalar
+  - id: i7
+    description: NULL ISBN — LENGTH(NULL) path must agree
+    source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_ISBN(NULL) FROM dual"
+    target_sql: "SELECT demo.validation_pkg_is_valid_isbn(NULL)"
+    compare: scalar
+
+  # ---- is_valid_price ----
+  - id: p1
+    description: real listing price 10.95 -> valid (1)
+    source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_PRICE(10.95) FROM dual"
+    target_sql: "SELECT demo.validation_pkg_is_valid_price(10.95)"
+    compare: scalar
+  - id: p2
+    description: real listing price 6.5 -> valid (1)
+    source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_PRICE(6.5) FROM dual"
+    target_sql: "SELECT demo.validation_pkg_is_valid_price(6.5)"
+    compare: scalar
+  - id: p3
+    description: boundary — 0 is excluded by `p_price > 0` -> invalid (0)
+    source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_PRICE(0) FROM dual"
     target_sql: "SELECT demo.validation_pkg_is_valid_price(0)"
     compare: scalar
-  - id: c8
-    description: invalid price (at upper bound 10000)
-    source_sql: "SELECT demo.validation_pkg.is_valid_price(10000) FROM dual"
+  - id: p4
+    description: boundary — 10000 is excluded by `p_price < 10000` -> invalid (0)
+    source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_PRICE(10000) FROM dual"
     target_sql: "SELECT demo.validation_pkg_is_valid_price(10000)"
+    compare: scalar
+  - id: p5
+    description: boundary — 9999.99 just inside the range -> valid (1)
+    source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_PRICE(9999.99) FROM dual"
+    target_sql: "SELECT demo.validation_pkg_is_valid_price(9999.99)"
+    compare: scalar
+  - id: p6
+    description: negative price -> invalid (0)
+    source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_PRICE(-10.95) FROM dual"
+    target_sql: "SELECT demo.validation_pkg_is_valid_price(-10.95)"
+    compare: scalar
+  - id: p7
+    description: NULL price — comparison with NULL must yield the same result
+    source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_PRICE(NULL) FROM dual"
+    target_sql: "SELECT demo.validation_pkg_is_valid_price(NULL)"
     compare: scalar

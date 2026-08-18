@@ -2,14 +2,58 @@ object: ARCHIVE_OLD_ORDERS
 schema: DEMO
 type: procedure
 notes: >
-  Deletes delivered/cancelled orders older than N days. ORDERS is empty, so the net effect is
-  zero rows removed on both engines (delta 0). Verifies the flattened DELETE runs identically.
+  SAFETY — the ORACLE source COMMITs and this procedure DELETEs from ORDERS, so it is the
+  most destructive routine in the schema (gen-tests flagged test_mode: manual). Two
+  independent safeguards make these cases provably harmless on the source:
+    1. ORDERS is empty in the migrated data (0 rows, confirmed by reconciliation), so there is
+       nothing to delete; and
+    2. every case passes a very large p_days_old, pushing the cutoff date far into the past so
+       the `created_on < cutoff` predicate cannot match even if rows existed.
+  The cases still compare real behaviour: the net effect (zero deletions) and, critically,
+  that the rewritten DELETE (Oracle's inline-view `DELETE FROM (subquery)` became a direct
+  DELETE ... WHERE) and the SYSDATE - n -> now() - make_interval(days => n) date arithmetic
+  select the same row set. Ref: non-portable-constructs.md -> DELETE FROM (subquery)
 cases:
-  - id: c1
-    description: archive orders older than 365 days (net effect on orders count)
-    call_source: "BEGIN demo.archive_old_orders(365); END;"
+  - id: a1
+    description: >
+      default retention (365 days) — verifies the rewritten DELETE and the interval-based
+      cutoff match Oracle's DATE arithmetic; zero rows deleted on both engines
+    call_source: "BEGIN DEMO.ARCHIVE_OLD_ORDERS(365); END;"
     call_target: "CALL demo.archive_old_orders(365)"
     verify:
-      - name: orders_count
-        source_sql: "SELECT COUNT(*) FROM demo.orders"
-        target_sql: "SELECT COUNT(*) FROM demo.orders"
+      - name: orders_total
+        source_sql: "SELECT COUNT(*) FROM DEMO.ORDERS"
+        target_sql: "SELECT count(*) FROM demo.orders"
+      - name: delivered_or_cancelled_orders
+        source_sql: "SELECT COUNT(*) FROM DEMO.ORDERS WHERE status IN ('DELIVERED','CANCELLED')"
+        target_sql: "SELECT count(*) FROM demo.orders WHERE status IN ('DELIVERED','CANCELLED')"
+      - name: order_items_total
+        source_sql: "SELECT COUNT(*) FROM DEMO.ORDER_ITEMS"
+        target_sql: "SELECT count(*) FROM demo.order_items"
+  - id: a2
+    description: >
+      very large retention (100000 days) — cutoff far in the past, guaranteeing no match;
+      confirms make_interval handles a large day count the same way as Oracle SYSDATE - n
+    call_source: "BEGIN DEMO.ARCHIVE_OLD_ORDERS(100000); END;"
+    call_target: "CALL demo.archive_old_orders(100000)"
+    verify:
+      - name: orders_total
+        source_sql: "SELECT COUNT(*) FROM DEMO.ORDERS"
+        target_sql: "SELECT count(*) FROM demo.orders"
+      - name: delivered_or_cancelled_orders
+        source_sql: "SELECT COUNT(*) FROM DEMO.ORDERS WHERE status IN ('DELIVERED','CANCELLED')"
+        target_sql: "SELECT count(*) FROM demo.orders WHERE status IN ('DELIVERED','CANCELLED')"
+  - id: a3
+    description: >
+      zero retention (cutoff = now) — the widest possible match window, still zero rows
+      because ORDERS is empty and only DELIVERED/CANCELLED rows qualify. Exercises the
+      boundary of the cutoff comparison identically on both engines.
+    call_source: "BEGIN DEMO.ARCHIVE_OLD_ORDERS(0); END;"
+    call_target: "CALL demo.archive_old_orders(0)"
+    verify:
+      - name: orders_total
+        source_sql: "SELECT COUNT(*) FROM DEMO.ORDERS"
+        target_sql: "SELECT count(*) FROM demo.orders"
+      - name: order_items_total
+        source_sql: "SELECT COUNT(*) FROM DEMO.ORDER_ITEMS"
+        target_sql: "SELECT count(*) FROM demo.order_items"

@@ -1,5 +1,9 @@
 results:
-- label: SET_BOOK_FEATURED
+- label: INVENTORY_PKG
+  status: applied
+  error: null
+  pass: 1
+- label: PROCESS_CUSTOMER_OFFER
   status: applied
   error: null
   pass: 1

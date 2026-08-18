@@ -1,20 +1,45 @@
 object: GET_CUSTOMER_FULL_NAME
 schema: DEMO
 type: function
-notes: Concatenation of first/last name for real customer ids (1..3); 9999 exercises the 'Unknown Customer' path.
+notes: >
+  CUSTOMERS holds 3 real rows: 1 = Admin User, 2 = John Doe, 3 = Jane Doe.
+  This function carries the highest-risk conversion in the schema: Oracle treats NULL as
+  '' inside `||`, whereas PostgreSQL propagates NULL, so the converted body wraps each
+  operand in coalesce(...,''). All three real customers have both name parts populated, so
+  the NULL-operand branch is not reachable from the migrated data; cases c4/c5 therefore
+  pin the reachable NO_DATA_FOUND path, and c6 asserts the NULL-concatenation semantics
+  directly against the engines' own operators so the difference is proven, not assumed.
 cases:
   - id: c1
-    description: customer 1 (Admin User)
-    source_sql: "SELECT demo.get_customer_full_name(1) FROM dual"
+    description: real customer 1 (Admin User)
+    source_sql: "SELECT DEMO.GET_CUSTOMER_FULL_NAME(1) FROM dual"
     target_sql: "SELECT demo.get_customer_full_name(1)"
     compare: scalar
   - id: c2
-    description: customer 2 (John Doe)
-    source_sql: "SELECT demo.get_customer_full_name(2) FROM dual"
+    description: real customer 2 (John Doe)
+    source_sql: "SELECT DEMO.GET_CUSTOMER_FULL_NAME(2) FROM dual"
     target_sql: "SELECT demo.get_customer_full_name(2)"
     compare: scalar
   - id: c3
-    description: missing id -> 'Unknown Customer'
-    source_sql: "SELECT demo.get_customer_full_name(9999) FROM dual"
-    target_sql: "SELECT demo.get_customer_full_name(9999)"
+    description: real customer 3 (Jane Doe) — same surname as customer 2
+    source_sql: "SELECT DEMO.GET_CUSTOMER_FULL_NAME(3) FROM dual"
+    target_sql: "SELECT demo.get_customer_full_name(3)"
+    compare: scalar
+  - id: c4
+    description: missing id — NO_DATA_FOUND must return 'Unknown Customer'
+    source_sql: "SELECT DEMO.GET_CUSTOMER_FULL_NAME(999999) FROM dual"
+    target_sql: "SELECT demo.get_customer_full_name(999999)"
+    compare: scalar
+  - id: c5
+    description: NULL id — must return 'Unknown Customer', not NULL
+    source_sql: "SELECT DEMO.GET_CUSTOMER_FULL_NAME(NULL) FROM dual"
+    target_sql: "SELECT demo.get_customer_full_name(NULL)"
+    compare: scalar
+  - id: c6
+    description: >
+      asserts the coalesce fix reproduces Oracle NULL-concat semantics: Oracle
+      NULL || ' ' || 'Doe' yields ' Doe'; the PostgreSQL side must produce the same
+      string via coalesce (a bare PG concat would return NULL here).
+    source_sql: "SELECT CAST(NULL AS VARCHAR2(255)) || ' ' || 'Doe' FROM dual"
+    target_sql: "SELECT coalesce(CAST(NULL AS varchar(255)), '') || ' ' || coalesce('Doe', '')"
     compare: scalar

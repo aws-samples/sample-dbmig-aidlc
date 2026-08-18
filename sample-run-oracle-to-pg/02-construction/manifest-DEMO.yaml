@@ -1,7 +1,7 @@
-project: oracle-demo
+project: demo
 schema: DEMO
 phase: construction
-generated_at: '2026-07-02T12:01:34Z'
+generated_at: '2026-08-17T04:19:33Z'
 provider: kiro
 model: kiro
 unit_count: 14
@@ -9,7 +9,7 @@ batch_count: 3
 units:
 - name: ADDRESSES
   schema: DEMO
-  num_rows: 3
+  num_rows: -1
   batch_id: 1
   prompt_file: prompts/DEMO/batch_001.prompt.md
   output_file: ddl/demo/addresses.sql
@@ -19,7 +19,7 @@ units:
   post_last_error: null
 - name: BOOKS
   schema: DEMO
-  num_rows: 56
+  num_rows: -1
   batch_id: 1
   prompt_file: prompts/DEMO/batch_001.prompt.md
   output_file: ddl/demo/books.sql
@@ -29,7 +29,7 @@ units:
   post_last_error: null
 - name: BOOKS_COVER
   schema: DEMO
-  num_rows: 56
+  num_rows: -1
   batch_id: 1
   prompt_file: prompts/DEMO/batch_001.prompt.md
   output_file: ddl/demo/books_cover.sql
@@ -39,7 +39,7 @@ units:
   post_last_error: null
 - name: BOOK_TYPES
   schema: DEMO
-  num_rows: 3
+  num_rows: -1
   batch_id: 1
   prompt_file: prompts/DEMO/batch_001.prompt.md
   output_file: ddl/demo/book_types.sql
@@ -48,7 +48,7 @@ units:
   post_status: applied
 - name: CONDITIONS
   schema: DEMO
-  num_rows: 4
+  num_rows: -1
   batch_id: 1
   prompt_file: prompts/DEMO/batch_001.prompt.md
   output_file: ddl/demo/conditions.sql
@@ -57,7 +57,7 @@ units:
   post_status: applied
 - name: CUSTOMERS
   schema: DEMO
-  num_rows: 3
+  num_rows: -1
   batch_id: 2
   prompt_file: prompts/DEMO/batch_002.prompt.md
   output_file: ddl/demo/customers.sql
@@ -66,7 +66,7 @@ units:
   post_status: applied
 - name: GENRES
   schema: DEMO
-  num_rows: 8
+  num_rows: -1
   batch_id: 2
   prompt_file: prompts/DEMO/batch_002.prompt.md
   output_file: ddl/demo/genres.sql
@@ -75,7 +75,7 @@ units:
   post_status: applied
 - name: LISTINGS
   schema: DEMO
-  num_rows: 56
+  num_rows: -1
   batch_id: 2
   prompt_file: prompts/DEMO/batch_002.prompt.md
   output_file: ddl/demo/listings.sql
@@ -123,7 +123,7 @@ units:
   post_status: applied
 - name: PUBLISHERS
   schema: DEMO
-  num_rows: 10
+  num_rows: -1
   batch_id: 3
   prompt_file: prompts/DEMO/batch_003.prompt.md
   output_file: ddl/demo/publishers.sql

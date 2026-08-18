@@ -2,19 +2,62 @@ object: PROCESS_CUSTOMER_OFFER
 schema: DEMO
 type: procedure
 notes: >
-  Mutating procedure (REJECT sets status=2, APPROVE sets status=1/STORE). The Oracle SOURCE
-  procedure issues an internal COMMIT, so the run-tests rollback cannot undo a change against a
-  real row (and re-runs would not be idempotent). To keep the equivalence test non-destructive
-  and repeatable, it targets a non-existent listing id: the UPDATE matches zero rows on both
-  engines, so the net effect is identical (no change) and the source data is never mutated.
-  The converted PG procedure intentionally omits COMMIT (caller controls the transaction).
+  SAFETY — the ORACLE source COMMITs (gen-tests flagged test_mode: manual), so all cases use a
+  NON-EXISTENT listing id (999999). The UPDATE matches zero rows, Oracle's COMMIT commits
+  nothing, and the source database is provably unmodified while the net effect is still
+  compared across engines.
+  Covers both branches of the IF (APPROVE -> status 1 + listing_type 'STORE';
+  REJECT -> status 2). The third branch raises an error
+  (RAISE_APPLICATION_ERROR(-20002) -> RAISE EXCEPTION ... ERRCODE 'P0002'); an exception is
+  not comparable through the delta harness, so that path is verified separately and recorded
+  in 03-validation/error-parity-verification.md.
+  Real admin id 1 (customer 'Admin User', role ADMIN) is used as p_admin_id.
 cases:
-  - id: c1
-    description: reject a non-existent listing -> zero rows affected on both engines
-    call_source: "BEGIN demo.process_customer_offer(999999, 'REJECT', 1, 'equivalence test'); END;"
-    call_target: "CALL demo.process_customer_offer(999999, 'REJECT', 1, 'equivalence test')"
+  - id: p1
+    description: >
+      APPROVE branch on a non-existent listing — zero rows updated on both engines.
+      Probes cover every column the branch writes (status, listing_type, processed_by).
+    call_source: "BEGIN DEMO.PROCESS_CUSTOMER_OFFER(999999, 'APPROVE', 1, 'approved by test'); END;"
+    call_target: "CALL demo.process_customer_offer(999999, 'APPROVE', 1, 'approved by test')"
     verify:
-      - name: rejected_listings
-        source_sql: "SELECT COUNT(*) FROM demo.listings WHERE status = 2"
-        target_sql: "SELECT COUNT(*) FROM demo.listings WHERE status = 2"
-
+      - name: status_1_listings
+        source_sql: "SELECT COUNT(*) FROM DEMO.LISTINGS WHERE status = 1"
+        target_sql: "SELECT count(*) FROM demo.listings WHERE status = 1"
+      - name: store_listings
+        source_sql: "SELECT COUNT(*) FROM DEMO.LISTINGS WHERE listing_type = 'STORE'"
+        target_sql: "SELECT count(*) FROM demo.listings WHERE listing_type = 'STORE'"
+      - name: processed_by_admin_1
+        source_sql: "SELECT COUNT(*) FROM DEMO.LISTINGS WHERE processed_by = 1"
+        target_sql: "SELECT count(*) FROM demo.listings WHERE processed_by = 1"
+      - name: admin_notes_set
+        source_sql: "SELECT COUNT(*) FROM DEMO.LISTINGS WHERE admin_notes IS NOT NULL"
+        target_sql: "SELECT count(*) FROM demo.listings WHERE admin_notes IS NOT NULL"
+  - id: p2
+    description: >
+      REJECT branch on a non-existent listing — status 2 path; note the source deliberately
+      does NOT change listing_type on reject, and that asymmetry must be preserved
+    call_source: "BEGIN DEMO.PROCESS_CUSTOMER_OFFER(999999, 'REJECT', 1, 'rejected by test'); END;"
+    call_target: "CALL demo.process_customer_offer(999999, 'REJECT', 1, 'rejected by test')"
+    verify:
+      - name: status_2_listings
+        source_sql: "SELECT COUNT(*) FROM DEMO.LISTINGS WHERE status = 2"
+        target_sql: "SELECT count(*) FROM demo.listings WHERE status = 2"
+      - name: store_listings_unchanged
+        source_sql: "SELECT COUNT(*) FROM DEMO.LISTINGS WHERE listing_type = 'STORE'"
+        target_sql: "SELECT count(*) FROM demo.listings WHERE listing_type = 'STORE'"
+      - name: processed_at_set
+        source_sql: "SELECT COUNT(*) FROM DEMO.LISTINGS WHERE processed_at IS NOT NULL"
+        target_sql: "SELECT count(*) FROM demo.listings WHERE processed_at IS NOT NULL"
+  - id: p3
+    description: >
+      APPROVE with a NULL p_notes (the parameter's default) — confirms the optional-argument
+      default behaves the same after conversion
+    call_source: "BEGIN DEMO.PROCESS_CUSTOMER_OFFER(999999, 'APPROVE', 1); END;"
+    call_target: "CALL demo.process_customer_offer(999999, 'APPROVE', 1)"
+    verify:
+      - name: status_1_listings
+        source_sql: "SELECT COUNT(*) FROM DEMO.LISTINGS WHERE status = 1"
+        target_sql: "SELECT count(*) FROM demo.listings WHERE status = 1"
+      - name: admin_notes_set
+        source_sql: "SELECT COUNT(*) FROM DEMO.LISTINGS WHERE admin_notes IS NOT NULL"
+        target_sql: "SELECT count(*) FROM demo.listings WHERE admin_notes IS NOT NULL"

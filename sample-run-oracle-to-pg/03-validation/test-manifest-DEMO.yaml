@@ -1,7 +1,7 @@
-project: oracle-demo
+project: demo
 schema: DEMO
 phase: validation-tests
-generated_at: '2026-07-02T12:14:08Z'
+generated_at: '2026-08-17T04:46:18Z'
 provider: kiro
 unit_count: 15
 units:
@@ -71,12 +71,16 @@ units:
   prompt_file: test_prompts/DEMO/procedure__archive_old_orders.prompt.md
   spec_file: tests/DEMO/procedure__archive_old_orders.test.yaml
   status: generated
+  transaction_managed: true
+  test_mode: manual
 - name: CLEAR_SHOPPING_CART
   object_type: PROCEDURE
   schema: DEMO
   prompt_file: test_prompts/DEMO/procedure__clear_shopping_cart.prompt.md
   spec_file: tests/DEMO/procedure__clear_shopping_cart.test.yaml
   status: generated
+  transaction_managed: true
+  test_mode: manual
 - name: GENERATE_SALES_REPORT
   object_type: PROCEDURE
   schema: DEMO
@@ -89,9 +93,21 @@ units:
   prompt_file: test_prompts/DEMO/procedure__process_customer_offer.prompt.md
   spec_file: tests/DEMO/procedure__process_customer_offer.test.yaml
   status: generated
+  transaction_managed: true
+  test_mode: manual
 - name: SET_BOOK_FEATURED
   object_type: PROCEDURE
   schema: DEMO
   prompt_file: test_prompts/DEMO/procedure__set_book_featured.prompt.md
   spec_file: tests/DEMO/procedure__set_book_featured.test.yaml
   status: generated
+  transaction_managed: true
+  test_mode: manual
+- name: INVENTORY_PKG_FUNCTIONS
+  object_type: PACKAGE
+  schema: DEMO
+  prompt_file: test_prompts/DEMO/package__inventory_pkg.prompt.md
+  spec_file: tests/DEMO/package__inventory_pkg_functions.test.yaml
+  status: generated
+  note: 'added by Kiro: scalar cases for the package read-only functions (the base
+    unit is procedure-typed for reduce_inventory)'

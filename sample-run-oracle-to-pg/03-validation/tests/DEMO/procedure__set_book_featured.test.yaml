@@ -2,15 +2,54 @@ object: SET_BOOK_FEATURED
 schema: DEMO
 type: procedure
 notes: >
-  Sets is_featured on STORE listings (status 1) for a book. The seeded listings are of type
-  SYSTEM, so no rows match and the net effect is zero on both engines — verifying the WHERE
-  predicate (listing_type='STORE' AND status=1) is applied identically.
+  SAFETY — the ORACLE source COMMITs, so rollback cannot undo source-side changes
+  (gen-tests flagged test_mode: manual). Cases therefore target a NON-EXISTENT book id so the
+  UPDATE matches zero rows and Oracle's COMMIT commits nothing.
+  A second, independent safety factor: the procedure's WHERE clause also requires
+  listing_type = 'STORE' AND status = 1, and the migrated LISTINGS contain NO 'STORE' rows at
+  all (55 'SYSTEM' + 1 'CUSTOMER'), so even a real book id could not match.
+  This still meaningfully compares the net effect (zero rows changed) and, in c3, that the
+  numeric -> smallint cast added for the target does not alter the outcome.
 cases:
-  - id: c1
-    description: feature book 1 across its STORE listings (net effect on featured sum)
-    call_source: "BEGIN demo.set_book_featured(1, 1); END;"
+  - id: f1
+    description: non-existent book 999999, featured=1 — zero rows updated on both engines
+    call_source: "BEGIN DEMO.SET_BOOK_FEATURED(999999, 1); END;"
+    call_target: "CALL demo.set_book_featured(999999, 1)"
+    verify:
+      - name: featured_listings
+        source_sql: "SELECT COUNT(*) FROM DEMO.LISTINGS WHERE is_featured = 1"
+        target_sql: "SELECT count(*) FROM demo.listings WHERE is_featured = 1"
+      - name: featured_sum
+        source_sql: "SELECT NVL(SUM(is_featured),0) FROM DEMO.LISTINGS"
+        target_sql: "SELECT coalesce(sum(is_featured),0) FROM demo.listings"
+      - name: store_status1_rows
+        source_sql: "SELECT COUNT(*) FROM DEMO.LISTINGS WHERE listing_type = 'STORE' AND status = 1"
+        target_sql: "SELECT count(*) FROM demo.listings WHERE listing_type = 'STORE' AND status = 1"
+  - id: f2
+    description: non-existent book 999999, featured=0 — the un-feature path, also a no-op
+    call_source: "BEGIN DEMO.SET_BOOK_FEATURED(999999, 0); END;"
+    call_target: "CALL demo.set_book_featured(999999, 0)"
+    verify:
+      - name: featured_listings
+        source_sql: "SELECT COUNT(*) FROM DEMO.LISTINGS WHERE is_featured = 1"
+        target_sql: "SELECT count(*) FROM demo.listings WHERE is_featured = 1"
+      - name: unfeatured_listings
+        source_sql: "SELECT COUNT(*) FROM DEMO.LISTINGS WHERE is_featured = 0"
+        target_sql: "SELECT count(*) FROM demo.listings WHERE is_featured = 0"
+  - id: f3
+    description: >
+      real book id 1 — safe because no 'STORE'/status=1 listing exists, so the UPDATE still
+      matches zero rows. Confirms the added p_is_featured::smallint cast on the target
+      produces the same net effect as Oracle's implicit NUMBER coercion.
+    call_source: "BEGIN DEMO.SET_BOOK_FEATURED(1, 1); END;"
     call_target: "CALL demo.set_book_featured(1, 1)"
     verify:
-      - name: featured_sum
-        source_sql: "SELECT COALESCE(SUM(is_featured),0) FROM demo.listings WHERE book_id = 1 AND listing_type='STORE' AND status = 1"
-        target_sql: "SELECT COALESCE(SUM(is_featured),0) FROM demo.listings WHERE book_id = 1 AND listing_type='STORE' AND status = 1"
+      - name: featured_listings
+        source_sql: "SELECT COUNT(*) FROM DEMO.LISTINGS WHERE is_featured = 1"
+        target_sql: "SELECT count(*) FROM demo.listings WHERE is_featured = 1"
+      - name: listings_for_book_1
+        source_sql: "SELECT NVL(SUM(is_featured),0) FROM DEMO.LISTINGS WHERE book_id = 1"
+        target_sql: "SELECT coalesce(sum(is_featured),0) FROM demo.listings WHERE book_id = 1"
+      - name: updated_on_set_for_book_1
+        source_sql: "SELECT COUNT(*) FROM DEMO.LISTINGS WHERE book_id = 1 AND updated_on IS NOT NULL"
+        target_sql: "SELECT count(*) FROM demo.listings WHERE book_id = 1 AND updated_on IS NOT NULL"

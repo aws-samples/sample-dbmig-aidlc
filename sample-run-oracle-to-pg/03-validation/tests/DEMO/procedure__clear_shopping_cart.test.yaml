@@ -2,14 +2,42 @@ object: CLEAR_SHOPPING_CART
 schema: DEMO
 type: procedure
 notes: >
-  Removes non-wishlist cart items for a customer. SHOPPING_CART_ITEMS is empty, so the delta is
-  zero on both engines. Verifies the DELETE predicate (is_wishlist_item = 0) runs identically.
+  SAFETY — the ORACLE source of this procedure ends with COMMIT, so the harness's rollback
+  cannot undo whatever it does on the SOURCE database. gen-tests flagged it test_mode: manual
+  for exactly this reason. (The converted PostgreSQL version has the COMMIT removed.)
+  Following the playbook's guidance for this situation, every case targets a NON-EXISTENT
+  customer id, so the DELETE matches zero rows and Oracle's COMMIT commits nothing — the
+  source database is provably unmodified while the net effect (0 rows deleted) is still
+  compared across engines. SHOPPING_CART_ITEMS is also empty in the migrated data (0 rows),
+  giving a second layer of safety.
+  Ref: non-portable-constructs.md -> Transactions in procedures (testability)
 cases:
-  - id: c1
-    description: clear cart for customer 2 (net effect on their cart rows)
-    call_source: "BEGIN demo.clear_shopping_cart(2); END;"
-    call_target: "CALL demo.clear_shopping_cart(2)"
+  - id: s1
+    description: >
+      non-existent customer 999999 — deletes nothing; both engines must show a zero delta
+      on the cart table (and Oracle's COMMIT therefore has no effect)
+    call_source: "BEGIN DEMO.CLEAR_SHOPPING_CART(999999); END;"
+    call_target: "CALL demo.clear_shopping_cart(999999)"
     verify:
-      - name: cart_rows
-        source_sql: "SELECT COUNT(*) FROM demo.shopping_cart_items WHERE customer_id = 2"
-        target_sql: "SELECT COUNT(*) FROM demo.shopping_cart_items WHERE customer_id = 2"
+      - name: cart_items_total
+        source_sql: "SELECT COUNT(*) FROM DEMO.SHOPPING_CART_ITEMS"
+        target_sql: "SELECT count(*) FROM demo.shopping_cart_items"
+      - name: cart_items_for_customer
+        source_sql: "SELECT COUNT(*) FROM DEMO.SHOPPING_CART_ITEMS WHERE customer_id = 999999"
+        target_sql: "SELECT count(*) FROM demo.shopping_cart_items WHERE customer_id = 999999"
+      - name: non_wishlist_items
+        source_sql: "SELECT COUNT(*) FROM DEMO.SHOPPING_CART_ITEMS WHERE is_wishlist_item = 0"
+        target_sql: "SELECT count(*) FROM demo.shopping_cart_items WHERE is_wishlist_item = 0"
+  - id: s2
+    description: >
+      NULL customer id — the `customer_id = NULL` predicate matches nothing in both engines,
+      so this is also a safe no-op and confirms identical NULL-comparison semantics
+    call_source: "BEGIN DEMO.CLEAR_SHOPPING_CART(NULL); END;"
+    call_target: "CALL demo.clear_shopping_cart(NULL)"
+    verify:
+      - name: cart_items_total
+        source_sql: "SELECT COUNT(*) FROM DEMO.SHOPPING_CART_ITEMS"
+        target_sql: "SELECT count(*) FROM demo.shopping_cart_items"
+      - name: wishlist_items_preserved
+        source_sql: "SELECT COUNT(*) FROM DEMO.SHOPPING_CART_ITEMS WHERE is_wishlist_item = 1"
+        target_sql: "SELECT count(*) FROM demo.shopping_cart_items WHERE is_wishlist_item = 1"

@@ -2,26 +2,85 @@ object: BOOK_PKG
 schema: DEMO
 type: function
 notes: >
-  Package flattened to demo.book_pkg_* on the target; Oracle calls use pkg.member syntax.
-  Function subprograms only (get_book_details is an OUT-parameter procedure). Real book ids 1..56.
+  Package flattened to demo.book_pkg_*. Covers the three public FUNCTIONS as scalar
+  comparisons; the fourth subprogram (get_book_details) is an OUT-parameter procedure and is
+  verified separately (see 03-validation/out-parameter-verification.md) because the
+  rollback harness compares net effects and that routine is read-only.
+  Data note: get_available_quantity / get_avg_price filter listing_type = 'STORE', and the
+  migrated LISTINGS contain only 'SYSTEM' (55 rows) and 'CUSTOMER' (1 row) — no 'STORE'
+  rows exist. Every case therefore exercises the aggregate-over-empty-set path, which is
+  exactly where Oracle NVL(...,0)/AVG(NULL) and PostgreSQL coalesce(...,0) must agree that
+  the result is 0 rather than NULL. Book ids 1, 2, 3 and 56 are real rows.
 cases:
-  - id: c1
-    description: available store quantity for book 1
-    source_sql: "SELECT demo.book_pkg.get_available_quantity(1) FROM dual"
+  # ---- get_available_quantity : NVL(SUM(...),0) over an empty match set ----
+  - id: q1
+    description: real book id 1 — no STORE listings, SUM-over-empty must be 0 not NULL
+    source_sql: "SELECT DEMO.BOOK_PKG.GET_AVAILABLE_QUANTITY(1) FROM dual"
     target_sql: "SELECT demo.book_pkg_get_available_quantity(1)"
     compare: scalar
-  - id: c2
-    description: average store price for book 1
-    source_sql: "SELECT demo.book_pkg.get_avg_price(1) FROM dual"
+  - id: q2
+    description: real book id 2 — same empty-aggregate path
+    source_sql: "SELECT DEMO.BOOK_PKG.GET_AVAILABLE_QUANTITY(2) FROM dual"
+    target_sql: "SELECT demo.book_pkg_get_available_quantity(2)"
+    compare: scalar
+  - id: q3
+    description: boundary — highest real book id 56 (the only CUSTOMER-type listing)
+    source_sql: "SELECT DEMO.BOOK_PKG.GET_AVAILABLE_QUANTITY(56) FROM dual"
+    target_sql: "SELECT demo.book_pkg_get_available_quantity(56)"
+    compare: scalar
+  - id: q4
+    description: non-existent book id — must still return 0
+    source_sql: "SELECT DEMO.BOOK_PKG.GET_AVAILABLE_QUANTITY(999999) FROM dual"
+    target_sql: "SELECT demo.book_pkg_get_available_quantity(999999)"
+    compare: scalar
+  - id: q5
+    description: NULL book id — must return 0
+    source_sql: "SELECT DEMO.BOOK_PKG.GET_AVAILABLE_QUANTITY(NULL) FROM dual"
+    target_sql: "SELECT demo.book_pkg_get_available_quantity(NULL)"
+    compare: scalar
+
+  # ---- get_avg_price : NVL(AVG(...),0) — AVG over empty set is NULL in both engines ----
+  - id: a1
+    description: real book id 1 — AVG-over-empty must be coerced to 0 identically
+    source_sql: "SELECT DEMO.BOOK_PKG.GET_AVG_PRICE(1) FROM dual"
     target_sql: "SELECT demo.book_pkg_get_avg_price(1)"
     compare: scalar
-  - id: c3
-    description: in-stock flag for book 1
-    source_sql: "SELECT demo.book_pkg.is_in_stock(1) FROM dual"
+  - id: a2
+    description: real book id 3 — same path
+    source_sql: "SELECT DEMO.BOOK_PKG.GET_AVG_PRICE(3) FROM dual"
+    target_sql: "SELECT demo.book_pkg_get_avg_price(3)"
+    compare: scalar
+  - id: a3
+    description: non-existent book id — must return 0
+    source_sql: "SELECT DEMO.BOOK_PKG.GET_AVG_PRICE(999999) FROM dual"
+    target_sql: "SELECT demo.book_pkg_get_avg_price(999999)"
+    compare: scalar
+  - id: a4
+    description: NULL book id — must return 0
+    source_sql: "SELECT DEMO.BOOK_PKG.GET_AVG_PRICE(NULL) FROM dual"
+    target_sql: "SELECT demo.book_pkg_get_avg_price(NULL)"
+    compare: scalar
+
+  # ---- is_in_stock : intra-package call, CASE returning 1/0 ----
+  - id: s1
+    description: >
+      real book id 1 — verifies the intra-package call was rewritten to
+      demo.book_pkg_get_available_quantity and the 1/0 CASE result matches
+    source_sql: "SELECT DEMO.BOOK_PKG.IS_IN_STOCK(1) FROM dual"
     target_sql: "SELECT demo.book_pkg_is_in_stock(1)"
     compare: scalar
-  - id: c4
-    description: available quantity for book 43
-    source_sql: "SELECT demo.book_pkg.get_available_quantity(43) FROM dual"
-    target_sql: "SELECT demo.book_pkg_get_available_quantity(43)"
+  - id: s2
+    description: real book id 56 — boundary book id
+    source_sql: "SELECT DEMO.BOOK_PKG.IS_IN_STOCK(56) FROM dual"
+    target_sql: "SELECT demo.book_pkg_is_in_stock(56)"
+    compare: scalar
+  - id: s3
+    description: non-existent book id — quantity 0 so must return 0
+    source_sql: "SELECT DEMO.BOOK_PKG.IS_IN_STOCK(999999) FROM dual"
+    target_sql: "SELECT demo.book_pkg_is_in_stock(999999)"
+    compare: scalar
+  - id: s4
+    description: NULL book id — must return 0
+    source_sql: "SELECT DEMO.BOOK_PKG.IS_IN_STOCK(NULL) FROM dual"
+    target_sql: "SELECT demo.book_pkg_is_in_stock(NULL)"
     compare: scalar

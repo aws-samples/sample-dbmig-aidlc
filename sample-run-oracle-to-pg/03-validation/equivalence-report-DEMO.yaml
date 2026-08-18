@@ -1,8 +1,8 @@
 schema: DEMO
 mode: silent
 summary:
-  cases: 41
-  passed: 41
+  cases: 103
+  passed: 103
   failed: 0
   skipped: 0
 results:
@@ -11,29 +11,50 @@ results:
   case: c1
   status: pass
   detail:
-    source: '20'
-    target: '20.00'
+    source: '40.64'
+    target: '40.64'
 - object: DEMO.CALCULATE_DISCOUNT_PCT
   type: function
   case: c2
   status: pass
   detail:
-    source: '0'
-    target: '0'
+    source: '21.51'
+    target: '21.51'
 - object: DEMO.CALCULATE_DISCOUNT_PCT
   type: function
   case: c3
   status: pass
   detail:
     source: '0'
-    target: '0.00'
+    target: '0'
 - object: DEMO.CALCULATE_DISCOUNT_PCT
   type: function
   case: c4
   status: pass
   detail:
-    source: '33.34'
-    target: '33.34'
+    source: '0'
+    target: '0.00'
+- object: DEMO.CALCULATE_DISCOUNT_PCT
+  type: function
+  case: c5
+  status: pass
+  detail:
+    source: '66.67'
+    target: '66.67'
+- object: DEMO.CALCULATE_DISCOUNT_PCT
+  type: function
+  case: c6
+  status: pass
+  detail:
+    source: '-68.46'
+    target: '-68.46'
+- object: DEMO.CALCULATE_DISCOUNT_PCT
+  type: function
+  case: c7
+  status: pass
+  detail:
+    source: null
+    target: null
 - object: DEMO.GET_CONDITION_NAME
   type: function
   case: c1
@@ -51,6 +72,27 @@ results:
 - object: DEMO.GET_CONDITION_NAME
   type: function
   case: c3
+  status: pass
+  detail:
+    source: Good
+    target: Good
+- object: DEMO.GET_CONDITION_NAME
+  type: function
+  case: c4
+  status: pass
+  detail:
+    source: Acceptable
+    target: Acceptable
+- object: DEMO.GET_CONDITION_NAME
+  type: function
+  case: c5
+  status: pass
+  detail:
+    source: Unknown
+    target: Unknown
+- object: DEMO.GET_CONDITION_NAME
+  type: function
+  case: c6
   status: pass
   detail:
     source: Unknown
@@ -74,8 +116,29 @@ results:
   case: c3
   status: pass
   detail:
+    source: Jane Doe
+    target: Jane Doe
+- object: DEMO.GET_CUSTOMER_FULL_NAME
+  type: function
+  case: c4
+  status: pass
+  detail:
     source: Unknown Customer
     target: Unknown Customer
+- object: DEMO.GET_CUSTOMER_FULL_NAME
+  type: function
+  case: c5
+  status: pass
+  detail:
+    source: Unknown Customer
+    target: Unknown Customer
+- object: DEMO.GET_CUSTOMER_FULL_NAME
+  type: function
+  case: c6
+  status: pass
+  detail:
+    source: ' Doe'
+    target: ' Doe'
 - object: DEMO.GET_CUSTOMER_LIFETIME_VALUE
   type: function
   case: c1
@@ -86,6 +149,27 @@ results:
 - object: DEMO.GET_CUSTOMER_LIFETIME_VALUE
   type: function
   case: c2
+  status: pass
+  detail:
+    source: '0'
+    target: '0'
+- object: DEMO.GET_CUSTOMER_LIFETIME_VALUE
+  type: function
+  case: c3
+  status: pass
+  detail:
+    source: '0'
+    target: '0'
+- object: DEMO.GET_CUSTOMER_LIFETIME_VALUE
+  type: function
+  case: c4
+  status: pass
+  detail:
+    source: '0'
+    target: '0'
+- object: DEMO.GET_CUSTOMER_LIFETIME_VALUE
+  type: function
+  case: c5
   status: pass
   detail:
     source: '0'
@@ -102,204 +186,770 @@ results:
   case: c2
   status: pass
   detail:
+    source: Children's Books
+    target: Children's Books
+- object: DEMO.GET_GENRE_NAME
+  type: function
+  case: c3
+  status: pass
+  detail:
     source: History
     target: History
 - object: DEMO.GET_GENRE_NAME
   type: function
-  case: c3
+  case: c4
+  status: pass
+  detail:
+    source: Self-Help
+    target: Self-Help
+- object: DEMO.GET_GENRE_NAME
+  type: function
+  case: c5
+  status: pass
+  detail:
+    source: Unknown
+    target: Unknown
+- object: DEMO.GET_GENRE_NAME
+  type: function
+  case: c6
   status: pass
   detail:
     source: Unknown
     target: Unknown
 - object: DEMO.BOOK_PKG
   type: function
-  case: c1
+  case: q1
   status: pass
   detail:
     source: '0'
     target: '0'
 - object: DEMO.BOOK_PKG
   type: function
-  case: c2
+  case: q2
   status: pass
   detail:
     source: '0'
     target: '0'
 - object: DEMO.BOOK_PKG
   type: function
-  case: c3
+  case: q3
   status: pass
   detail:
     source: '0'
     target: '0'
 - object: DEMO.BOOK_PKG
   type: function
-  case: c4
+  case: q4
+  status: pass
+  detail:
+    source: '0'
+    target: '0'
+- object: DEMO.BOOK_PKG
+  type: function
+  case: q5
+  status: pass
+  detail:
+    source: '0'
+    target: '0'
+- object: DEMO.BOOK_PKG
+  type: function
+  case: a1
+  status: pass
+  detail:
+    source: '0'
+    target: '0'
+- object: DEMO.BOOK_PKG
+  type: function
+  case: a2
+  status: pass
+  detail:
+    source: '0'
+    target: '0'
+- object: DEMO.BOOK_PKG
+  type: function
+  case: a3
+  status: pass
+  detail:
+    source: '0'
+    target: '0'
+- object: DEMO.BOOK_PKG
+  type: function
+  case: a4
+  status: pass
+  detail:
+    source: '0'
+    target: '0'
+- object: DEMO.BOOK_PKG
+  type: function
+  case: s1
+  status: pass
+  detail:
+    source: '0'
+    target: '0'
+- object: DEMO.BOOK_PKG
+  type: function
+  case: s2
+  status: pass
+  detail:
+    source: '0'
+    target: '0'
+- object: DEMO.BOOK_PKG
+  type: function
+  case: s3
+  status: pass
+  detail:
+    source: '0'
+    target: '0'
+- object: DEMO.BOOK_PKG
+  type: function
+  case: s4
   status: pass
   detail:
     source: '0'
     target: '0'
 - object: DEMO.INVENTORY_PKG
-  type: function
-  case: c1
+  type: procedure
+  case: r1
   status: pass
   detail:
-    source: '1'
-    target: '1'
+    qty_listing_1:
+      source_delta: '-5.0'
+      target_delta: '-5.0'
+      match: true
+    qty_total_all_listings:
+      source_delta: '-5.0'
+      target_delta: '-5.0'
+      match: true
+    rows_touched_marker:
+      source_delta: '1.0'
+      target_delta: '1.0'
+      match: true
 - object: DEMO.INVENTORY_PKG
-  type: function
-  case: c2
+  type: procedure
+  case: r2
   status: pass
   detail:
-    source: '0'
-    target: '0'
+    qty_listing_2:
+      source_delta: '-3.0'
+      target_delta: '-3.0'
+      match: true
+    zero_qty_rows:
+      source_delta: '1.0'
+      target_delta: '1.0'
+      match: true
 - object: DEMO.INVENTORY_PKG
-  type: function
-  case: c3
+  type: procedure
+  case: r3
   status: pass
   detail:
-    source: '0'
-    target: '0'
+    qty_listing_3:
+      source_delta: '-1.0'
+      target_delta: '-1.0'
+      match: true
+    qty_total_all_listings:
+      source_delta: '-1.0'
+      target_delta: '-1.0'
+      match: true
 - object: DEMO.INVENTORY_PKG
-  type: function
-  case: c4
+  type: procedure
+  case: r4
   status: pass
   detail:
-    source: '0'
-    target: '0'
+    qty_listing_1:
+      source_delta: '0.0'
+      target_delta: '0.0'
+      match: true
+    qty_total_all_listings:
+      source_delta: '0.0'
+      target_delta: '0.0'
+      match: true
 - object: DEMO.ORDER_PKG
-  type: function
-  case: c1
+  type: procedure
+  case: o1
   status: pass
   detail:
-    source: '0'
-    target: '0'
+    orders_count:
+      source_delta: '1.0'
+      target_delta: '1.0'
+      match: true
+    pending_orders_for_cust_1:
+      source_delta: '1.0'
+      target_delta: '1.0'
+      match: true
+    zero_total_orders:
+      source_delta: '1.0'
+      target_delta: '1.0'
+      match: true
 - object: DEMO.ORDER_PKG
-  type: function
-  case: c2
+  type: procedure
+  case: o2
   status: pass
   detail:
-    source: '0'
-    target: '0'
+    orders_count:
+      source_delta: '1.0'
+      target_delta: '1.0'
+      match: true
+    orders_for_cust_2:
+      source_delta: '1.0'
+      target_delta: '1.0'
+      match: true
 - object: DEMO.ORDER_PKG
-  type: function
-  case: c3
+  type: procedure
+  case: o3
   status: pass
   detail:
-    source: '0'
-    target: '0'
+    orders_count:
+      source_delta: '1.0'
+      target_delta: '1.0'
+      match: true
+    order_items_count:
+      source_delta: '1.0'
+      target_delta: '1.0'
+      match: true
+    order_items_total_value:
+      source_delta: '21.9'
+      target_delta: '21.9'
+      match: true
+    sum_order_total_amount:
+      source_delta: '21.9'
+      target_delta: '21.9'
+      match: true
+- object: DEMO.ORDER_PKG
+  type: procedure
+  case: o4
+  status: pass
+  detail:
+    order_items_count:
+      source_delta: '2.0'
+      target_delta: '2.0'
+      match: true
+    order_items_total_value:
+      source_delta: '30.45'
+      target_delta: '30.45'
+      match: true
+    sum_order_total_amount:
+      source_delta: '30.45'
+      target_delta: '30.45'
+      match: true
+- object: DEMO.ORDER_PKG
+  type: procedure
+  case: o5
+  status: pass
+  detail:
+    shipped_orders:
+      source_delta: '1.0'
+      target_delta: '1.0'
+      match: true
+    shipped_date_set:
+      source_delta: '1.0'
+      target_delta: '1.0'
+      match: true
+    delivered_date_still_null:
+      source_delta: '1.0'
+      target_delta: '1.0'
+      match: true
+    cancelled_date_still_null:
+      source_delta: '1.0'
+      target_delta: '1.0'
+      match: true
+- object: DEMO.ORDER_PKG
+  type: procedure
+  case: o6
+  status: pass
+  detail:
+    cancelled_orders:
+      source_delta: '1.0'
+      target_delta: '1.0'
+      match: true
+    cancelled_date_set:
+      source_delta: '1.0'
+      target_delta: '1.0'
+      match: true
+    shipped_date_still_null:
+      source_delta: '1.0'
+      target_delta: '1.0'
+      match: true
 - object: DEMO.REPORTING_PKG
-  type: function
-  case: c1
+  type: procedure
+  case: t1
   status: pass
   detail:
-    source: '0'
-    target: '0'
+    top_books_row_count:
+      source_delta: '1.0'
+      target_delta: '1.0'
+      match: true
+    top_books_total_sold:
+      source_delta: '2.0'
+      target_delta: '2.0'
+      match: true
+    top_books_revenue:
+      source_delta: '21.9'
+      target_delta: '21.9'
+      match: true
 - object: DEMO.REPORTING_PKG
-  type: function
-  case: c2
+  type: procedure
+  case: t2
   status: pass
   detail:
-    source: '0'
-    target: '0'
+    top_books_row_count:
+      source_delta: '3.0'
+      target_delta: '3.0'
+      match: true
+    top_books_total_sold:
+      source_delta: '9.0'
+      target_delta: '9.0'
+      match: true
+    top_books_revenue:
+      source_delta: '103.1'
+      target_delta: '103.1'
+      match: true
+    highest_ranked_title:
+      source_delta: '(True, ''2020: The Apocalypse'')'
+      target_delta: '(True, ''2020: The Apocalypse'')'
+      match: true
+- object: DEMO.REPORTING_PKG
+  type: procedure
+  case: t3
+  status: pass
+  detail:
+    limit_1_row_count:
+      source_delta: '1.0'
+      target_delta: '1.0'
+      match: true
+    limit_2_row_count:
+      source_delta: '2.0'
+      target_delta: '2.0'
+      match: true
+    limit_1_total_sold:
+      source_delta: '5.0'
+      target_delta: '5.0'
+      match: true
+- object: DEMO.REPORTING_PKG
+  type: procedure
+  case: t4
+  status: pass
+  detail:
+    top_books_row_count:
+      source_delta: '0.0'
+      target_delta: '0.0'
+      match: true
+    top_books_revenue:
+      source_delta: '0.0'
+      target_delta: '0.0'
+      match: true
 - object: DEMO.VALIDATION_PKG
   type: function
-  case: c1
+  case: e1
   status: pass
   detail:
     source: '1'
     target: '1'
 - object: DEMO.VALIDATION_PKG
   type: function
-  case: c2
-  status: pass
-  detail:
-    source: '0'
-    target: '0'
-- object: DEMO.VALIDATION_PKG
-  type: function
-  case: c3
+  case: e2
   status: pass
   detail:
     source: '1'
     target: '1'
 - object: DEMO.VALIDATION_PKG
   type: function
-  case: c4
-  status: pass
-  detail:
-    source: '1'
-    target: '1'
-- object: DEMO.VALIDATION_PKG
-  type: function
-  case: c5
+  case: e3
   status: pass
   detail:
     source: '0'
     target: '0'
 - object: DEMO.VALIDATION_PKG
   type: function
-  case: c6
-  status: pass
-  detail:
-    source: '1'
-    target: '1'
-- object: DEMO.VALIDATION_PKG
-  type: function
-  case: c7
+  case: e4
   status: pass
   detail:
     source: '0'
     target: '0'
 - object: DEMO.VALIDATION_PKG
   type: function
-  case: c8
+  case: e5
+  status: pass
+  detail:
+    source: '0'
+    target: '0'
+- object: DEMO.VALIDATION_PKG
+  type: function
+  case: i1
+  status: pass
+  detail:
+    source: '1'
+    target: '1'
+- object: DEMO.VALIDATION_PKG
+  type: function
+  case: i2
+  status: pass
+  detail:
+    source: '1'
+    target: '1'
+- object: DEMO.VALIDATION_PKG
+  type: function
+  case: i3
+  status: pass
+  detail:
+    source: '1'
+    target: '1'
+- object: DEMO.VALIDATION_PKG
+  type: function
+  case: i4
+  status: pass
+  detail:
+    source: '1'
+    target: '1'
+- object: DEMO.VALIDATION_PKG
+  type: function
+  case: i5
+  status: pass
+  detail:
+    source: '0'
+    target: '0'
+- object: DEMO.VALIDATION_PKG
+  type: function
+  case: i6
+  status: pass
+  detail:
+    source: '0'
+    target: '0'
+- object: DEMO.VALIDATION_PKG
+  type: function
+  case: i7
+  status: pass
+  detail:
+    source: '0'
+    target: '0'
+- object: DEMO.VALIDATION_PKG
+  type: function
+  case: p1
+  status: pass
+  detail:
+    source: '1'
+    target: '1'
+- object: DEMO.VALIDATION_PKG
+  type: function
+  case: p2
+  status: pass
+  detail:
+    source: '1'
+    target: '1'
+- object: DEMO.VALIDATION_PKG
+  type: function
+  case: p3
+  status: pass
+  detail:
+    source: '0'
+    target: '0'
+- object: DEMO.VALIDATION_PKG
+  type: function
+  case: p4
+  status: pass
+  detail:
+    source: '0'
+    target: '0'
+- object: DEMO.VALIDATION_PKG
+  type: function
+  case: p5
+  status: pass
+  detail:
+    source: '1'
+    target: '1'
+- object: DEMO.VALIDATION_PKG
+  type: function
+  case: p6
+  status: pass
+  detail:
+    source: '0'
+    target: '0'
+- object: DEMO.VALIDATION_PKG
+  type: function
+  case: p7
   status: pass
   detail:
     source: '0'
     target: '0'
 - object: DEMO.ARCHIVE_OLD_ORDERS
   type: procedure
-  case: c1
+  case: a1
   status: pass
   detail:
-    orders_count:
+    orders_total:
+      source_delta: '0.0'
+      target_delta: '0.0'
+      match: true
+    delivered_or_cancelled_orders:
+      source_delta: '0.0'
+      target_delta: '0.0'
+      match: true
+    order_items_total:
+      source_delta: '0.0'
+      target_delta: '0.0'
+      match: true
+- object: DEMO.ARCHIVE_OLD_ORDERS
+  type: procedure
+  case: a2
+  status: pass
+  detail:
+    orders_total:
+      source_delta: '0.0'
+      target_delta: '0.0'
+      match: true
+    delivered_or_cancelled_orders:
+      source_delta: '0.0'
+      target_delta: '0.0'
+      match: true
+- object: DEMO.ARCHIVE_OLD_ORDERS
+  type: procedure
+  case: a3
+  status: pass
+  detail:
+    orders_total:
+      source_delta: '0.0'
+      target_delta: '0.0'
+      match: true
+    order_items_total:
       source_delta: '0.0'
       target_delta: '0.0'
       match: true
 - object: DEMO.CLEAR_SHOPPING_CART
   type: procedure
-  case: c1
+  case: s1
   status: pass
   detail:
-    cart_rows:
+    cart_items_total:
+      source_delta: '0.0'
+      target_delta: '0.0'
+      match: true
+    cart_items_for_customer:
+      source_delta: '0.0'
+      target_delta: '0.0'
+      match: true
+    non_wishlist_items:
+      source_delta: '0.0'
+      target_delta: '0.0'
+      match: true
+- object: DEMO.CLEAR_SHOPPING_CART
+  type: procedure
+  case: s2
+  status: pass
+  detail:
+    cart_items_total:
+      source_delta: '0.0'
+      target_delta: '0.0'
+      match: true
+    wishlist_items_preserved:
       source_delta: '0.0'
       target_delta: '0.0'
       match: true
 - object: DEMO.GENERATE_SALES_REPORT
-  type: procedure
-  case: c1
+  type: function
+  case: g1
   status: pass
   detail:
-    orders_count:
+    source: '0'
+    target: '0'
+- object: DEMO.GENERATE_SALES_REPORT
+  type: function
+  case: g2
+  status: pass
+  detail:
+    source: '0'
+    target: '0'
+- object: DEMO.GENERATE_SALES_REPORT
+  type: function
+  case: g3
+  status: pass
+  detail:
+    source: '0'
+    target: '0'
+- object: DEMO.GENERATE_SALES_REPORT
+  type: function
+  case: g4
+  status: pass
+  detail:
+    source: '0'
+    target: '0'
+- object: DEMO.GENERATE_SALES_REPORT
+  type: function
+  case: g5
+  status: pass
+  detail:
+    source: '0'
+    target: '0'
+- object: DEMO.PROCESS_CUSTOMER_OFFER
+  type: procedure
+  case: p1
+  status: pass
+  detail:
+    status_1_listings:
+      source_delta: '0.0'
+      target_delta: '0.0'
+      match: true
+    store_listings:
+      source_delta: '0.0'
+      target_delta: '0.0'
+      match: true
+    processed_by_admin_1:
+      source_delta: '0.0'
+      target_delta: '0.0'
+      match: true
+    admin_notes_set:
       source_delta: '0.0'
       target_delta: '0.0'
       match: true
 - object: DEMO.PROCESS_CUSTOMER_OFFER
   type: procedure
-  case: c1
+  case: p2
   status: pass
   detail:
-    rejected_listings:
+    status_2_listings:
+      source_delta: '0.0'
+      target_delta: '0.0'
+      match: true
+    store_listings_unchanged:
+      source_delta: '0.0'
+      target_delta: '0.0'
+      match: true
+    processed_at_set:
+      source_delta: '0.0'
+      target_delta: '0.0'
+      match: true
+- object: DEMO.PROCESS_CUSTOMER_OFFER
+  type: procedure
+  case: p3
+  status: pass
+  detail:
+    status_1_listings:
+      source_delta: '0.0'
+      target_delta: '0.0'
+      match: true
+    admin_notes_set:
       source_delta: '0.0'
       target_delta: '0.0'
       match: true
 - object: DEMO.SET_BOOK_FEATURED
   type: procedure
-  case: c1
+  case: f1
   status: pass
   detail:
+    featured_listings:
+      source_delta: '0.0'
+      target_delta: '0.0'
+      match: true
     featured_sum:
       source_delta: '0.0'
       target_delta: '0.0'
       match: true
+    store_status1_rows:
+      source_delta: '0.0'
+      target_delta: '0.0'
+      match: true
+- object: DEMO.SET_BOOK_FEATURED
+  type: procedure
+  case: f2
+  status: pass
+  detail:
+    featured_listings:
+      source_delta: '0.0'
+      target_delta: '0.0'
+      match: true
+    unfeatured_listings:
+      source_delta: '0.0'
+      target_delta: '0.0'
+      match: true
+- object: DEMO.SET_BOOK_FEATURED
+  type: procedure
+  case: f3
+  status: pass
+  detail:
+    featured_listings:
+      source_delta: '0.0'
+      target_delta: '0.0'
+      match: true
+    listings_for_book_1:
+      source_delta: '0.0'
+      target_delta: '0.0'
+      match: true
+    updated_on_set_for_book_1:
+      source_delta: '0.0'
+      target_delta: '0.0'
+      match: true
+- object: DEMO.INVENTORY_PKG_FUNCTIONS
+  type: function
+  case: h1
+  status: pass
+  detail:
+    source: '1'
+    target: '1'
+- object: DEMO.INVENTORY_PKG_FUNCTIONS
+  type: function
+  case: h2
+  status: pass
+  detail:
+    source: '1'
+    target: '1'
+- object: DEMO.INVENTORY_PKG_FUNCTIONS
+  type: function
+  case: h3
+  status: pass
+  detail:
+    source: '0'
+    target: '0'
+- object: DEMO.INVENTORY_PKG_FUNCTIONS
+  type: function
+  case: h4
+  status: pass
+  detail:
+    source: '0'
+    target: '0'
+- object: DEMO.INVENTORY_PKG_FUNCTIONS
+  type: function
+  case: h5
+  status: pass
+  detail:
+    source: '1'
+    target: '1'
+- object: DEMO.INVENTORY_PKG_FUNCTIONS
+  type: function
+  case: h6
+  status: pass
+  detail:
+    source: '0'
+    target: '0'
+- object: DEMO.INVENTORY_PKG_FUNCTIONS
+  type: function
+  case: l1
+  status: pass
+  detail:
+    source: '0'
+    target: '0'
+- object: DEMO.INVENTORY_PKG_FUNCTIONS
+  type: function
+  case: l2
+  status: pass
+  detail:
+    source: '0'
+    target: '0'
+- object: DEMO.INVENTORY_PKG_FUNCTIONS
+  type: function
+  case: l3
+  status: pass
+  detail:
+    source: '0'
+    target: '0'
+- object: DEMO.INVENTORY_PKG_FUNCTIONS
+  type: function
+  case: l4
+  status: pass
+  detail:
+    source: '0'
+    target: '0'
+- object: DEMO.INVENTORY_PKG_FUNCTIONS
+  type: function
+  case: l5
+  status: pass
+  detail:
+    source: '0'
+    target: '0'

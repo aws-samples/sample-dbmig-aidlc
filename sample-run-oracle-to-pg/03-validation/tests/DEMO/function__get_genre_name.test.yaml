@@ -1,20 +1,40 @@
 object: GET_GENRE_NAME
 schema: DEMO
 type: function
-notes: Lookup by real genre ids (1..8 exist); 9999 exercises the NO_DATA_FOUND -> 'Unknown' path.
+notes: >
+  GENRES holds 8 real rows with ids 1..8. Cases use real ids (1 = 'Biographies',
+  2 = "Children's Books", 3 = 'History', 8 = last real row) plus the two paths where the
+  engines could diverge: a missing id and a NULL id. Both must hit NO_DATA_FOUND and
+  return 'Unknown' — this is what SELECT ... INTO STRICT preserves in PL/pgSQL, since a
+  plain PL/pgSQL SELECT INTO would silently return NULL instead.
 cases:
   - id: c1
-    description: existing genre id 1
-    source_sql: "SELECT demo.get_genre_name(1) FROM dual"
+    description: real genre id 1 (Biographies)
+    source_sql: "SELECT DEMO.GET_GENRE_NAME(1) FROM dual"
     target_sql: "SELECT demo.get_genre_name(1)"
     compare: scalar
   - id: c2
-    description: existing genre id 3
-    source_sql: "SELECT demo.get_genre_name(3) FROM dual"
-    target_sql: "SELECT demo.get_genre_name(3)"
+    description: real genre id 2 — name contains an apostrophe (Children's Books)
+    source_sql: "SELECT DEMO.GET_GENRE_NAME(2) FROM dual"
+    target_sql: "SELECT demo.get_genre_name(2)"
     compare: scalar
   - id: c3
-    description: missing id -> 'Unknown'
-    source_sql: "SELECT demo.get_genre_name(9999) FROM dual"
-    target_sql: "SELECT demo.get_genre_name(9999)"
+    description: real genre id 3 (History)
+    source_sql: "SELECT DEMO.GET_GENRE_NAME(3) FROM dual"
+    target_sql: "SELECT demo.get_genre_name(3)"
+    compare: scalar
+  - id: c4
+    description: boundary — highest real genre id 8
+    source_sql: "SELECT DEMO.GET_GENRE_NAME(8) FROM dual"
+    target_sql: "SELECT demo.get_genre_name(8)"
+    compare: scalar
+  - id: c5
+    description: missing id — NO_DATA_FOUND path must return 'Unknown' on both engines
+    source_sql: "SELECT DEMO.GET_GENRE_NAME(999999) FROM dual"
+    target_sql: "SELECT demo.get_genre_name(999999)"
+    compare: scalar
+  - id: c6
+    description: NULL id — no row matches, must also return 'Unknown' (not NULL)
+    source_sql: "SELECT DEMO.GET_GENRE_NAME(NULL) FROM dual"
+    target_sql: "SELECT demo.get_genre_name(NULL)"
     compare: scalar

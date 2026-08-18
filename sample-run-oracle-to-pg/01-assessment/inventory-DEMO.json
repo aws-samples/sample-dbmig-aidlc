@@ -13,32 +13,32 @@
   "tables": [
     {
       "name": "ADDRESSES",
-      "num_rows": 3,
+      "num_rows": -1,
       "columns": 10
     },
     {
       "name": "BOOKS",
-      "num_rows": 56,
+      "num_rows": -1,
       "columns": 14
     },
     {
       "name": "BOOKS_COVER",
-      "num_rows": 56,
+      "num_rows": -1,
       "columns": 6
     },
     {
       "name": "BOOK_TYPES",
-      "num_rows": 3,
+      "num_rows": -1,
       "columns": 5
     },
     {
       "name": "CONDITIONS",
-      "num_rows": 4,
+      "num_rows": -1,
       "columns": 5
     },
     {
       "name": "CUSTOMERS",
-      "num_rows": 3,
+      "num_rows": -1,
       "columns": 16
     },
     {
@@ -63,12 +63,12 @@
     },
     {
       "name": "GENRES",
-      "num_rows": 8,
+      "num_rows": -1,
       "columns": 5
     },
     {
       "name": "LISTINGS",
-      "num_rows": 56,
+      "num_rows": -1,
       "columns": 16
     },
     {
@@ -93,7 +93,7 @@
     },
     {
       "name": "PUBLISHERS",
-      "num_rows": 10,
+      "num_rows": -1,
       "columns": 6
     },
     {

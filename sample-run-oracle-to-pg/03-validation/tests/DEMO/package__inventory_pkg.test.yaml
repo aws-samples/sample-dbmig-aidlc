@@ -1,27 +1,68 @@
 object: INVENTORY_PKG
 schema: DEMO
-type: function
+type: procedure
 notes: >
-  Function subprograms of inventory_pkg (reduce_inventory is a mutating procedure, tested
-  separately by net effect elsewhere). Real listing ids 1..56; low-stock thresholds.
+  Package flattened to demo.inventory_pkg_*. This spec is procedure-typed because the
+  package's headline routine, reduce_inventory, MUTATES demo.listings — it is the one
+  genuinely write-testable package routine in the schema, and neither the Oracle source nor
+  the converted PostgreSQL version issues a COMMIT, so the harness's transaction+rollback
+  makes it safe to exercise for real.
+  Probes capture the net effect on the row being changed (its quantity), the table-wide
+  quantity total, and updated_on. Real listing rows are used: id 1 (book 1, quantity 25),
+  id 2 (quantity 3), id 3 (quantity 10).
+  The read-only functions has_sufficient_inventory / get_low_stock_count are compared as
+  scalars in package__inventory_pkg_functions.test.yaml.
 cases:
-  - id: c1
-    description: sufficient inventory check (listing 1, qty 5)
-    source_sql: "SELECT demo.inventory_pkg.has_sufficient_inventory(1, 5) FROM dual"
-    target_sql: "SELECT demo.inventory_pkg_has_sufficient_inventory(1, 5)"
-    compare: scalar
-  - id: c2
-    description: insufficient inventory check (listing 2, qty 1000)
-    source_sql: "SELECT demo.inventory_pkg.has_sufficient_inventory(2, 1000) FROM dual"
-    target_sql: "SELECT demo.inventory_pkg_has_sufficient_inventory(2, 1000)"
-    compare: scalar
-  - id: c3
-    description: low-stock count at threshold 5
-    source_sql: "SELECT demo.inventory_pkg.get_low_stock_count(5) FROM dual"
-    target_sql: "SELECT demo.inventory_pkg_get_low_stock_count(5)"
-    compare: scalar
-  - id: c4
-    description: low-stock count at threshold 100
-    source_sql: "SELECT demo.inventory_pkg.get_low_stock_count(100) FROM dual"
-    target_sql: "SELECT demo.inventory_pkg_get_low_stock_count(100)"
-    compare: scalar
+  - id: r1
+    description: >
+      reduce listing 1 (real quantity 25) by 5 — net effect must be -5 on that row and -5
+      on the table-wide total, identically on both engines
+    call_source: "BEGIN DEMO.INVENTORY_PKG.REDUCE_INVENTORY(1, 5); END;"
+    call_target: "CALL demo.inventory_pkg_reduce_inventory(1, 5)"
+    verify:
+      - name: qty_listing_1
+        source_sql: "SELECT quantity FROM DEMO.LISTINGS WHERE id = 1"
+        target_sql: "SELECT quantity FROM demo.listings WHERE id = 1"
+      - name: qty_total_all_listings
+        source_sql: "SELECT NVL(SUM(quantity),0) FROM DEMO.LISTINGS"
+        target_sql: "SELECT coalesce(sum(quantity),0) FROM demo.listings"
+      - name: rows_touched_marker
+        source_sql: "SELECT COUNT(*) FROM DEMO.LISTINGS WHERE id = 1 AND updated_on IS NOT NULL"
+        target_sql: "SELECT count(*) FROM demo.listings WHERE id = 1 AND updated_on IS NOT NULL"
+  - id: r2
+    description: >
+      boundary — reduce listing 2 by its exact full quantity (3), leaving 0. Verifies the
+      `v_current_qty < p_quantity` guard is NOT triggered on equality.
+    call_source: "BEGIN DEMO.INVENTORY_PKG.REDUCE_INVENTORY(2, 3); END;"
+    call_target: "CALL demo.inventory_pkg_reduce_inventory(2, 3)"
+    verify:
+      - name: qty_listing_2
+        source_sql: "SELECT quantity FROM DEMO.LISTINGS WHERE id = 2"
+        target_sql: "SELECT quantity FROM demo.listings WHERE id = 2"
+      - name: zero_qty_rows
+        source_sql: "SELECT COUNT(*) FROM DEMO.LISTINGS WHERE quantity = 0"
+        target_sql: "SELECT count(*) FROM demo.listings WHERE quantity = 0"
+  - id: r3
+    description: reduce listing 3 (quantity 10) by 1 — smallest meaningful decrement
+    call_source: "BEGIN DEMO.INVENTORY_PKG.REDUCE_INVENTORY(3, 1); END;"
+    call_target: "CALL demo.inventory_pkg_reduce_inventory(3, 1)"
+    verify:
+      - name: qty_listing_3
+        source_sql: "SELECT quantity FROM DEMO.LISTINGS WHERE id = 3"
+        target_sql: "SELECT quantity FROM demo.listings WHERE id = 3"
+      - name: qty_total_all_listings
+        source_sql: "SELECT NVL(SUM(quantity),0) FROM DEMO.LISTINGS"
+        target_sql: "SELECT coalesce(sum(quantity),0) FROM demo.listings"
+  - id: r4
+    description: >
+      zero-quantity reduction on listing 1 — must be a no-op on both engines
+      (delta 0), confirming no accidental extra write in the converted body
+    call_source: "BEGIN DEMO.INVENTORY_PKG.REDUCE_INVENTORY(1, 0); END;"
+    call_target: "CALL demo.inventory_pkg_reduce_inventory(1, 0)"
+    verify:
+      - name: qty_listing_1
+        source_sql: "SELECT quantity FROM DEMO.LISTINGS WHERE id = 1"
+        target_sql: "SELECT quantity FROM demo.listings WHERE id = 1"
+      - name: qty_total_all_listings
+        source_sql: "SELECT NVL(SUM(quantity),0) FROM DEMO.LISTINGS"
+        target_sql: "SELECT coalesce(sum(quantity),0) FROM demo.listings"

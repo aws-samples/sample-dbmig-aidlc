@@ -1,17 +1,59 @@
 object: GENERATE_SALES_REPORT
 schema: DEMO
-type: procedure
+type: function
 notes: >
-  Read-only reporting procedure with OUT params (Oracle OUT -> PG OUT). It changes no data, so
-  the net effect is zero; this case confirms it executes identically on both engines over the
-  same date range. Oracle is called via an anonymous block with declared OUT variables; PG via
-  CALL with NULL placeholders for the OUT parameters.
+  Read-only procedure whose entire output is OUT parameters, so net-effect probes would be
+  identically zero on both engines and prove nothing. Instead each case invokes the real
+  procedure and surfaces an OUT value as a scalar for direct comparison:
+  Oracle uses an inline WITH FUNCTION wrapper (12c+), PostgreSQL uses CALL, which returns the
+  OUT parameters as a row (PG 14+; target is 17.7) — the harness compares the first column,
+  p_total_orders. The remaining OUT values (p_total_revenue, p_avg_order_value) are compared
+  position-by-position in 03-validation/out-parameter-verification.md.
+  ORDERS is empty, so these cases pin the aggregate-over-empty-set contract: COUNT -> 0 and
+  NVL/coalesce(SUM|AVG, 0) -> 0 rather than NULL. Date bounds are real DATE/timestamp values;
+  the Oracle DATE parameter maps to timestamp(0) on the target, so no time component is lost.
 cases:
-  - id: c1
-    description: run report over a wide date range (no data change)
-    call_source: "DECLARE v_o NUMBER; v_r NUMBER; v_a NUMBER; BEGIN demo.generate_sales_report(TO_DATE('2020-01-01','YYYY-MM-DD'), TO_DATE('2030-01-01','YYYY-MM-DD'), v_o, v_r, v_a); END;"
-    call_target: "CALL demo.generate_sales_report(TIMESTAMP '2020-01-01', TIMESTAMP '2030-01-01', NULL, NULL, NULL)"
-    verify:
-      - name: orders_count
-        source_sql: "SELECT COUNT(*) FROM demo.orders"
-        target_sql: "SELECT COUNT(*) FROM demo.orders"
+  - id: g1
+    description: wide date window covering all data — p_total_orders must match (0, ORDERS empty)
+    source_sql: >
+      WITH FUNCTION f RETURN NUMBER IS n NUMBER; r NUMBER; a NUMBER;
+      BEGIN DEMO.GENERATE_SALES_REPORT(DATE '2020-01-01', DATE '2030-01-01', n, r, a); RETURN n; END;
+      SELECT f FROM dual
+    target_sql: "CALL demo.generate_sales_report(TIMESTAMP '2020-01-01 00:00:00', TIMESTAMP '2030-01-01 00:00:00', NULL, NULL, NULL)"
+    compare: scalar
+  - id: g2
+    description: narrow window around the real CREATED_ON values seen in the data (Aug 2026)
+    source_sql: >
+      WITH FUNCTION f RETURN NUMBER IS n NUMBER; r NUMBER; a NUMBER;
+      BEGIN DEMO.GENERATE_SALES_REPORT(DATE '2026-08-01', DATE '2026-08-31', n, r, a); RETURN n; END;
+      SELECT f FROM dual
+    target_sql: "CALL demo.generate_sales_report(TIMESTAMP '2026-08-01 00:00:00', TIMESTAMP '2026-08-31 00:00:00', NULL, NULL, NULL)"
+    compare: scalar
+  - id: g3
+    description: inverted window (start > end) — BETWEEN matches nothing; must return 0 on both
+    source_sql: >
+      WITH FUNCTION f RETURN NUMBER IS n NUMBER; r NUMBER; a NUMBER;
+      BEGIN DEMO.GENERATE_SALES_REPORT(DATE '2030-01-01', DATE '2020-01-01', n, r, a); RETURN n; END;
+      SELECT f FROM dual
+    target_sql: "CALL demo.generate_sales_report(TIMESTAMP '2030-01-01 00:00:00', TIMESTAMP '2020-01-01 00:00:00', NULL, NULL, NULL)"
+    compare: scalar
+  - id: g4
+    description: >
+      revenue OUT parameter (p_total_revenue) compared explicitly via the Oracle wrapper and
+      the equivalent PostgreSQL aggregate, proving NVL(SUM,0) -> coalesce(sum,0) yields 0 not NULL
+    source_sql: >
+      WITH FUNCTION f RETURN NUMBER IS n NUMBER; r NUMBER; a NUMBER;
+      BEGIN DEMO.GENERATE_SALES_REPORT(DATE '2020-01-01', DATE '2030-01-01', n, r, a); RETURN r; END;
+      SELECT f FROM dual
+    target_sql: "SELECT coalesce(sum(total_amount),0) FROM demo.orders WHERE created_on BETWEEN TIMESTAMP '2020-01-01 00:00:00' AND TIMESTAMP '2030-01-01 00:00:00' AND status NOT IN ('CANCELLED')"
+    compare: scalar
+  - id: g5
+    description: >
+      average OUT parameter (p_avg_order_value) — AVG over an empty set is NULL in both
+      engines and must be coerced to 0 identically
+    source_sql: >
+      WITH FUNCTION f RETURN NUMBER IS n NUMBER; r NUMBER; a NUMBER;
+      BEGIN DEMO.GENERATE_SALES_REPORT(DATE '2020-01-01', DATE '2030-01-01', n, r, a); RETURN a; END;
+      SELECT f FROM dual
+    target_sql: "SELECT coalesce(avg(total_amount),0) FROM demo.orders WHERE created_on BETWEEN TIMESTAMP '2020-01-01 00:00:00' AND TIMESTAMP '2030-01-01 00:00:00' AND status NOT IN ('CANCELLED')"
+    compare: scalar

@@ -1,7 +1,7 @@
-project: oracle-demo
+project: demo
 schema: DEMO
 phase: construction-code
-generated_at: '2026-07-02T12:06:38Z'
+generated_at: '2026-08-17T04:23:23Z'
 provider: kiro
 model: kiro
 unit_count: 20

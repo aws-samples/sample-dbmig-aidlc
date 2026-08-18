@@ -1,23 +1,116 @@
 object: ORDER_PKG
 schema: DEMO
-type: function
+type: procedure
 notes: >
-  Read-only function subprograms (calculate_order_total, get_customer_order_count). The
-  mutating create_order/add_order_item/update_order_status are not asserted here. ORDERS is
-  empty in the source, so totals/counts are 0 on both engines — a valid equivalence result.
+  Package flattened to demo.order_pkg_*. Procedure-typed because the interesting routines
+  WRITE: create_order inserts into ORDERS, add_order_item inserts into ORDER_ITEMS and then
+  updates the parent order's total, and update_order_status rewrites status/date columns.
+  None of them COMMIT in either engine, so the harness's rollback makes them safe to run.
+  ORDERS and ORDER_ITEMS are both empty in the migrated data, so these cases also prove the
+  identity/sequence-backed inserts work on the target after the identity advance.
+  Real data used: customer ids 1..3, address ids 1..3, listing ids 1 (book 1, price 10.95),
+  2 (13.95) and 3 (6.5).
+  create_order is a FUNCTION in both engines; it is invoked here inside a wrapper so its
+  INSERT side effect is what gets compared.
 cases:
-  - id: c1
-    description: order total for a non-existent order -> 0
-    source_sql: "SELECT demo.order_pkg.calculate_order_total(9999) FROM dual"
-    target_sql: "SELECT demo.order_pkg_calculate_order_total(9999)"
-    compare: scalar
-  - id: c2
-    description: order count for customer 2 -> 0 (no orders)
-    source_sql: "SELECT demo.order_pkg.get_customer_order_count(2) FROM dual"
-    target_sql: "SELECT demo.order_pkg_get_customer_order_count(2)"
-    compare: scalar
-  - id: c3
-    description: order count for customer 1 -> 0
-    source_sql: "SELECT demo.order_pkg.get_customer_order_count(1) FROM dual"
-    target_sql: "SELECT demo.order_pkg_get_customer_order_count(1)"
-    compare: scalar
+  - id: o1
+    description: >
+      create_order for real customer 1 / address 1 — net effect is exactly one new ORDERS
+      row with status 'PENDING' and total_amount 0
+    call_source: "DECLARE v NUMBER; BEGIN v := DEMO.ORDER_PKG.CREATE_ORDER(1, 1); END;"
+    call_target: "SELECT demo.order_pkg_create_order(1, 1)"
+    verify:
+      - name: orders_count
+        source_sql: "SELECT COUNT(*) FROM DEMO.ORDERS"
+        target_sql: "SELECT count(*) FROM demo.orders"
+      - name: pending_orders_for_cust_1
+        source_sql: "SELECT COUNT(*) FROM DEMO.ORDERS WHERE customer_id = 1 AND status = 'PENDING'"
+        target_sql: "SELECT count(*) FROM demo.orders WHERE customer_id = 1 AND status = 'PENDING'"
+      - name: zero_total_orders
+        source_sql: "SELECT COUNT(*) FROM DEMO.ORDERS WHERE total_amount = 0"
+        target_sql: "SELECT count(*) FROM demo.orders WHERE total_amount = 0"
+  - id: o2
+    description: >
+      create_order for real customer 2 / address 2 — second creation path, confirms the
+      identity column allocates without collision on the target after reset_identity
+    call_source: "DECLARE v NUMBER; BEGIN v := DEMO.ORDER_PKG.CREATE_ORDER(2, 2); END;"
+    call_target: "SELECT demo.order_pkg_create_order(2, 2)"
+    verify:
+      - name: orders_count
+        source_sql: "SELECT COUNT(*) FROM DEMO.ORDERS"
+        target_sql: "SELECT count(*) FROM demo.orders"
+      - name: orders_for_cust_2
+        source_sql: "SELECT COUNT(*) FROM DEMO.ORDERS WHERE customer_id = 2"
+        target_sql: "SELECT count(*) FROM demo.orders WHERE customer_id = 2"
+  - id: o3
+    description: >
+      create_order then add_order_item for real listing 1 (book 1, price 10.95, qty 2).
+      Net effect spans three tables: a new order, a new order item, and the parent order's
+      total_amount recalculated by calculate_order_total (10.95 * 2 = 21.90).
+    call_source: "DECLARE v NUMBER; BEGIN v := DEMO.ORDER_PKG.CREATE_ORDER(1, 1); DEMO.ORDER_PKG.ADD_ORDER_ITEM(v, 1, 2); END;"
+    call_target: "DO $$ DECLARE v numeric; BEGIN v := demo.order_pkg_create_order(1, 1); CALL demo.order_pkg_add_order_item(v, 1, 2); END $$"
+    verify:
+      - name: orders_count
+        source_sql: "SELECT COUNT(*) FROM DEMO.ORDERS"
+        target_sql: "SELECT count(*) FROM demo.orders"
+      - name: order_items_count
+        source_sql: "SELECT COUNT(*) FROM DEMO.ORDER_ITEMS"
+        target_sql: "SELECT count(*) FROM demo.order_items"
+      - name: order_items_total_value
+        source_sql: "SELECT NVL(SUM(book_price * quantity),0) FROM DEMO.ORDER_ITEMS"
+        target_sql: "SELECT coalesce(sum(book_price * quantity),0) FROM demo.order_items"
+      - name: sum_order_total_amount
+        source_sql: "SELECT NVL(SUM(total_amount),0) FROM DEMO.ORDERS"
+        target_sql: "SELECT coalesce(sum(total_amount),0) FROM demo.orders"
+  - id: o4
+    description: >
+      add two different real listings (1 @ 10.95 x1 and 3 @ 6.5 x3) to one order —
+      verifies calculate_order_total aggregates multiple items identically (10.95 + 19.50)
+    call_source: "DECLARE v NUMBER; BEGIN v := DEMO.ORDER_PKG.CREATE_ORDER(3, 3); DEMO.ORDER_PKG.ADD_ORDER_ITEM(v, 1, 1); DEMO.ORDER_PKG.ADD_ORDER_ITEM(v, 3, 3); END;"
+    call_target: "DO $$ DECLARE v numeric; BEGIN v := demo.order_pkg_create_order(3, 3); CALL demo.order_pkg_add_order_item(v, 1, 1); CALL demo.order_pkg_add_order_item(v, 3, 3); END $$"
+    verify:
+      - name: order_items_count
+        source_sql: "SELECT COUNT(*) FROM DEMO.ORDER_ITEMS"
+        target_sql: "SELECT count(*) FROM demo.order_items"
+      - name: order_items_total_value
+        source_sql: "SELECT NVL(SUM(book_price * quantity),0) FROM DEMO.ORDER_ITEMS"
+        target_sql: "SELECT coalesce(sum(book_price * quantity),0) FROM demo.order_items"
+      - name: sum_order_total_amount
+        source_sql: "SELECT NVL(SUM(total_amount),0) FROM DEMO.ORDERS"
+        target_sql: "SELECT coalesce(sum(total_amount),0) FROM demo.orders"
+  - id: o5
+    description: >
+      update_order_status to 'SHIPPED' — asserts the CASE/date behaviour converted faithfully:
+      shipped_date is set while delivered_date and cancelled_date are written as NULL
+      (the source CASE has no ELSE, and that quirk was deliberately preserved)
+    call_source: "DECLARE v NUMBER; BEGIN v := DEMO.ORDER_PKG.CREATE_ORDER(1, 1); DEMO.ORDER_PKG.UPDATE_ORDER_STATUS(v, 'SHIPPED'); END;"
+    call_target: "DO $$ DECLARE v numeric; BEGIN v := demo.order_pkg_create_order(1, 1); CALL demo.order_pkg_update_order_status(v, 'SHIPPED'); END $$"
+    verify:
+      - name: shipped_orders
+        source_sql: "SELECT COUNT(*) FROM DEMO.ORDERS WHERE status = 'SHIPPED'"
+        target_sql: "SELECT count(*) FROM demo.orders WHERE status = 'SHIPPED'"
+      - name: shipped_date_set
+        source_sql: "SELECT COUNT(*) FROM DEMO.ORDERS WHERE shipped_date IS NOT NULL"
+        target_sql: "SELECT count(*) FROM demo.orders WHERE shipped_date IS NOT NULL"
+      - name: delivered_date_still_null
+        source_sql: "SELECT COUNT(*) FROM DEMO.ORDERS WHERE delivered_date IS NULL"
+        target_sql: "SELECT count(*) FROM demo.orders WHERE delivered_date IS NULL"
+      - name: cancelled_date_still_null
+        source_sql: "SELECT COUNT(*) FROM DEMO.ORDERS WHERE cancelled_date IS NULL"
+        target_sql: "SELECT count(*) FROM demo.orders WHERE cancelled_date IS NULL"
+  - id: o6
+    description: >
+      update_order_status to 'CANCELLED' — cancelled_date set, shipped_date left NULL;
+      also confirms a 'CANCELLED' order is excluded from lifetime-value style aggregates
+    call_source: "DECLARE v NUMBER; BEGIN v := DEMO.ORDER_PKG.CREATE_ORDER(2, 2); DEMO.ORDER_PKG.UPDATE_ORDER_STATUS(v, 'CANCELLED'); END;"
+    call_target: "DO $$ DECLARE v numeric; BEGIN v := demo.order_pkg_create_order(2, 2); CALL demo.order_pkg_update_order_status(v, 'CANCELLED'); END $$"
+    verify:
+      - name: cancelled_orders
+        source_sql: "SELECT COUNT(*) FROM DEMO.ORDERS WHERE status = 'CANCELLED'"
+        target_sql: "SELECT count(*) FROM demo.orders WHERE status = 'CANCELLED'"
+      - name: cancelled_date_set
+        source_sql: "SELECT COUNT(*) FROM DEMO.ORDERS WHERE cancelled_date IS NOT NULL"
+        target_sql: "SELECT count(*) FROM demo.orders WHERE cancelled_date IS NOT NULL"
+      - name: shipped_date_still_null
+        source_sql: "SELECT COUNT(*) FROM DEMO.ORDERS WHERE shipped_date IS NULL"
+        target_sql: "SELECT count(*) FROM demo.orders WHERE shipped_date IS NULL"

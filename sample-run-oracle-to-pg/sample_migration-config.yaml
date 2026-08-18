@@ -1,5 +1,5 @@
 # dbmig-aidlc — migration scope/strategy (git-ignored).
-project: oracle-demo
+project: demo
 
 run:
   mode: silent

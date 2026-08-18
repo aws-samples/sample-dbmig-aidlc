@@ -1,0 +1,28 @@
+project: demo
+items:
+- ts: '2026-08-17T05:01:24Z'
+  phase: validation
+  kind: test_failure
+  object: DEMO.NEGATIVE_CONTROL [n1]
+  detail: '{''source'': ''1'', ''target'': ''2''}'
+  status: resolved
+  resolution: 'Intentional negative control, NOT a migration defect. Deliberately
+    mismatched cases run once to prove the harness actually compares values and can
+    report FAIL (so the 103 passes are meaningful, not vacuous). n2 additionally demonstrated
+    the real REGEXP_REPLACE trap: Oracle strips all matches (13) while PostgreSQL
+    without the "g" flag strips only the first (15) - confirming the "g" flag added
+    to validation_pkg_is_valid_isbn was necessary. Control spec deleted and removed
+    from the manifest afterwards.'
+- ts: '2026-08-17T05:01:25Z'
+  phase: validation
+  kind: test_failure
+  object: DEMO.NEGATIVE_CONTROL [n2]
+  detail: '{''source'': ''13'', ''target'': ''15''}'
+  status: resolved
+  resolution: 'Intentional negative control, NOT a migration defect. Deliberately
+    mismatched cases run once to prove the harness actually compares values and can
+    report FAIL (so the 103 passes are meaningful, not vacuous). n2 additionally demonstrated
+    the real REGEXP_REPLACE trap: Oracle strips all matches (13) while PostgreSQL
+    without the "g" flag strips only the first (15) - confirming the "g" flag added
+    to validation_pkg_is_valid_isbn was necessary. Control spec deleted and removed
+    from the manifest afterwards.'

@@ -1,20 +1,38 @@
 object: GET_CONDITION_NAME
 schema: DEMO
 type: function
-notes: Lookup by real condition ids (1..4 exist); 9999 exercises the NO_DATA_FOUND -> 'Unknown' path.
+notes: >
+  CONDITIONS holds 4 real rows, ids 1..4 (1 = 'New', 2 = 'Like New', 3 = 'Good').
+  Same shape as GET_GENRE_NAME: real ids plus the missing-id and NULL-id paths that
+  must return 'Unknown' via NO_DATA_FOUND (preserved by SELECT ... INTO STRICT).
 cases:
   - id: c1
-    description: existing condition id 1
-    source_sql: "SELECT demo.get_condition_name(1) FROM dual"
+    description: real condition id 1 (New)
+    source_sql: "SELECT DEMO.GET_CONDITION_NAME(1) FROM dual"
     target_sql: "SELECT demo.get_condition_name(1)"
     compare: scalar
   - id: c2
-    description: existing condition id 2
-    source_sql: "SELECT demo.get_condition_name(2) FROM dual"
+    description: real condition id 2 — multi-word value (Like New)
+    source_sql: "SELECT DEMO.GET_CONDITION_NAME(2) FROM dual"
     target_sql: "SELECT demo.get_condition_name(2)"
     compare: scalar
   - id: c3
-    description: missing id -> 'Unknown'
-    source_sql: "SELECT demo.get_condition_name(9999) FROM dual"
-    target_sql: "SELECT demo.get_condition_name(9999)"
+    description: real condition id 3 (Good)
+    source_sql: "SELECT DEMO.GET_CONDITION_NAME(3) FROM dual"
+    target_sql: "SELECT demo.get_condition_name(3)"
+    compare: scalar
+  - id: c4
+    description: boundary — highest real condition id 4
+    source_sql: "SELECT DEMO.GET_CONDITION_NAME(4) FROM dual"
+    target_sql: "SELECT demo.get_condition_name(4)"
+    compare: scalar
+  - id: c5
+    description: missing id — NO_DATA_FOUND must return 'Unknown'
+    source_sql: "SELECT DEMO.GET_CONDITION_NAME(999999) FROM dual"
+    target_sql: "SELECT demo.get_condition_name(999999)"
+    compare: scalar
+  - id: c6
+    description: NULL id — must return 'Unknown', not NULL
+    source_sql: "SELECT DEMO.GET_CONDITION_NAME(NULL) FROM dual"
+    target_sql: "SELECT demo.get_condition_name(NULL)"
     compare: scalar

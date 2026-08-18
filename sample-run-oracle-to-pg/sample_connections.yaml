@@ -17,7 +17,7 @@ target:
   version: "17"
   host: <AURORA_PG_CLUSTER_ENDPOINT>   # masked; e.g. <cluster>.cluster-<id>.<region>.rds.amazonaws.com
   port: 5432
-  database: demo            # new database created for this migration
+  database: demodb         # new database created for this migration
   username: postgres
   password: ${PG_PASSWORD}
   default_schema: demo

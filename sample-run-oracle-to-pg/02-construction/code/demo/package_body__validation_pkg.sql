@@ -1,39 +1,15 @@
--- DEMO.VALIDATION_PKG (package body) -> flattened routines demo.validation_pkg_*
--- REGEXP_LIKE -> the ~ operator; Oracle REGEXP_REPLACE replaces all -> add the 'g' flag in PG.
--- Pure input->output functions marked IMMUTABLE.
+-- Converted from Oracle DEMO.VALIDATION_PKG (PACKAGE BODY) -> intentionally a NO-OP.
+--
+-- Rationale: Oracle splits a package into a SPEC (declarations) and a BODY
+-- (implementations). PostgreSQL has neither -- each subprogram becomes ONE schema-level
+-- routine that carries its own signature and body. The complete conversion of
+-- VALIDATION_PKG (spec + body converted together, holistically) therefore lives in a single file:
+--
+--     code/demo/package__validation_pkg.sql   ->   demo.validation_pkg_<subprogram>(...)
+--
+-- Emitting the routines again here would only re-run identical CREATE OR REPLACE
+-- statements. This file is kept so every source object in the inventory keeps a
+-- traceable 1:1 artifact in the manifest.
+-- Ref: checks/package-naming.md, non-portable-constructs.md -> Packages
 
-CREATE OR REPLACE FUNCTION demo.validation_pkg_is_valid_email(p_email varchar)
-RETURNS numeric
-IMMUTABLE
-AS $$
-BEGIN
-  RETURN CASE
-    WHEN p_email ~ '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$' THEN 1
-    ELSE 0
-  END;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE OR REPLACE FUNCTION demo.validation_pkg_is_valid_isbn(p_isbn varchar)
-RETURNS numeric
-IMMUTABLE
-AS $$
-BEGIN
-  RETURN CASE
-    WHEN length(regexp_replace(p_isbn, '[^0-9X]', '', 'g')) IN (10, 13) THEN 1
-    ELSE 0
-  END;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE OR REPLACE FUNCTION demo.validation_pkg_is_valid_price(p_price numeric)
-RETURNS numeric
-IMMUTABLE
-AS $$
-BEGIN
-  RETURN CASE
-    WHEN p_price > 0 AND p_price < 10000 THEN 1
-    ELSE 0
-  END;
-END;
-$$ LANGUAGE plpgsql;
+DO $$ BEGIN NULL; END $$;

@@ -1,25 +1,43 @@
 object: CALCULATE_DISCOUNT_PCT
 schema: DEMO
 type: function
-notes: Pure arithmetic (no data dependency); covers the zero-price guard and rounding.
+notes: >
+  Pure arithmetic (no table access). Inputs use real LISTINGS.PRICE values from the sampled
+  data (10.95, 13.95, 6.5) plus the guarded zero-divisor branch and NULL propagation.
+  This exercises the ROUND(numeric, 2) equivalence and the IF p_original_price = 0 guard.
 cases:
   - id: c1
-    description: typical discount 100 -> 80
-    source_sql: "SELECT demo.calculate_discount_pct(100, 80) FROM dual"
-    target_sql: "SELECT demo.calculate_discount_pct(100, 80)"
+    description: real price pair 10.95 -> 6.5 (typical discount)
+    source_sql: "SELECT DEMO.CALCULATE_DISCOUNT_PCT(10.95, 6.5) FROM dual"
+    target_sql: "SELECT demo.calculate_discount_pct(10.95, 6.5)"
     compare: scalar
   - id: c2
-    description: zero original price guard (no division by zero)
-    source_sql: "SELECT demo.calculate_discount_pct(0, 0) FROM dual"
-    target_sql: "SELECT demo.calculate_discount_pct(0, 0)"
+    description: real price pair 13.95 -> 10.95
+    source_sql: "SELECT DEMO.CALCULATE_DISCOUNT_PCT(13.95, 10.95) FROM dual"
+    target_sql: "SELECT demo.calculate_discount_pct(13.95, 10.95)"
     compare: scalar
   - id: c3
-    description: no discount
-    source_sql: "SELECT demo.calculate_discount_pct(50, 50) FROM dual"
-    target_sql: "SELECT demo.calculate_discount_pct(50, 50)"
+    description: boundary — zero original price hits the divide-by-zero guard, returns 0
+    source_sql: "SELECT DEMO.CALCULATE_DISCOUNT_PCT(0, 6.5) FROM dual"
+    target_sql: "SELECT demo.calculate_discount_pct(0, 6.5)"
     compare: scalar
   - id: c4
-    description: rounding to 2 decimals
-    source_sql: "SELECT demo.calculate_discount_pct(29.99, 19.99) FROM dual"
-    target_sql: "SELECT demo.calculate_discount_pct(29.99, 19.99)"
+    description: no discount — same price both sides, expect 0
+    source_sql: "SELECT DEMO.CALCULATE_DISCOUNT_PCT(10.95, 10.95) FROM dual"
+    target_sql: "SELECT demo.calculate_discount_pct(10.95, 10.95)"
+    compare: scalar
+  - id: c5
+    description: rounding behaviour — 1/3-style repeating decimal must round identically to 2dp
+    source_sql: "SELECT DEMO.CALCULATE_DISCOUNT_PCT(3, 1) FROM dual"
+    target_sql: "SELECT demo.calculate_discount_pct(3, 1)"
+    compare: scalar
+  - id: c6
+    description: edge — negative discount (price increased) must not be clamped
+    source_sql: "SELECT DEMO.CALCULATE_DISCOUNT_PCT(6.5, 10.95) FROM dual"
+    target_sql: "SELECT demo.calculate_discount_pct(6.5, 10.95)"
+    compare: scalar
+  - id: c7
+    description: NULL input — NULL must propagate identically (not become 0)
+    source_sql: "SELECT DEMO.CALCULATE_DISCOUNT_PCT(NULL, 6.5) FROM dual"
+    target_sql: "SELECT demo.calculate_discount_pct(NULL, 6.5)"
     compare: scalar

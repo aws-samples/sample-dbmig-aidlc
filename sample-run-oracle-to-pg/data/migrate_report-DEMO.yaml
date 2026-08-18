@@ -8,6 +8,10 @@ results:
   copied: 0
   status: ok
   error: null
+- table: CONDITIONS
+  copied: 4
+  status: ok
+  error: null
 - table: GENRES
   copied: 8
   status: ok
@@ -16,24 +20,20 @@ results:
   copied: 3
   status: ok
   error: null
-- table: CONDITIONS
-  copied: 4
+- table: PUBLISHERS
+  copied: 10
   status: ok
   error: null
 - table: CUSTOMERS
   copied: 3
   status: ok
   error: null
-- table: PUBLISHERS
-  copied: 10
+- table: PASSWORD_RESET_TOKENS
+  copied: 0
   status: ok
   error: null
 - table: ADDRESSES
   copied: 3
-  status: ok
-  error: null
-- table: PASSWORD_RESET_TOKENS
-  copied: 0
   status: ok
   error: null
 - table: BOOKS

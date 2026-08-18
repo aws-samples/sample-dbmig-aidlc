@@ -1,18 +1,79 @@
 object: REPORTING_PKG
 schema: DEMO
-type: function
+type: procedure
 notes: >
-  get_top_books is an Oracle PIPELINED table function -> PostgreSQL RETURNS TABLE. Compared
-  by row count via COUNT(*) over the table function (Oracle TABLE(...) vs PG set-returning call).
-  ORDERS is empty so both return 0 rows. get_customer_stats is an OUT-parameter procedure (not asserted here).
+  Package flattened to demo.reporting_pkg_*. get_top_books is the schema's PIPELINED table
+  function, redesigned to a PostgreSQL set-returning RETURNS TABLE function with RETURN QUERY.
+  ORDER_ITEMS is empty in the migrated data, so a bare call would only prove "empty set on
+  both sides". Instead each case SEEDS a real order + order items inside the harness
+  transaction (using ORDER_PKG with real listing ids 1 @ 10.95, 2 @ 13.95, 3 @ 6.5), then the
+  verify probes read back THROUGH get_top_books. That exercises the rewritten join, the
+  GROUP BY, the ORDER BY total_sold DESC and the FETCH FIRST -> LIMIT conversion against
+  non-empty data. Everything is rolled back afterwards.
+  get_customer_stats is an OUT-parameter, read-only procedure; its OUT values are compared
+  directly in 03-validation/out-parameter-verification.md.
 cases:
-  - id: c1
-    description: number of top-book rows (limit 5) -> 0 (no sales)
-    source_sql: "SELECT COUNT(*) FROM TABLE(demo.reporting_pkg.get_top_books(5))"
-    target_sql: "SELECT COUNT(*) FROM demo.reporting_pkg_get_top_books(5)"
-    compare: scalar
-  - id: c2
-    description: number of top-book rows (limit 10) -> 0
-    source_sql: "SELECT COUNT(*) FROM TABLE(demo.reporting_pkg.get_top_books(10))"
-    target_sql: "SELECT COUNT(*) FROM demo.reporting_pkg_get_top_books(10)"
-    compare: scalar
+  - id: t1
+    description: >
+      seed one order with a single real listing (book 1, qty 2 @ 10.95) then read back through
+      get_top_books — must return exactly 1 row with total_sold 2 and revenue 21.90 on both engines
+    call_source: "DECLARE v NUMBER; BEGIN v := DEMO.ORDER_PKG.CREATE_ORDER(1, 1); DEMO.ORDER_PKG.ADD_ORDER_ITEM(v, 1, 2); END;"
+    call_target: "DO $$ DECLARE v numeric; BEGIN v := demo.order_pkg_create_order(1, 1); CALL demo.order_pkg_add_order_item(v, 1, 2); END $$"
+    verify:
+      - name: top_books_row_count
+        source_sql: "SELECT COUNT(*) FROM TABLE(DEMO.REPORTING_PKG.GET_TOP_BOOKS(10))"
+        target_sql: "SELECT count(*) FROM demo.reporting_pkg_get_top_books(10)"
+      - name: top_books_total_sold
+        source_sql: "SELECT NVL(SUM(total_sold),0) FROM TABLE(DEMO.REPORTING_PKG.GET_TOP_BOOKS(10))"
+        target_sql: "SELECT coalesce(sum(total_sold),0) FROM demo.reporting_pkg_get_top_books(10)"
+      - name: top_books_revenue
+        source_sql: "SELECT NVL(SUM(revenue),0) FROM TABLE(DEMO.REPORTING_PKG.GET_TOP_BOOKS(10))"
+        target_sql: "SELECT coalesce(sum(revenue),0) FROM demo.reporting_pkg_get_top_books(10)"
+  - id: t2
+    description: >
+      seed three DIFFERENT books in one order (qty 5, 3, 1) — verifies GROUP BY produces one
+      row per book and the ORDER BY total_sold DESC ranking picks the same top title
+    call_source: "DECLARE v NUMBER; BEGIN v := DEMO.ORDER_PKG.CREATE_ORDER(1, 1); DEMO.ORDER_PKG.ADD_ORDER_ITEM(v, 1, 5); DEMO.ORDER_PKG.ADD_ORDER_ITEM(v, 2, 3); DEMO.ORDER_PKG.ADD_ORDER_ITEM(v, 3, 1); END;"
+    call_target: "DO $$ DECLARE v numeric; BEGIN v := demo.order_pkg_create_order(1, 1); CALL demo.order_pkg_add_order_item(v, 1, 5); CALL demo.order_pkg_add_order_item(v, 2, 3); CALL demo.order_pkg_add_order_item(v, 3, 1); END $$"
+    verify:
+      - name: top_books_row_count
+        source_sql: "SELECT COUNT(*) FROM TABLE(DEMO.REPORTING_PKG.GET_TOP_BOOKS(10))"
+        target_sql: "SELECT count(*) FROM demo.reporting_pkg_get_top_books(10)"
+      - name: top_books_total_sold
+        source_sql: "SELECT NVL(SUM(total_sold),0) FROM TABLE(DEMO.REPORTING_PKG.GET_TOP_BOOKS(10))"
+        target_sql: "SELECT coalesce(sum(total_sold),0) FROM demo.reporting_pkg_get_top_books(10)"
+      - name: top_books_revenue
+        source_sql: "SELECT NVL(SUM(revenue),0) FROM TABLE(DEMO.REPORTING_PKG.GET_TOP_BOOKS(10))"
+        target_sql: "SELECT coalesce(sum(revenue),0) FROM demo.reporting_pkg_get_top_books(10)"
+      - name: highest_ranked_title
+        source_sql: "SELECT title FROM (SELECT title FROM TABLE(DEMO.REPORTING_PKG.GET_TOP_BOOKS(10))) WHERE ROWNUM = 1"
+        target_sql: "SELECT title FROM demo.reporting_pkg_get_top_books(10) LIMIT 1"
+  - id: t3
+    description: >
+      FETCH FIRST -> LIMIT conversion — seed 3 books but request only the top 1;
+      both engines must return exactly one row
+    call_source: "DECLARE v NUMBER; BEGIN v := DEMO.ORDER_PKG.CREATE_ORDER(1, 1); DEMO.ORDER_PKG.ADD_ORDER_ITEM(v, 1, 5); DEMO.ORDER_PKG.ADD_ORDER_ITEM(v, 2, 3); DEMO.ORDER_PKG.ADD_ORDER_ITEM(v, 3, 1); END;"
+    call_target: "DO $$ DECLARE v numeric; BEGIN v := demo.order_pkg_create_order(1, 1); CALL demo.order_pkg_add_order_item(v, 1, 5); CALL demo.order_pkg_add_order_item(v, 2, 3); CALL demo.order_pkg_add_order_item(v, 3, 1); END $$"
+    verify:
+      - name: limit_1_row_count
+        source_sql: "SELECT COUNT(*) FROM TABLE(DEMO.REPORTING_PKG.GET_TOP_BOOKS(1))"
+        target_sql: "SELECT count(*) FROM demo.reporting_pkg_get_top_books(1)"
+      - name: limit_2_row_count
+        source_sql: "SELECT COUNT(*) FROM TABLE(DEMO.REPORTING_PKG.GET_TOP_BOOKS(2))"
+        target_sql: "SELECT count(*) FROM demo.reporting_pkg_get_top_books(2)"
+      - name: limit_1_total_sold
+        source_sql: "SELECT NVL(SUM(total_sold),0) FROM TABLE(DEMO.REPORTING_PKG.GET_TOP_BOOKS(1))"
+        target_sql: "SELECT coalesce(sum(total_sold),0) FROM demo.reporting_pkg_get_top_books(1)"
+  - id: t4
+    description: >
+      CANCELLED orders must be excluded from the report on both engines — seed an order,
+      add an item, then cancel it; get_top_books must go back to returning nothing
+    call_source: "DECLARE v NUMBER; BEGIN v := DEMO.ORDER_PKG.CREATE_ORDER(1, 1); DEMO.ORDER_PKG.ADD_ORDER_ITEM(v, 1, 4); DEMO.ORDER_PKG.UPDATE_ORDER_STATUS(v, 'CANCELLED'); END;"
+    call_target: "DO $$ DECLARE v numeric; BEGIN v := demo.order_pkg_create_order(1, 1); CALL demo.order_pkg_add_order_item(v, 1, 4); CALL demo.order_pkg_update_order_status(v, 'CANCELLED'); END $$"
+    verify:
+      - name: top_books_row_count
+        source_sql: "SELECT COUNT(*) FROM TABLE(DEMO.REPORTING_PKG.GET_TOP_BOOKS(10))"
+        target_sql: "SELECT count(*) FROM demo.reporting_pkg_get_top_books(10)"
+      - name: top_books_revenue
+        source_sql: "SELECT NVL(SUM(revenue),0) FROM TABLE(DEMO.REPORTING_PKG.GET_TOP_BOOKS(10))"
+        target_sql: "SELECT coalesce(sum(revenue),0) FROM demo.reporting_pkg_get_top_books(10)"
