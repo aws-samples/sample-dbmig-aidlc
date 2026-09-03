@@ -1,0 +1,2 @@
+ALTER TABLE person.personphone
+ADD CONSTRAINT pk_personphone_businessentityid_phonenumber_phonenumbertypeid_1822629536 PRIMARY KEY (businessentityid, phonenumber, phonenumbertypeid);

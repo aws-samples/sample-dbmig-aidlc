@@ -1,0 +1,84 @@
+items:
+  Servers.SQLSERVER_SOURCE.Databases.AdventureWorks.Schemas.Person.Tables.Person.Indexes.PXML_Person_AddContact:
+    object: Person.PXML_Person_AddContact
+    type: INDEX
+    codes:
+    - '7791'
+    status: verified
+    method: equivalence-test
+    by: migration-engineer
+    at: '2026-09-02T07:40:35Z'
+    note: sample sign-off
+  ? Servers.SQLSERVER_SOURCE.Databases.AdventureWorks.Schemas.Person.Tables.Person.Indexes.XMLVALUE_Person_Demographics
+  : object: Person.XMLVALUE_Person_Demographics
+    type: INDEX
+    codes:
+    - '7791'
+    status: verified
+    method: equivalence-test
+    by: migration-engineer
+    at: '2026-09-02T07:40:35Z'
+    note: sample sign-off
+  Servers.SQLSERVER_SOURCE.Databases.AdventureWorks.Schemas.Person.Views.vAdditionalContactInfo:
+    object: Person.vAdditionalContactInfo
+    type: VIEW
+    codes:
+    - '7744'
+    status: pending
+    method: ''
+    by: ''
+    at: ''
+    note: ''
+  ? Servers.SQLSERVER_SOURCE.Databases.AdventureWorks.Schemas.Person.Tables.Person.Indexes.XMLPATH_Person_Demographics
+  : object: Person.XMLPATH_Person_Demographics
+    type: INDEX
+    codes:
+    - '7791'
+    status: pending
+    method: ''
+    by: ''
+    at: ''
+    note: ''
+  ? Servers.SQLSERVER_SOURCE.Databases.AdventureWorks.Schemas.Person.Tables.Person.Indexes.XMLPROPERTY_Person_Demographics
+  : object: Person.XMLPROPERTY_Person_Demographics
+    type: INDEX
+    codes:
+    - '7791'
+    status: pending
+    method: ''
+    by: ''
+    at: ''
+    note: ''
+  Servers.SQLSERVER_SOURCE.Databases.AdventureWorks.Schemas.Person.Views.vStateProvinceCountryRegion:
+    object: Person.vStateProvinceCountryRegion
+    type: VIEW
+    codes:
+    - '7634'
+    - '7795'
+    status: pending
+    method: ''
+    by: ''
+    at: ''
+    note: ''
+  Servers.SQLSERVER_SOURCE.Databases.AdventureWorks.Schemas.Person.Tables.Person.Indexes.PXML_Person_Demographics:
+    object: Person.PXML_Person_Demographics
+    type: INDEX
+    codes:
+    - '7791'
+    status: pending
+    method: ''
+    by: ''
+    at: ''
+    note: ''
+  Servers.SQLSERVER_SOURCE.Databases.AdventureWorks.Schemas.Person.Tables.Person.Constraints.CK_Person_PersonType:
+    object: Person.CK_Person_PersonType
+    type: CONSTRAINT
+    codes:
+    - '7795'
+    status: pending
+    method: ''
+    by: ''
+    at: ''
+    note: ''
+project: adventureworks-hr-person
+schema: PERSON

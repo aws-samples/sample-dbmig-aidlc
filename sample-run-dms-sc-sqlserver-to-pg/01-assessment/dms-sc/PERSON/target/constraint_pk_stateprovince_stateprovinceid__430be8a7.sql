@@ -1,0 +1,2 @@
+ALTER TABLE person.stateprovince
+ADD CONSTRAINT pk_stateprovince_stateprovinceid_219147826 PRIMARY KEY (stateprovinceid);

@@ -1,0 +1,2 @@
+ALTER TABLE [HumanResources].[EmployeeDepartmentHistory]
+ADD CONSTRAINT [PK_EmployeeDepartmentHistory_BusinessEntityID_StartDate_DepartmentID] PRIMARY KEY CLUSTERED ([BusinessEntityID], [StartDate], [DepartmentID], [ShiftID]);

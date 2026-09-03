@@ -297,12 +297,22 @@ class SourceEngine(Engine, ABC):
 
     @abstractmethod
     def chunk_iterator(self, schema: str, table: str, pk_cols: List[str],
-                       batch_size: int) -> Iterator[Tuple[str, dict]]:
+                       batch_size: int, pk_lo: Optional[int] = None,
+                       pk_hi: Optional[int] = None) -> Iterator[Tuple[str, dict]]:
         """Yield (query, params) tuples for chunked data extraction.
 
         Range-based on a single numeric PK (parallelizable); a single full-table
-        chunk otherwise.
+        chunk otherwise. When ``pk_lo``/``pk_hi`` are given (a shard sub-range of a
+        single numeric PK), chunk only within ``[pk_lo, pk_hi)`` — this is how
+        intra-table sharding hands each parallel reader a disjoint PK slice.
         """
+
+    def numeric_pk_bounds(self, schema: str, table: str,
+                          pk: str) -> Optional[Tuple[int, int]]:
+        """Return (min, max) of a single numeric PK column for intra-table
+        sharding, or ``None`` when the table is not shardable this way (non-numeric
+        / composite / no PK). Default: not shardable."""
+        return None
 
     @abstractmethod
     def inventory(self, schema: str) -> Dict[str, Any]:

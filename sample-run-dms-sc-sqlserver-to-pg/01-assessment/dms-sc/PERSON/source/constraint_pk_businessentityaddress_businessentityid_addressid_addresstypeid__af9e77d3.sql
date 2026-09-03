@@ -1,0 +1,2 @@
+ALTER TABLE [Person].[BusinessEntityAddress]
+ADD CONSTRAINT [PK_BusinessEntityAddress_BusinessEntityID_AddressID_AddressTypeID] PRIMARY KEY CLUSTERED ([BusinessEntityID], [AddressID], [AddressTypeID]);

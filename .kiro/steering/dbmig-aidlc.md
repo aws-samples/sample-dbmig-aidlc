@@ -15,6 +15,15 @@ If the user says anything like "start a database migration", "migrate Oracle to 
 **`db-migration-orchestrator`** skill (in `skills/db-migration-orchestrator/`) and let it run
 the intake interview and route the phases. Do not skip it or hand-roll the migration.
 
+**Already ran AWS DMS Schema Conversion (DMS SC)?** If the user says they have already run
+DMS SC and applied the converted schema to the target (e.g. "import my DMS SC project",
+"continue from an existing DMS SC conversion"), route to the **`db-migration-dms-sc-ingest`**
+skill (via the orchestrator's intake branch). It imports and triages the project
+(ACCEPT / VERIFY / MANUAL), reconciles against the live target (`diff-target`), and prepares
+the already-applied target for the data load (`capture-target-objects` → `pre-load-drop` →
+load → `post-load-restore`), then rejoins the normal Validation → Operations phases. It does
+not convert from scratch.
+
 Supported engine pairs: **Oracle → PostgreSQL**, **Oracle → MySQL**,
 **SQL Server → PostgreSQL**, **SQL Server → MySQL**. The active pair is derived from the
 connection engines and defined under `engines/<pair>/` with knowledge in
@@ -28,7 +37,14 @@ connection engines and defined under `engines/<pair>/` with knowledge in
    approval** before the next phase. Do not auto-advance.
 3. **Artifacts + traceability.** Every phase writes to `migrations/<project>/`. Each converted
    object traces back to the inventory and forward to its apply/test result.
-4. **Ambiguity detection.** If a required input is missing or unclear, ask — do not guess.
+4. **Ambiguity detection is a hard GATE — ask, never assume.** For **both** database
+   migration and application modernization: if a required input, mapping, disposition, target
+   name, or any decision is missing, unclear, or could be interpreted more than one way,
+   **STOP and ask the user** — present the options you are choosing between and your
+   recommendation, and wait for their choice. Do **not** assume a default and proceed; a wrong
+   assumption that silently diverges from the customer's requirement is worse than a question.
+   This gate applies before converting an object, resolving a diff conflict, choosing a target
+   schema/name, editing an application file, or advancing a phase.
 5. **Safety.** Treat any write to the target (DDL apply, data load, cutover) as a gated action.
    Confirm before destructive operations. Never echo secret values.
 

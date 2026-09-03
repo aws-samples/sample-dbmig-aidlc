@@ -1,0 +1,3 @@
+CREATE INDEX ix_employeedepartmenthistory_ix_employeedepartmenthist$6e69a24d
+ON humanresources.employeedepartmenthistory
+USING BTREE (departmentid ASC);

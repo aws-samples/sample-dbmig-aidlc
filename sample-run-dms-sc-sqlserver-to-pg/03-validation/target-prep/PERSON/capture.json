@@ -1,0 +1,165 @@
+{
+  "project": "adventureworks-hr-person",
+  "schema": "PERSON",
+  "target_schema": "person",
+  "captured_at": "2026-09-02T07:40:35Z",
+  "counts": {
+    "foreign_keys": 14,
+    "indexes": 8,
+    "triggers": 2
+  },
+  "objects": {
+    "foreign_keys": [
+      {
+        "name": "fk_address_stateprovince_stateprovinceid_635149308",
+        "table": "address",
+        "create_sql": "ALTER TABLE \"person\".\"address\" ADD CONSTRAINT \"fk_address_stateprovince_stateprovinceid_635149308\" FOREIGN KEY (stateprovinceid) REFERENCES person.stateprovince(stateprovinceid);",
+        "drop_sql": "ALTER TABLE \"person\".\"address\" DROP CONSTRAINT IF EXISTS \"fk_address_stateprovince_stateprovinceid_635149308\";"
+      },
+      {
+        "name": "fk_businessentityaddress_address_addressid_699149536",
+        "table": "businessentityaddress",
+        "create_sql": "ALTER TABLE \"person\".\"businessentityaddress\" ADD CONSTRAINT \"fk_businessentityaddress_address_addressid_699149536\" FOREIGN KEY (addressid) REFERENCES person.address(addressid);",
+        "drop_sql": "ALTER TABLE \"person\".\"businessentityaddress\" DROP CONSTRAINT IF EXISTS \"fk_businessentityaddress_address_addressid_699149536\";"
+      },
+      {
+        "name": "fk_businessentityaddress_addresstype_addresstypeid_715149593",
+        "table": "businessentityaddress",
+        "create_sql": "ALTER TABLE \"person\".\"businessentityaddress\" ADD CONSTRAINT \"fk_businessentityaddress_addresstype_addresstypeid_715149593\" FOREIGN KEY (addresstypeid) REFERENCES person.addresstype(addresstypeid);",
+        "drop_sql": "ALTER TABLE \"person\".\"businessentityaddress\" DROP CONSTRAINT IF EXISTS \"fk_businessentityaddress_addresstype_addresstypeid_715149593\";"
+      },
+      {
+        "name": "fk_businessentityaddress_businessentity_businessentityid_731149",
+        "table": "businessentityaddress",
+        "create_sql": "ALTER TABLE \"person\".\"businessentityaddress\" ADD CONSTRAINT \"fk_businessentityaddress_businessentity_businessentityid_731149\" FOREIGN KEY (businessentityid) REFERENCES person.businessentity(businessentityid);",
+        "drop_sql": "ALTER TABLE \"person\".\"businessentityaddress\" DROP CONSTRAINT IF EXISTS \"fk_businessentityaddress_businessentity_businessentityid_731149\";"
+      },
+      {
+        "name": "fk_businessentitycontact_businessentity_businessentityid_779149",
+        "table": "businessentitycontact",
+        "create_sql": "ALTER TABLE \"person\".\"businessentitycontact\" ADD CONSTRAINT \"fk_businessentitycontact_businessentity_businessentityid_779149\" FOREIGN KEY (businessentityid) REFERENCES person.businessentity(businessentityid);",
+        "drop_sql": "ALTER TABLE \"person\".\"businessentitycontact\" DROP CONSTRAINT IF EXISTS \"fk_businessentitycontact_businessentity_businessentityid_779149\";"
+      },
+      {
+        "name": "fk_businessentitycontact_contacttype_contacttypeid_763149764",
+        "table": "businessentitycontact",
+        "create_sql": "ALTER TABLE \"person\".\"businessentitycontact\" ADD CONSTRAINT \"fk_businessentitycontact_contacttype_contacttypeid_763149764\" FOREIGN KEY (contacttypeid) REFERENCES person.contacttype(contacttypeid);",
+        "drop_sql": "ALTER TABLE \"person\".\"businessentitycontact\" DROP CONSTRAINT IF EXISTS \"fk_businessentitycontact_contacttype_contacttypeid_763149764\";"
+      },
+      {
+        "name": "fk_businessentitycontact_person_personid_747149707",
+        "table": "businessentitycontact",
+        "create_sql": "ALTER TABLE \"person\".\"businessentitycontact\" ADD CONSTRAINT \"fk_businessentitycontact_person_personid_747149707\" FOREIGN KEY (personid) REFERENCES person.person(businessentityid);",
+        "drop_sql": "ALTER TABLE \"person\".\"businessentitycontact\" DROP CONSTRAINT IF EXISTS \"fk_businessentitycontact_person_personid_747149707\";"
+      },
+      {
+        "name": "fk_emailaddress_person_businessentityid_923150334",
+        "table": "emailaddress",
+        "create_sql": "ALTER TABLE \"person\".\"emailaddress\" ADD CONSTRAINT \"fk_emailaddress_person_businessentityid_923150334\" FOREIGN KEY (businessentityid) REFERENCES person.person(businessentityid);",
+        "drop_sql": "ALTER TABLE \"person\".\"emailaddress\" DROP CONSTRAINT IF EXISTS \"fk_emailaddress_person_businessentityid_923150334\";"
+      },
+      {
+        "name": "fk_password_person_businessentityid_1035150733",
+        "table": "password",
+        "create_sql": "ALTER TABLE \"person\".\"password\" ADD CONSTRAINT \"fk_password_person_businessentityid_1035150733\" FOREIGN KEY (businessentityid) REFERENCES person.person(businessentityid);",
+        "drop_sql": "ALTER TABLE \"person\".\"password\" DROP CONSTRAINT IF EXISTS \"fk_password_person_businessentityid_1035150733\";"
+      },
+      {
+        "name": "fk_person_businessentity_businessentityid_1051150790",
+        "table": "person",
+        "create_sql": "ALTER TABLE \"person\".\"person\" ADD CONSTRAINT \"fk_person_businessentity_businessentityid_1051150790\" FOREIGN KEY (businessentityid) REFERENCES person.businessentity(businessentityid);",
+        "drop_sql": "ALTER TABLE \"person\".\"person\" DROP CONSTRAINT IF EXISTS \"fk_person_businessentity_businessentityid_1051150790\";"
+      },
+      {
+        "name": "fk_personphone_person_businessentityid_1099150961",
+        "table": "personphone",
+        "create_sql": "ALTER TABLE \"person\".\"personphone\" ADD CONSTRAINT \"fk_personphone_person_businessentityid_1099150961\" FOREIGN KEY (businessentityid) REFERENCES person.person(businessentityid);",
+        "drop_sql": "ALTER TABLE \"person\".\"personphone\" DROP CONSTRAINT IF EXISTS \"fk_personphone_person_businessentityid_1099150961\";"
+      },
+      {
+        "name": "fk_personphone_phonenumbertype_phonenumbertypeid_1115151018",
+        "table": "personphone",
+        "create_sql": "ALTER TABLE \"person\".\"personphone\" ADD CONSTRAINT \"fk_personphone_phonenumbertype_phonenumbertypeid_1115151018\" FOREIGN KEY (phonenumbertypeid) REFERENCES person.phonenumbertype(phonenumbertypeid);",
+        "drop_sql": "ALTER TABLE \"person\".\"personphone\" DROP CONSTRAINT IF EXISTS \"fk_personphone_phonenumbertype_phonenumbertypeid_1115151018\";"
+      },
+      {
+        "name": "fk_stateprovince_countryregion_countryregioncode_1915153868",
+        "table": "stateprovince",
+        "create_sql": "ALTER TABLE \"person\".\"stateprovince\" ADD CONSTRAINT \"fk_stateprovince_countryregion_countryregioncode_1915153868\" FOREIGN KEY (countryregioncode) REFERENCES person.countryregion(countryregioncode);",
+        "drop_sql": "ALTER TABLE \"person\".\"stateprovince\" DROP CONSTRAINT IF EXISTS \"fk_stateprovince_countryregion_countryregioncode_1915153868\";"
+      },
+      {
+        "name": "fk_stateprovince_salesterritory_territoryid_1931153925",
+        "table": "stateprovince",
+        "create_sql": "ALTER TABLE \"person\".\"stateprovince\" ADD CONSTRAINT \"fk_stateprovince_salesterritory_territoryid_1931153925\" FOREIGN KEY (territoryid) REFERENCES sales.salesterritory(territoryid);",
+        "drop_sql": "ALTER TABLE \"person\".\"stateprovince\" DROP CONSTRAINT IF EXISTS \"fk_stateprovince_salesterritory_territoryid_1931153925\";"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "ix_address_ix_address_stateprovinceid",
+        "table": "address",
+        "create_sql": "CREATE INDEX ix_address_ix_address_stateprovinceid ON person.address USING btree (stateprovinceid);",
+        "drop_sql": "DROP INDEX IF EXISTS \"person\".\"ix_address_ix_address_stateprovinceid\";"
+      },
+      {
+        "name": "ix_businessentityaddress_ix_businessentityaddress_addressid",
+        "table": "businessentityaddress",
+        "create_sql": "CREATE INDEX ix_businessentityaddress_ix_businessentityaddress_addressid ON person.businessentityaddress USING btree (addressid);",
+        "drop_sql": "DROP INDEX IF EXISTS \"person\".\"ix_businessentityaddress_ix_businessentityaddress_addressid\";"
+      },
+      {
+        "name": "ix_businessentityaddress_ix_businessentityaddress_addresstypeid",
+        "table": "businessentityaddress",
+        "create_sql": "CREATE INDEX ix_businessentityaddress_ix_businessentityaddress_addresstypeid ON person.businessentityaddress USING btree (addresstypeid);",
+        "drop_sql": "DROP INDEX IF EXISTS \"person\".\"ix_businessentityaddress_ix_businessentityaddress_addresstypeid\";"
+      },
+      {
+        "name": "ix_businessentitycontact_ix_businessentitycontact_contacttypeid",
+        "table": "businessentitycontact",
+        "create_sql": "CREATE INDEX ix_businessentitycontact_ix_businessentitycontact_contacttypeid ON person.businessentitycontact USING btree (contacttypeid);",
+        "drop_sql": "DROP INDEX IF EXISTS \"person\".\"ix_businessentitycontact_ix_businessentitycontact_contacttypeid\";"
+      },
+      {
+        "name": "ix_businessentitycontact_ix_businessentitycontact_personid",
+        "table": "businessentitycontact",
+        "create_sql": "CREATE INDEX ix_businessentitycontact_ix_businessentitycontact_personid ON person.businessentitycontact USING btree (personid);",
+        "drop_sql": "DROP INDEX IF EXISTS \"person\".\"ix_businessentitycontact_ix_businessentitycontact_personid\";"
+      },
+      {
+        "name": "ix_emailaddress_ix_emailaddress_emailaddress",
+        "table": "emailaddress",
+        "create_sql": "CREATE INDEX ix_emailaddress_ix_emailaddress_emailaddress ON person.emailaddress USING btree (emailaddress);",
+        "drop_sql": "DROP INDEX IF EXISTS \"person\".\"ix_emailaddress_ix_emailaddress_emailaddress\";"
+      },
+      {
+        "name": "ix_person_ix_person_lastname_firstname_middlename",
+        "table": "person",
+        "create_sql": "CREATE INDEX ix_person_ix_person_lastname_firstname_middlename ON person.person USING btree (lastname, firstname, middlename);",
+        "drop_sql": "DROP INDEX IF EXISTS \"person\".\"ix_person_ix_person_lastname_firstname_middlename\";"
+      },
+      {
+        "name": "ix_personphone_ix_personphone_phonenumber",
+        "table": "personphone",
+        "create_sql": "CREATE INDEX ix_personphone_ix_personphone_phonenumber ON person.personphone USING btree (phonenumber);",
+        "drop_sql": "DROP INDEX IF EXISTS \"person\".\"ix_personphone_ix_personphone_phonenumber\";"
+      }
+    ],
+    "triggers": [
+      {
+        "name": "iuperson_after_insert",
+        "table": "person",
+        "create_sql": "CREATE TRIGGER iuperson_after_insert AFTER INSERT ON person.person REFERENCING NEW TABLE AS \"inserted$dd8b1d18\" FOR EACH STATEMENT EXECUTE FUNCTION person.fn_iuperson();",
+        "drop_sql": "DROP TRIGGER IF EXISTS \"iuperson_after_insert\" ON \"person\".\"person\";"
+      },
+      {
+        "name": "iuperson_after_update",
+        "table": "person",
+        "create_sql": "CREATE TRIGGER iuperson_after_update AFTER UPDATE ON person.person REFERENCING OLD TABLE AS \"deleted$dd8b1d18\" NEW TABLE AS \"inserted$dd8b1d18\" FOR EACH STATEMENT EXECUTE FUNCTION person.fn_iuperson();",
+        "drop_sql": "DROP TRIGGER IF EXISTS \"iuperson_after_update\" ON \"person\".\"person\";"
+      }
+    ]
+  },
+  "drop_state": {},
+  "restore_state": {}
+}

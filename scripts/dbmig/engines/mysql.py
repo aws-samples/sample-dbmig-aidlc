@@ -207,3 +207,119 @@ class MySQLEngine(TargetEngine):
             nxt = cur.fetchone()[0]
             cur.execute(build_set_auto_increment_sql(schema, table, nxt))
         conn.commit()
+
+    # ---- live target introspection (for diff-target / capture) --------------
+    # A MySQL "schema" is a database; ``schema`` below is the database name.
+
+    def live_schema_catalog(self, schema: str) -> dict:
+        """Names present in the database, by kind (lower-cased). Mirrors the
+        PostgreSQL adapter. MySQL has no sequences (empty set)."""
+        q = {
+            "tables": ("SELECT table_name FROM information_schema.tables "
+                       "WHERE table_schema=%s AND table_type='BASE TABLE'"),
+            "views": ("SELECT table_name FROM information_schema.views "
+                      "WHERE table_schema=%s"),
+            "indexes": ("SELECT DISTINCT index_name FROM information_schema.statistics "
+                        "WHERE table_schema=%s AND index_name<>'PRIMARY'"),
+            "constraints": ("SELECT constraint_name FROM information_schema.table_constraints "
+                            "WHERE constraint_schema=%s"),
+            "triggers": ("SELECT trigger_name FROM information_schema.triggers "
+                         "WHERE trigger_schema=%s"),
+            "routines": ("SELECT routine_name FROM information_schema.routines "
+                         "WHERE routine_schema=%s"),
+        }
+        out: dict = {"sequences": set()}
+        for kind, sql in q.items():
+            _, rows = self.fetch(sql, (schema,))
+            out[kind] = {str(r[0]).lower() for r in rows}
+        return out
+
+    def routine_definitions(self, schema: str) -> dict:
+        _, rows = self.fetch(
+            "SELECT routine_name, routine_definition FROM information_schema.routines "
+            "WHERE routine_schema=%s", (schema,))
+        return {str(n).lower(): (d or "") for n, d in rows}
+
+    def view_definitions(self, schema: str) -> dict:
+        _, rows = self.fetch(
+            "SELECT table_name, view_definition FROM information_schema.views "
+            "WHERE table_schema=%s", (schema,))
+        return {str(n).lower(): (d or "") for n, d in rows}
+
+    def capture_secondary_objects(self, schema: str) -> dict:
+        """Capture load-hostile secondary objects to drop before a bulk load and
+        recreate after: foreign keys, NON-UNIQUE secondary indexes, and triggers.
+        Primary keys and UNIQUE indexes are kept. DDL is rebuilt from
+        information_schema (MySQL has no pg_get_*def functions)."""
+        def qi(name: str) -> str:
+            return _quote_ident(name)
+
+        def cols(concat: str) -> str:
+            return ", ".join(qi(c) for c in concat.split(",")) if concat else ""
+
+        sch = qi(schema)
+
+        # Foreign keys ------------------------------------------------------
+        _, fk_rows = self.fetch(
+            "SELECT rc.constraint_name, kcu.table_name, "
+            " GROUP_CONCAT(kcu.column_name ORDER BY kcu.ordinal_position), "
+            " kcu.referenced_table_name, "
+            " GROUP_CONCAT(kcu.referenced_column_name ORDER BY kcu.ordinal_position), "
+            " rc.update_rule, rc.delete_rule "
+            "FROM information_schema.referential_constraints rc "
+            "JOIN information_schema.key_column_usage kcu "
+            "  ON kcu.constraint_schema=rc.constraint_schema "
+            " AND kcu.constraint_name=rc.constraint_name "
+            "WHERE rc.constraint_schema=%s "
+            "GROUP BY rc.constraint_name, kcu.table_name, kcu.referenced_table_name, "
+            " rc.update_rule, rc.delete_rule "
+            "ORDER BY kcu.table_name, rc.constraint_name", (schema,))
+        fks = []
+        for name, tbl, lcols, rtbl, rcols, upd, dele in fk_rows:
+            actions = ""
+            if dele and dele.upper() not in ("NO ACTION", "RESTRICT"):
+                actions += f" ON DELETE {dele}"
+            if upd and upd.upper() not in ("NO ACTION", "RESTRICT"):
+                actions += f" ON UPDATE {upd}"
+            fks.append({
+                "name": name, "table": tbl,
+                "create_sql": (f"ALTER TABLE {sch}.{qi(tbl)} ADD CONSTRAINT {qi(name)} "
+                               f"FOREIGN KEY ({cols(lcols)}) REFERENCES "
+                               f"{sch}.{qi(rtbl)} ({cols(rcols)}){actions};"),
+                "drop_sql": f"ALTER TABLE {sch}.{qi(tbl)} DROP FOREIGN KEY {qi(name)};",
+            })
+
+        # Non-unique secondary indexes (non_unique=1; PK/unique kept). Indexes that
+        # back a foreign key (MySQL auto-creates one, named after the FK) are excluded
+        # — they are managed by the FK's own drop/recreate, not separately.
+        fk_names = {f["name"] for f in fks}
+        _, idx_rows = self.fetch(
+            "SELECT table_name, index_name, "
+            " GROUP_CONCAT(column_name ORDER BY seq_in_index) "
+            "FROM information_schema.statistics "
+            "WHERE table_schema=%s AND non_unique=1 "
+            "GROUP BY table_name, index_name "
+            "ORDER BY table_name, index_name", (schema,))
+        indexes = [{
+            "name": name, "table": tbl,
+            "create_sql": f"CREATE INDEX {qi(name)} ON {sch}.{qi(tbl)} ({cols(cc)});",
+            "drop_sql": f"DROP INDEX {qi(name)} ON {sch}.{qi(tbl)};",
+        } for tbl, name, cc in idx_rows if name not in fk_names]
+
+        # Triggers ----------------------------------------------------------
+        _, trg_rows = self.fetch(
+            "SELECT trigger_name, event_object_table, action_timing, "
+            " event_manipulation, action_statement "
+            "FROM information_schema.triggers WHERE trigger_schema=%s "
+            "ORDER BY event_object_table, trigger_name", (schema,))
+        triggers = []
+        for name, tbl, timing, event, body in trg_rows:
+            body = (body or "").rstrip().rstrip(";")
+            triggers.append({
+                "name": name, "table": tbl,
+                "create_sql": (f"CREATE TRIGGER {sch}.{qi(name)} {timing} {event} "
+                               f"ON {sch}.{qi(tbl)} FOR EACH ROW {body};"),
+                "drop_sql": f"DROP TRIGGER IF EXISTS {sch}.{qi(name)};",
+            })
+
+        return {"foreign_keys": fks, "indexes": indexes, "triggers": triggers}

@@ -1,0 +1,93 @@
+{
+  "project": "adventureworks-hr-person",
+  "schema": "HUMANRESOURCES",
+  "target_schema": "humanresources",
+  "captured_at": "2026-09-02T07:40:27Z",
+  "counts": {
+    "foreign_keys": 6,
+    "indexes": 5,
+    "triggers": 1
+  },
+  "objects": {
+    "foreign_keys": [
+      {
+        "name": "fk_employee_person_businessentityid_939150391",
+        "table": "employee",
+        "create_sql": "ALTER TABLE \"humanresources\".\"employee\" ADD CONSTRAINT \"fk_employee_person_businessentityid_939150391\" FOREIGN KEY (businessentityid) REFERENCES person.person(businessentityid);",
+        "drop_sql": "ALTER TABLE \"humanresources\".\"employee\" DROP CONSTRAINT IF EXISTS \"fk_employee_person_businessentityid_939150391\";"
+      },
+      {
+        "name": "fk_employeedepartmenthistory_department_departmentid_955150448",
+        "table": "employeedepartmenthistory",
+        "create_sql": "ALTER TABLE \"humanresources\".\"employeedepartmenthistory\" ADD CONSTRAINT \"fk_employeedepartmenthistory_department_departmentid_955150448\" FOREIGN KEY (departmentid) REFERENCES humanresources.department(departmentid);",
+        "drop_sql": "ALTER TABLE \"humanresources\".\"employeedepartmenthistory\" DROP CONSTRAINT IF EXISTS \"fk_employeedepartmenthistory_department_departmentid_955150448\";"
+      },
+      {
+        "name": "fk_employeedepartmenthistory_employee_businessentityid_97115050",
+        "table": "employeedepartmenthistory",
+        "create_sql": "ALTER TABLE \"humanresources\".\"employeedepartmenthistory\" ADD CONSTRAINT \"fk_employeedepartmenthistory_employee_businessentityid_97115050\" FOREIGN KEY (businessentityid) REFERENCES humanresources.employee(businessentityid);",
+        "drop_sql": "ALTER TABLE \"humanresources\".\"employeedepartmenthistory\" DROP CONSTRAINT IF EXISTS \"fk_employeedepartmenthistory_employee_businessentityid_97115050\";"
+      },
+      {
+        "name": "fk_employeedepartmenthistory_shift_shiftid_987150562",
+        "table": "employeedepartmenthistory",
+        "create_sql": "ALTER TABLE \"humanresources\".\"employeedepartmenthistory\" ADD CONSTRAINT \"fk_employeedepartmenthistory_shift_shiftid_987150562\" FOREIGN KEY (shiftid) REFERENCES humanresources.shift(shiftid);",
+        "drop_sql": "ALTER TABLE \"humanresources\".\"employeedepartmenthistory\" DROP CONSTRAINT IF EXISTS \"fk_employeedepartmenthistory_shift_shiftid_987150562\";"
+      },
+      {
+        "name": "fk_employeepayhistory_employee_businessentityid_1003150619",
+        "table": "employeepayhistory",
+        "create_sql": "ALTER TABLE \"humanresources\".\"employeepayhistory\" ADD CONSTRAINT \"fk_employeepayhistory_employee_businessentityid_1003150619\" FOREIGN KEY (businessentityid) REFERENCES humanresources.employee(businessentityid);",
+        "drop_sql": "ALTER TABLE \"humanresources\".\"employeepayhistory\" DROP CONSTRAINT IF EXISTS \"fk_employeepayhistory_employee_businessentityid_1003150619\";"
+      },
+      {
+        "name": "fk_jobcandidate_employee_businessentityid_1019150676",
+        "table": "jobcandidate",
+        "create_sql": "ALTER TABLE \"humanresources\".\"jobcandidate\" ADD CONSTRAINT \"fk_jobcandidate_employee_businessentityid_1019150676\" FOREIGN KEY (businessentityid) REFERENCES humanresources.employee(businessentityid);",
+        "drop_sql": "ALTER TABLE \"humanresources\".\"jobcandidate\" DROP CONSTRAINT IF EXISTS \"fk_jobcandidate_employee_businessentityid_1019150676\";"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "ix_employee_ix_employee_organizationlevel_organizationnode",
+        "table": "employee",
+        "create_sql": "CREATE INDEX ix_employee_ix_employee_organizationlevel_organizationnode ON humanresources.employee USING btree (organizationlevel, organizationnode);",
+        "drop_sql": "DROP INDEX IF EXISTS \"humanresources\".\"ix_employee_ix_employee_organizationlevel_organizationnode\";"
+      },
+      {
+        "name": "ix_employee_ix_employee_organizationnode",
+        "table": "employee",
+        "create_sql": "CREATE INDEX ix_employee_ix_employee_organizationnode ON humanresources.employee USING btree (organizationnode);",
+        "drop_sql": "DROP INDEX IF EXISTS \"humanresources\".\"ix_employee_ix_employee_organizationnode\";"
+      },
+      {
+        "name": "ix_employeedepartmenthistory_ix_employeedepartmenthist$3e917ebd",
+        "table": "employeedepartmenthistory",
+        "create_sql": "CREATE INDEX \"ix_employeedepartmenthistory_ix_employeedepartmenthist$3e917ebd\" ON humanresources.employeedepartmenthistory USING btree (shiftid);",
+        "drop_sql": "DROP INDEX IF EXISTS \"humanresources\".\"ix_employeedepartmenthistory_ix_employeedepartmenthist$3e917ebd\";"
+      },
+      {
+        "name": "ix_employeedepartmenthistory_ix_employeedepartmenthist$6e69a24d",
+        "table": "employeedepartmenthistory",
+        "create_sql": "CREATE INDEX \"ix_employeedepartmenthistory_ix_employeedepartmenthist$6e69a24d\" ON humanresources.employeedepartmenthistory USING btree (departmentid);",
+        "drop_sql": "DROP INDEX IF EXISTS \"humanresources\".\"ix_employeedepartmenthistory_ix_employeedepartmenthist$6e69a24d\";"
+      },
+      {
+        "name": "ix_jobcandidate_ix_jobcandidate_businessentityid",
+        "table": "jobcandidate",
+        "create_sql": "CREATE INDEX ix_jobcandidate_ix_jobcandidate_businessentityid ON humanresources.jobcandidate USING btree (businessentityid);",
+        "drop_sql": "DROP INDEX IF EXISTS \"humanresources\".\"ix_jobcandidate_ix_jobcandidate_businessentityid\";"
+      }
+    ],
+    "triggers": [
+      {
+        "name": "tr_employee_biu",
+        "table": "employee",
+        "create_sql": "CREATE TRIGGER tr_employee_biu BEFORE INSERT OR UPDATE ON humanresources.employee FOR EACH ROW EXECUTE FUNCTION humanresources.fn_tr_employee_biu();",
+        "drop_sql": "DROP TRIGGER IF EXISTS \"tr_employee_biu\" ON \"humanresources\".\"employee\";"
+      }
+    ]
+  },
+  "drop_state": {},
+  "restore_state": {}
+}

@@ -1,0 +1,74 @@
+items:
+  ? Servers.SQLSERVER_SOURCE.Databases.AdventureWorks.Schemas.HumanResources.Tables.Employee.Constraints.CK_Employee_Gender
+  : object: HumanResources.CK_Employee_Gender
+    type: CONSTRAINT
+    codes:
+    - '7795'
+    status: pending
+    method: ''
+    by: ''
+    at: ''
+    note: ''
+  ? Servers.SQLSERVER_SOURCE.Databases.AdventureWorks.Schemas.HumanResources.Procedures.uspUpdateEmployeePersonalInfo
+  : object: HumanResources.uspUpdateEmployeePersonalInfo
+    type: PROCEDURE
+    codes:
+    - '7744'
+    status: pending
+    method: ''
+    by: ''
+    at: ''
+    note: ''
+  Servers.SQLSERVER_SOURCE.Databases.AdventureWorks.Schemas.HumanResources.Views.vJobCandidateEmployment:
+    object: HumanResources.vJobCandidateEmployment
+    type: VIEW
+    codes:
+    - '7744'
+    status: pending
+    method: ''
+    by: ''
+    at: ''
+    note: ''
+  Servers.SQLSERVER_SOURCE.Databases.AdventureWorks.Schemas.HumanResources.Views.vJobCandidate:
+    object: HumanResources.vJobCandidate
+    type: VIEW
+    codes:
+    - '7744'
+    - '9997'
+    status: pending
+    method: ''
+    by: ''
+    at: ''
+    note: ''
+  Servers.SQLSERVER_SOURCE.Databases.AdventureWorks.Schemas.HumanResources.Views.vEmployee:
+    object: HumanResources.vEmployee
+    type: VIEW
+    codes:
+    - '7795'
+    status: pending
+    method: ''
+    by: ''
+    at: ''
+    note: ''
+  Servers.SQLSERVER_SOURCE.Databases.AdventureWorks.Schemas.HumanResources.Views.vJobCandidateEducation:
+    object: HumanResources.vJobCandidateEducation
+    type: VIEW
+    codes:
+    - '7744'
+    status: pending
+    method: ''
+    by: ''
+    at: ''
+    note: ''
+  ? Servers.SQLSERVER_SOURCE.Databases.AdventureWorks.Schemas.HumanResources.Tables.Employee.Constraints.CK_Employee_MaritalStatus
+  : object: HumanResources.CK_Employee_MaritalStatus
+    type: CONSTRAINT
+    codes:
+    - '7795'
+    status: pending
+    method: ''
+    by: ''
+    at: ''
+    note: ''
+project: adventureworks-hr-person
+schema: HUMANRESOURCES

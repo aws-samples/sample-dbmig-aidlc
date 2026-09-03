@@ -52,7 +52,12 @@ The skill names mirror the database module (`db-migration-inception` … `db-mig
 one-for-one, so the whole framework speaks a single phase vocabulary.
 
 Same operating principles as the database migration: phases not a black box, a human gate at the
-end of each, artifacts for traceability, ask rather than guess, and treat writes as gated.
+end of each, artifacts for traceability, and treat writes as gated. **Ambiguity is a hard gate —
+ask, never assume:** if the target framework/dialect, a datasource/config value, an error-code
+mapping, which migration workspace to conform to, or any edit decision is unclear or has more
+than one reasonable interpretation, STOP and present the options with a recommendation and wait
+for the user's choice rather than guessing (a wrong assumption that diverges from the customer's
+requirement is worse than a question).
 
 ## Artifacts
 
@@ -127,6 +132,7 @@ Do **not** start from generic dialect rules. Start from what this migration actu
 | `03-validation/validation-summary.md` | the **"carry-forward for the application team"** list — the app's to-do list, already written |
 | `engines/<pair>/app/app-config.yaml` | driver, URL, dialect, error style, identity handling |
 | `engines/<pair>/app/app-sql-rules.md` | dialect + behavioural SQL rules |
+| `engines/<pair>/app/customer-specific/*.md` | **highest precedence** — the customer's own app conventions, datasource config, error-code mappings, forbidden patterns (overrides the generic rules above) |
 
 Write `01-assessment/app-contract.md`: a table of **DB change → required app change**, each row
 citing its source. Where the validation summary already lists carry-forward items, they are

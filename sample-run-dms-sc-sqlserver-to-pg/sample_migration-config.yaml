@@ -1,0 +1,37 @@
+# Sample migration-config for the DMS SC *continuation* sample run.
+# The customer already ran AWS DMS Schema Conversion and applied it to the target; this
+# run imports that project, triages it, reconciles against the live target, and prepares
+# it for the data load — then rejoins the normal Validation -> Operations phases.
+
+project: adventureworks-hr-person
+
+run:
+  mode: silent            # silent logs follow-ups and continues; 'interactive' prompts
+
+scope:
+  schemas:
+    - PERSON
+    - HUMANRESOURCES
+  object_types:
+    - tables
+    - indexes
+    - constraints
+    - sequences
+    - views
+    - functions
+    - procedures
+    - triggers
+
+strategy:
+  mode: full
+  identifier_case: lower_case
+
+# Who moves the data. 'dms' = an AWS DMS task loads data (the secondary-object
+# drop/recreate around the load still applies); 'framework' = the built-in migrate-data
+# for dev/test loads.
+testing:
+  data_load: dms
+  equivalence:
+    reconcile_row_counts: true
+    function_parity: true
+    procedure_parity: true

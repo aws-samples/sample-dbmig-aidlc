@@ -22,7 +22,12 @@ defined in `engines/<pair>/engine.yaml` with knowledge in `skills/<pair>-playboo
    approval** before starting the next phase. Do not auto-advance.
 3. **Artifacts + traceability.** Every phase writes to `migrations/<project>/`. Every
    converted object traces back to the inventory and to the playbook guidance used.
-4. **Ambiguity detection.** If a required input is missing or unclear, ask — do not guess.
+4. **Ambiguity detection is a hard GATE — ask, never assume.** If a required input, mapping,
+   disposition, target name, or any decision is missing, unclear, or could be read more than
+   one way, **STOP and ask** — present the options and your recommendation and wait for the
+   user's choice. Never assume a default and proceed; a silent wrong assumption that diverges
+   from the customer's requirement is worse than a question. Applies before converting an
+   object, resolving a diff conflict, choosing a target schema/name, or advancing a phase.
 5. **Safety.** Treat any write to the target (DDL, data load, cutover) as a gated action.
    Confirm before destructive operations. Never echo secret values.
 
@@ -49,6 +54,16 @@ Confirm these inputs, asking only for what is missing. Echo back a summary befor
    - `dms` — the user runs AWS DMS (or another loader) externally and you test what's loaded.
 7. **Project name** — used as the workspace folder `migrations/<project>/`.
 
+8. **Already ran AWS DMS Schema Conversion (DMS SC)?** — if the customer has *already*
+   run DMS SC and applied the converted schema to the target (and just needs to continue,
+   keeping the clean output and reworking only what DMS SC flagged), this is a different
+   entry path. If yes, ask for the **local DMS SC project directory** and route to the
+   **`db-migration-dms-sc-ingest`** skill instead of `db-migration-inception` +
+   `db-migration-construction` (steps below). That skill imports and triages the project
+   (ACCEPT / VERIFY / MANUAL), reconciles against the live target, and prepares the
+   already-applied target for the data load, then rejoins Validation → Operations. Do
+   **not** convert from scratch in that case.
+
 Validate the engine pair exists under `engines/<pair>/`. If not, tell the user it is not yet
 supported and stop.
 
@@ -67,6 +82,11 @@ python -m dbmig test-connection --side both
   with a broken connection.
 
 ## Step 3 — Route through the phases
+
+**Alternate entry (DMS SC already run):** if intake #8 was "yes", route Inception +
+Construction through **`db-migration-dms-sc-ingest`** (import → triage → diff-target →
+reconcile → target-prep), then continue to `db-migration-validation` and
+`db-migration-operations` below. Otherwise use the standard phase skills:
 
 Run each phase by invoking its skill. After each, **present the artifacts and stop at the
 gate** for approval.

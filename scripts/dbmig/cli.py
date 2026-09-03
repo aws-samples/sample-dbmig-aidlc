@@ -56,6 +56,19 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("inventory", help="assess a source schema; write reports")
     _add_common(p)
 
+    # import-dms-sc
+    p = sub.add_parser("import-dms-sc",
+                       help="ingest an existing AWS DMS Schema Conversion project "
+                            "(local dir) -> manifests + mapping + ACCEPT/VERIFY/MANUAL report")
+    p.add_argument("--dms-sc-dir", dest="dms_sc_dir", required=True,
+                   help="path to the local DMS SC project directory (the folder "
+                        "containing s-*/ t-*/ and action-items/)")
+    p.add_argument("--schema", default=None,
+                   help="limit to one or more schemas (comma-separated). Default: all "
+                        "schemas found in the project.")
+    p.add_argument("--project", default=None,
+                   help="run workspace name under migrations/ (see other commands)")
+
     # convert-schema
     p = sub.add_parser("convert-schema",
                        help="extract object-units + build conversion prompts (Kiro converts)")
@@ -101,11 +114,18 @@ def build_parser() -> argparse.ArgumentParser:
                    help="comma-separated tables to skip (e.g. ones needing custom "
                         "read-time conversion); applied after --tables")
     p.add_argument("--workers", type=int, default=4,
-                   help="parallel workers (default 4). The live single-line progress bar "
-                        "is shown only with --workers 1; parallel runs print per-table "
-                        "completion lines instead")
+                   help="max concurrent work units (default 4). Each unit is a table or "
+                        "a table's PK shard and opens its own source+target connections")
     p.add_argument("--batch-size", type=int, default=50000,
                    help="rows per COPY batch (default 50000)")
+    p.add_argument("--shards", type=int, default=1,
+                   help="split each large single-numeric-PK table into N disjoint PK-range "
+                        "readers (default 1 = no intra-table split). Lets one big table be "
+                        "copied by many parallel streams")
+    p.add_argument("--mode-parallel", dest="mode_parallel",
+                   choices=["process", "thread"], default="process",
+                   help="'process' (default) gives each unit its own core/GIL for real "
+                        "parallel throughput; 'thread' is the legacy GIL-bound pool")
     p.add_argument("--truncate", action="store_true",
                    help="truncate non-resumable target tables before copy")
 
@@ -113,6 +133,54 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("compare", help="reconcile source vs target row counts")
     _add_common(p, tables=True)
     _add_mode(p)
+
+    # diff-target (reconcile DMS SC import against live target)
+    p = sub.add_parser("diff-target",
+                       help="reconcile imported DMS SC objects against the LIVE target "
+                            "(MATCH/DIFF/MISSING/EXTRA); optionally resolve conflicts")
+    _add_common(p)
+    p.add_argument("--resolve", choices=["apply-ours", "keep-live", "ask"], default=None,
+                   help="act on MISSING/DIFF: apply the DMS SC DDL, keep the live "
+                        "version, or ask interactively (default: report only)")
+    p.add_argument("--apply", action="store_true",
+                   help="actually execute DDL when resolving (default: dry-run print)")
+
+    # capture-target-objects (Phase 3: snapshot secondary objects from the live target)
+    p = sub.add_parser("capture-target-objects",
+                       help="snapshot live secondary objects (FKs, non-unique indexes, "
+                            "triggers) into drop/restore scripts for a data load")
+    _add_common(p)
+
+    # pre-load-drop / post-load-restore
+    p = sub.add_parser("pre-load-drop",
+                       help="drop the captured secondary objects before a data load "
+                            "(dry-run unless --apply)")
+    _add_common(p)
+    p.add_argument("--apply", action="store_true",
+                   help="actually execute the drop statements (default: dry-run)")
+    p = sub.add_parser("post-load-restore",
+                       help="recreate the captured secondary objects after a data load, "
+                            "then reconcile (dry-run unless --apply)")
+    _add_common(p)
+    p.add_argument("--apply", action="store_true",
+                   help="actually execute the restore statements (default: dry-run)")
+
+    # verify (DMS SC VERIFY objects)
+    p = sub.add_parser("verify",
+                       help="list/record verification of DMS SC VERIFY objects "
+                            "(so verified work is not repeated)")
+    _add_common(p)
+    p.add_argument("--set", dest="set", choices=["verified", "pending", "failed"],
+                   default=None, help="set verification status (omit to just list)")
+    p.add_argument("--objects", default=None,
+                   help="comma-separated object names/ids to mark (match by name, "
+                        "schema.name, or source id)")
+    p.add_argument("--all", action="store_true",
+                   help="apply --set to every tracked VERIFY object in the schema")
+    p.add_argument("--by", default=None, help="who verified (recorded in the ledger)")
+    p.add_argument("--method", default=None,
+                   help="verification method, e.g. 'equivalence-test' or 'manual'")
+    p.add_argument("--note", default=None, help="free-text note recorded with the verdict")
 
     # mark
     p = sub.add_parser("mark",
@@ -142,6 +210,24 @@ def _dispatch(args) -> int:
     if cmd == "inventory":
         from .commands import inventory
         return inventory.run(args)
+    if cmd == "import-dms-sc":
+        from .commands import import_dms_sc
+        return import_dms_sc.run(args)
+    if cmd == "verify":
+        from .commands import verify
+        return verify.run(args)
+    if cmd == "diff-target":
+        from .commands import diff_target
+        return diff_target.run(args)
+    if cmd == "capture-target-objects":
+        from .commands import target_prep
+        return target_prep.run_capture(args)
+    if cmd == "pre-load-drop":
+        from .commands import target_prep
+        return target_prep.run_drop(args)
+    if cmd == "post-load-restore":
+        from .commands import target_prep
+        return target_prep.run_restore(args)
     if cmd == "convert-schema":
         from .commands import convert_schema
         return convert_schema.run(args)

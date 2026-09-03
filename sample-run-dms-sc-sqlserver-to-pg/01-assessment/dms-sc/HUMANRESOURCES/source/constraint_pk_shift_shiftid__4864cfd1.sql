@@ -1,0 +1,2 @@
+ALTER TABLE [HumanResources].[Shift]
+ADD CONSTRAINT [PK_Shift_ShiftID] PRIMARY KEY CLUSTERED ([ShiftID]);

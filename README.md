@@ -29,6 +29,81 @@ client tools), then drives the migration through four phases. You approve at eac
 The entry point is the `db-migration-orchestrator` skill, which runs the intake interview
 and routes between phases.
 
+## Alternative start: continue from an existing AWS DMS Schema Conversion (DMS SC)
+
+Sometimes the customer has **already run AWS DMS Schema Conversion**, applied the converted
+schema to the target, and just needs to *continue* — the conversion is rarely 100% clean, so
+DMS SC leaves *action items* on some objects. Instead of converting from scratch, point the
+framework at the **local DMS SC project folder** and it will import, triage, and continue.
+
+`dbmig import-dms-sc` parses the DMS SC project (engine- and schema-generic) and classifies
+every object into three dispositions:
+
+| Disposition | Meaning | What happens |
+|---|---|---|
+| **ACCEPT** | no action items | keep the DMS SC conversion as-is |
+| **VERIFY** | `5444` ML/GenAI or LOW/MEDIUM advisories | keep, but **prove** it (equivalence tests); tracked in a ledger so it is not re-verified |
+| **MANUAL** | CRITICAL/HIGH or "convert manually" | reconvert via the construction skill |
+
+Because DMS SC already applied the schema, the toolkit also **reconciles against the live
+target** and **prepares it for the data load** (drop load-hostile secondary objects, load,
+recreate — keeping primary/unique keys):
+
+```bash
+python -m dbmig import-dms-sc         --dms-sc-dir <PATH> --project <P>   # import + triage (ACCEPT/VERIFY/MANUAL)
+python -m dbmig diff-target           --schema <S> --project <P>         # reconcile vs LIVE target (MATCH/MISSING/UNMATCHED/EXTRA)
+python -m dbmig capture-target-objects --schema <S> --project <P>        # snapshot FKs/indexes/triggers -> drop/restore scripts
+python -m dbmig pre-load-drop         --schema <S> --project <P> --apply # before the data load
+#   … load data (dbmig migrate-data, or an AWS DMS task) …
+python -m dbmig post-load-restore     --schema <S> --project <P> --apply # after the data load; reconciles
+python -m dbmig verify                --schema <S> --project <P>         # list/record VERIFY sign-off
+```
+
+Each run refreshes a human-readable, phase-aligned **`migrations/<project>/migration-report.md`**
+so anyone can see what has been done and what to be aware of. This path is driven by the
+`db-migration-dms-sc-ingest` skill (reached from the orchestrator's intake). See
+**[docs/dms-sc-import-design.md](docs/dms-sc-import-design.md)**.
+
+### Getting the DMS SC project onto your machine (copy from S3)
+
+DMS Schema Conversion keeps the project files (the `s-*/` source tree, `t-*/` target tree,
+`action-items/`, and `apply-result/`) in the **S3 bucket associated with the DMS SC instance
+profile**, under a prefix named after your migration project. Copy that prefix to a local
+folder (skip the `.zip`/`.pdf` report exports) and point `import-dms-sc` at it:
+
+```bash
+# find the bucket + your project prefix
+aws s3 ls s3://<your-dms-sc-bucket>/
+
+# copy the project locally (exclude the report exports)
+aws s3 cp s3://<your-dms-sc-bucket>/<migration-project-name>/ ./dms-sc-project/ \
+  --recursive --exclude "*.zip" --exclude "*.pdf"
+
+python -m dbmig import-dms-sc --dms-sc-dir ./dms-sc-project --project <P>
+```
+
+The framework reads the local folder only — it does not call the DMS API — so you fully
+control what is imported. Re-copy after a fresh DMS SC *apply* to refresh `apply-result/`.
+
+### Sample prompts
+
+**Fresh migration (you have NOT used DMS SC)** — start from the source database and let the
+framework convert:
+
+- *"Start a database migration from Oracle to PostgreSQL."*
+- *"Migrate my SQL Server database to Aurora MySQL."*
+- *"Convert my Oracle schema `APP` to PostgreSQL and validate it."*
+
+**Continue from an existing DMS SC conversion (you HAVE used DMS SC and applied it)** — point
+the framework at the local project folder you copied from S3:
+
+- *"I already ran AWS DMS Schema Conversion and applied it to the target. Import my DMS SC
+  project at `./dms-sc-project` and continue."*
+- *"Continue from an existing DMS SC conversion — the project folder is at `~/dms/adventureworks`;
+  triage it, reconcile against the live target, and prepare it for the data load."*
+- *"Import the DMS SC project in `./dms-sc-project`, show me the ACCEPT/VERIFY/MANUAL triage,
+  then diff it against the live target."*
+
 ## Optional: application modernization (separate, opt-in module)
 
 After a database migration, the **application** still speaks the old dialect — embedded SQL,
@@ -149,6 +224,7 @@ dbmig-aidlc/
 │   ├── db-migration-construction/       # schema + PL/SQL conversion
 │   ├── db-migration-validation/         # data load + equivalence testing
 │   ├── db-migration-operations/         # cutover, rollback, monitoring
+│   ├── db-migration-dms-sc-ingest/      # ALT entry: import an existing AWS DMS SC project
 │   ├── app-modernization-orchestrator/  # OPTIONAL app-code module — entry (opt-in, gated)
 │   ├── app-modernization-inception/     #   Inception: scan + classify impacted app sites
 │   ├── app-modernization-construction/  #   Construction: apply approved edits + mirrored backups
@@ -168,17 +244,20 @@ dbmig-aidlc/
 │   └── requirements.txt                 # pyyaml, oracledb, psycopg[binary], pymysql, python-tds
 ├── guides/                              # step-by-step guides, one per engine pair
 ├── templates/                           # connections + migration-config examples
-├── sample-run-oracle-to-pg/             # a complete real run, captured end-to-end (example)
-├── sample-run-sqlserver-to-pg/          # a second real run — SQL Server, two schemas, one project
+├── sample-run-oracle-to-pg/             # sample run 1: converted purely by dbmig-aidlc (Oracle DEMO)
+├── sample-run-dms-sc-sqlserver-to-pg/   # sample run 2: CONTINUE from AWS DMS SC output (SQL Server AdventureWorks)
 └── migrations/                          # per-run workspaces (git-ignored; holds artifacts)
 ```
 
-Two complete, real runs are archived for reference:
-**[sample-run-oracle-to-pg/](sample-run-oracle-to-pg/)** (an Oracle `DEMO` schema) and
-**[sample-run-sqlserver-to-pg/](sample-run-sqlserver-to-pg/)** (AdventureWorks `Person` +
-`Sales` — 32 tables / ~395k rows / 6 views migrated under a single project using schema-scoped
-manifests). Each holds every phase's artifacts (inventory, converted DDL/code, manifests,
-apply/reconcile reports) so you can see the workflow's output without database access.
+Two complete, real runs are archived for reference — one per entry path:
+**[sample-run-oracle-to-pg/](sample-run-oracle-to-pg/)** — a migration **converted purely by
+dbmig-aidlc** from the source (an Oracle `DEMO` schema, all four AI-DLC phases); and
+**[sample-run-dms-sc-sqlserver-to-pg/](sample-run-dms-sc-sqlserver-to-pg/)** — a run that
+**starts from AWS DMS Schema Conversion output** and works forward (SQL Server
+`AdventureWorks` `Person` + `HumanResources`: import → ACCEPT/VERIFY/MANUAL triage →
+`diff-target` reconciliation → secondary-object capture → VERIFY sign-off). Both are masked
+(no real hosts/credentials) and hold each phase's artifacts so you can see the workflow's
+output without database access.
 
 ## Getting started
 

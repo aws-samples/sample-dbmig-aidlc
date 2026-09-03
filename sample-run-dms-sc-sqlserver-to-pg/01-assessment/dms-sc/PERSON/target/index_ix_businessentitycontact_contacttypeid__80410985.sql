@@ -1,0 +1,3 @@
+CREATE INDEX ix_businessentitycontact_ix_businessentitycontact_contacttypeid
+ON person.businessentitycontact
+USING BTREE (contacttypeid ASC);

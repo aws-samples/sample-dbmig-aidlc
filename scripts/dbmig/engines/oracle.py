@@ -496,7 +496,8 @@ class OracleEngine(SourceEngine):
     def table_columns(self, schema, table):
         return table_columns(self.connection, schema, table)
 
-    def chunk_iterator(self, schema, table, pk_cols, batch_size):
+    def chunk_iterator(self, schema, table, pk_cols, batch_size,
+                       pk_lo=None, pk_hi=None):
         # Identifiers are interpolated (not bound), so validate them. Oracle is
         # case-insensitive for unquoted names, so schema/table stay unquoted to
         # preserve the catalog's folding behavior.
@@ -506,19 +507,33 @@ class OracleEngine(SourceEngine):
         base = f"SELECT {col_list} FROM {schema}.{table}"  # nosec B608
         if len(pk_cols) == 1:
             pk = pk_cols[0]
-            lo = self.scalar(f'SELECT MIN("{pk}") FROM {schema}.{table}')  # nosec B608
-            hi = self.scalar(f'SELECT MAX("{pk}") FROM {schema}.{table}')  # nosec B608
+            # A shard passes its own [pk_lo, pk_hi); otherwise cover the whole table.
+            if pk_lo is not None and pk_hi is not None:
+                lo, hi = pk_lo, pk_hi - 1  # hi is exclusive upstream; make inclusive
+            else:
+                lo = self.scalar(f'SELECT MIN("{pk}") FROM {schema}.{table}')  # nosec B608
+                hi = self.scalar(f'SELECT MAX("{pk}") FROM {schema}.{table}')  # nosec B608
             if isinstance(lo, _Number) and isinstance(hi, _Number) and hi >= lo:
                 lo_i, hi_i = int(lo), int(hi)
+                upper_excl = hi_i + 1  # exclusive end of this reader's range
                 step = max(1, int(batch_size))
                 cur = lo_i
-                while cur <= hi_i:
+                while cur < upper_excl:
+                    nxt = min(cur + step, upper_excl)  # clamp so shards never overlap
                     yield (f'{base} WHERE "{pk}" >= :lo AND "{pk}" < :hi '
-                           f'ORDER BY "{pk}"', {"lo": cur, "hi": cur + step})
-                    cur += step
+                           f'ORDER BY "{pk}"', {"lo": cur, "hi": nxt})
+                    cur = nxt
                 return
         # Fallback: a single full-table chunk (non-numeric / composite / no PK).
         yield (base, {})
+
+    def numeric_pk_bounds(self, schema, table, pk):
+        assert_identifier(schema, table, pk)
+        lo = self.scalar(f'SELECT MIN("{pk}") FROM {schema}.{table}')  # nosec B608
+        hi = self.scalar(f'SELECT MAX("{pk}") FROM {schema}.{table}')  # nosec B608
+        if isinstance(lo, _Number) and isinstance(hi, _Number) and hi >= lo:
+            return int(lo), int(hi)
+        return None
 
     def inventory(self, schema):
         return inventory(self.connection, schema)

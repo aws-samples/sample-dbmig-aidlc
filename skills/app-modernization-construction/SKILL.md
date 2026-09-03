@@ -63,6 +63,12 @@ Convert in this order so the build fails for one reason at a time:
 
 ## How to convert
 
+- **Customer-specific app knowledge wins — highest precedence.** Read every `*.md` in
+  `engines/<pair>/app/customer-specific/` (except `_index.md`) FIRST and treat it as the
+  top authority; where it conflicts with the generic `app-sql-rules.md`/`app-config.yaml`,
+  the customer file wins (rules there are marked "Override:"). This folder holds the
+  customer's frameworks, datasource config, embedded-SQL conventions, error-code mappings
+  and forbidden patterns.
 - Apply the pair's `app-sql-rules.md` for dialect and behavioural rules, and `app-config.yaml`
   for driver/dialect/error/identity facts.
 - **The migration's own decisions win.** Where `app-contract.md` records what this migration

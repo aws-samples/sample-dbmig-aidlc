@@ -1,0 +1,2 @@
+ALTER TABLE humanresources.employee
+ADD CONSTRAINT pk_employee_businessentityid_1678629023 PRIMARY KEY (businessentityid);

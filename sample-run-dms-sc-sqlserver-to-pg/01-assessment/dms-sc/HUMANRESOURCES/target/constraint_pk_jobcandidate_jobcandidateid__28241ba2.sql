@@ -1,0 +1,2 @@
+ALTER TABLE humanresources.jobcandidate
+ADD CONSTRAINT pk_jobcandidate_jobcandidateid_1742629251 PRIMARY KEY (jobcandidateid);

@@ -1,0 +1,3 @@
+CREATE INDEX ix_employee_ix_employee_organizationlevel_organizationnode
+ON humanresources.employee
+USING BTREE (organizationlevel ASC, organizationnode ASC);

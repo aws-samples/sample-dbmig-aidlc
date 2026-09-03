@@ -1,0 +1,2 @@
+ALTER TABLE humanresources.employeedepartmenthistory
+ADD CONSTRAINT pk_employeedepartmenthistory_businessentityid_startdat$97d1afc2_1694629080 PRIMARY KEY (businessentityid, startdate, departmentid, shiftid);

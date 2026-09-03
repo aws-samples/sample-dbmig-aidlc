@@ -328,7 +328,8 @@ class SQLServerEngine(SourceEngine):
         except Exception:
             return [], []
 
-    def chunk_iterator(self, schema, table, pk_cols, batch_size):
+    def chunk_iterator(self, schema, table, pk_cols, batch_size,
+                       pk_lo=None, pk_hi=None):
         assert_identifier(schema, table, *pk_cols)
         typed = self.table_columns(schema, table)
         # Convert hierarchyid/geography/geometry to portable text at read time so
@@ -337,18 +338,31 @@ class SQLServerEngine(SourceEngine):
         base = f"SELECT {col_list} FROM {_q(schema)}.{_q(table)}"  # nosec B608
         if len(pk_cols) == 1:
             pk = pk_cols[0]
-            lo = self.scalar(f"SELECT MIN({_q(pk)}) FROM {_q(schema)}.{_q(table)}")  # nosec B608
-            hi = self.scalar(f"SELECT MAX({_q(pk)}) FROM {_q(schema)}.{_q(table)}")  # nosec B608
+            if pk_lo is not None and pk_hi is not None:
+                lo, hi = pk_lo, pk_hi - 1
+            else:
+                lo = self.scalar(f"SELECT MIN({_q(pk)}) FROM {_q(schema)}.{_q(table)}")  # nosec B608
+                hi = self.scalar(f"SELECT MAX({_q(pk)}) FROM {_q(schema)}.{_q(table)}")  # nosec B608
             if isinstance(lo, Number) and isinstance(hi, Number) and hi >= lo:
                 lo_i, hi_i = int(lo), int(hi)
+                upper_excl = hi_i + 1  # exclusive end of this reader's range
                 step = max(1, int(batch_size))
                 cur = lo_i
-                while cur <= hi_i:
-                    yield (f"{base} WHERE {_q(pk)} >= {cur} AND {_q(pk)} < {cur + step} "
+                while cur < upper_excl:
+                    nxt = min(cur + step, upper_excl)  # clamp so shards never overlap
+                    yield (f"{base} WHERE {_q(pk)} >= {cur} AND {_q(pk)} < {nxt} "
                            f"ORDER BY {_q(pk)}", {})
-                    cur += step
+                    cur = nxt
                 return
         yield (base, {})
+
+    def numeric_pk_bounds(self, schema, table, pk):
+        assert_identifier(schema, table, pk)
+        lo = self.scalar(f"SELECT MIN({_q(pk)}) FROM {_q(schema)}.{_q(table)}")  # nosec B608
+        hi = self.scalar(f"SELECT MAX({_q(pk)}) FROM {_q(schema)}.{_q(table)}")  # nosec B608
+        if isinstance(lo, Number) and isinstance(hi, Number) and hi >= lo:
+            return int(lo), int(hi)
+        return None
 
     # ---- aggregate / inventory -------------------------------------------
     def count_rows(self, schema: str, table: str) -> int:

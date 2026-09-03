@@ -1,0 +1,2 @@
+ALTER TABLE person.emailaddress
+ADD CONSTRAINT pk_emailaddress_businessentityid_emailaddressid_1662628966 PRIMARY KEY (businessentityid, emailaddressid);

@@ -1,0 +1,3 @@
+CREATE UNIQUE INDEX ix_businessentitycontact_ak_businessentitycontact_rowguid
+ON person.businessentitycontact
+USING BTREE (rowguid ASC);

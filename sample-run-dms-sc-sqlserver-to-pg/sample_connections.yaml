@@ -1,0 +1,26 @@
+# Sample connection file for the DMS SC *continuation* sample run
+# (SQL Server -> Aurora PostgreSQL). Illustrative only — secrets are referenced via
+# ${ENV_VAR}; never commit real hosts/usernames/passwords.
+#
+# In the DMS SC continuation path the target schema has ALREADY been applied by AWS DMS
+# Schema Conversion, so the target connection points at that live database (the one the
+# framework reconciles against with `diff-target`).
+
+source:
+  engine: sqlserver
+  version: "2019"
+  host: ${MSSQL_HOST}
+  port: 1433
+  database: ${MSSQL_DATABASE}     # e.g. AdventureWorks
+  username: ${MSSQL_USER}
+  password: ${MSSQL_PASSWORD}
+
+target:
+  engine: postgresql              # Aurora PostgreSQL (schema already applied by DMS SC)
+  version: "17"
+  host: ${PG_HOST}
+  port: 5432
+  database: ${PG_DATABASE}
+  username: ${PG_USER}
+  password: ${PG_PASSWORD}
+  sslmode: require
