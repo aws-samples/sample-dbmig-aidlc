@@ -45,6 +45,92 @@ def build_setval_max_sql(schema: str, table: str, col: str) -> str:
     return f'SELECT setval(%s, COALESCE((SELECT MAX({_quote_ident(col)}) FROM {_qualified(schema, table)}), 1))'  # nosec B608
 
 
+# ---- FDW push-down builders ----------------------------------------------
+# These build the DDL for the ``migrate-data --method fdw`` path: the target
+# PostgreSQL reads directly from the source through a foreign data wrapper
+# (oracle_fdw / tds_fdw), so bulk data moves source->target server-side and the
+# toolkit only issues control SQL. Identifiers are quoted; OPTION *values*
+# (including the source password) are escaped as SQL string literals. OPTION keys
+# and the wrapper/extension name come only from trusted engine code but are
+# validated defensively against a strict allowlist.
+
+import re as _re  # noqa: E402
+
+_FDW_NAME_RE = _re.compile(r"^[a-z_][a-z0-9_]*$")
+
+
+def _assert_fdw_name(name: str) -> None:
+    """Validate an unquoted SQL name used verbatim (extension / option key)."""
+    if not name or not _FDW_NAME_RE.match(name):
+        raise ValueError(f"unsafe FDW identifier: {name!r}")
+
+
+def _fdw_opt_literal(value) -> str:
+    """A single-quoted SQL string literal for an FDW OPTION value (doubling quotes)."""
+    return "'" + str(value).replace("'", "''") + "'"
+
+
+def _fdw_options_clause(options) -> str:
+    parts = []
+    for k, v in options.items():
+        _assert_fdw_name(str(k))
+        parts.append(f"{k} {_fdw_opt_literal(v)}")
+    return ", ".join(parts)
+
+
+def build_create_extension_sql(wrapper: str) -> str:
+    _assert_fdw_name(wrapper)
+    return f"CREATE EXTENSION IF NOT EXISTS {wrapper}"  # nosec B608
+
+
+def build_create_server_sql(server: str, wrapper: str, options) -> str:
+    _assert_fdw_name(wrapper)
+    return (f"CREATE SERVER {_quote_ident(server)} "  # nosec B608
+            f"FOREIGN DATA WRAPPER {wrapper} OPTIONS ({_fdw_options_clause(options)})")
+
+
+def build_create_user_mapping_sql(server: str, options) -> str:
+    return (f"CREATE USER MAPPING FOR CURRENT_USER "  # nosec B608
+            f"SERVER {_quote_ident(server)} OPTIONS ({_fdw_options_clause(options)})")
+
+
+def build_create_foreign_table_sql(stage: str, ftname: str,
+                                   columns, server: str, options) -> str:
+    """``columns`` is a sequence of (name, type_sql); ``type_sql`` comes from the
+    target catalog's ``format_type`` (a valid, re-parseable PG type string)."""
+    col_defs = ", ".join(f"{_quote_ident(n)} {t}" for n, t in columns)
+    return (f"CREATE FOREIGN TABLE {_qualified(stage, ftname)} ({col_defs}) "  # nosec B608
+            f"SERVER {_quote_ident(server)} OPTIONS ({_fdw_options_clause(options)})")
+
+
+def build_fdw_insert_select_sql(tgt_schema: str, tgt_table: str, insert_cols,
+                                stage: str, ftname: str, select_exprs,
+                                pk: Optional[str] = None,
+                                lo: Optional[int] = None,
+                                hi: Optional[int] = None) -> str:
+    """INSERT INTO <target> (insert_cols) SELECT select_exprs FROM <stage.ft> [WHERE
+    pk range]. ``insert_cols`` are target column names (quoted here); ``select_exprs``
+    are ready SQL expressions over the foreign table's (source-named) columns, aligned
+    by position — usually the quoted column name, or a ``CAST(...)`` where the wrapper
+    needs a target-side conversion. PK-range bounds are integers (from
+    ``numeric_pk_bounds``) inlined as literals so the wrapper pushes the predicate down
+    to the source for each shard."""
+    ins = ", ".join(_quote_ident(c) for c in insert_cols)
+    sel = ", ".join(select_exprs)
+    sql = (f"INSERT INTO {_qualified(tgt_schema, tgt_table)} ({ins}) "  # nosec B608
+           f"SELECT {sel} FROM {_qualified(stage, ftname)}")
+    if pk is not None and lo is not None and hi is not None:
+        sql += (f" WHERE {_quote_ident(pk)} >= {int(lo)} "
+                f"AND {_quote_ident(pk)} < {int(hi)}")
+    return sql
+
+
+def build_fdw_delete_range_sql(schema: str, table: str, pk: str,
+                               lo: int, hi: int) -> str:
+    return (f"DELETE FROM {_qualified(schema, table)} "  # nosec B608
+            f"WHERE {_quote_ident(pk)} >= {int(lo)} AND {_quote_ident(pk)} < {int(hi)}")
+
+
 def server_version(conn) -> str:
     with conn.cursor() as cur:
         cur.execute("SHOW server_version")
@@ -128,6 +214,10 @@ from .base import TargetEngine  # noqa: E402
 class PostgreSQLEngine(TargetEngine):
     """PostgreSQL / Aurora PostgreSQL target adapter (psycopg v3)."""
 
+    # PostgreSQL can pull directly from Oracle/SQL Server via oracle_fdw/tds_fdw,
+    # so ``migrate-data --method fdw`` is available for this target.
+    fdw_capable = True
+
     def connect(self):
         return _connections.db_connect(self.model)
 
@@ -179,6 +269,80 @@ class PostgreSQLEngine(TargetEngine):
                 seq = row[0] if row else None
                 if seq:
                     cur.execute(build_setval_max_sql(schema, table, c), (seq,))
+        conn.commit()
+
+    # ---- FDW push-down load (target reads source directly) -----------------
+
+    def target_column_types(self, schema, table):
+        """Return [(column_name, type_sql)] for the target table in ordinal order,
+        where ``type_sql`` is ``format_type`` output — a valid, re-parseable PG type
+        string (e.g. ``numeric(10,2)``, ``character varying(50)``, ``demo.myenum``).
+        Used to declare the FDW foreign table with the exact target column types so
+        the server-side ``INSERT ... SELECT`` lands values as the converted schema
+        expects. Empty if the table does not exist."""
+        _, rows = self.fetch(
+            "SELECT a.attname, format_type(a.atttypid, a.atttypmod) "
+            "FROM pg_attribute a "
+            "JOIN pg_class c ON c.oid = a.attrelid "
+            "JOIN pg_namespace n ON n.oid = c.relnamespace "
+            "WHERE n.nspname = %s AND c.relname = %s "
+            "AND a.attnum > 0 AND NOT a.attisdropped "
+            "ORDER BY a.attnum", (schema, table))
+        return [(str(r[0]), str(r[1])) for r in rows]
+
+    def fdw_setup_server(self, wrapper, server, server_options, user_mapping_options):
+        """Create the extension (if needed), (re)create the foreign server and the
+        current user's user mapping. Drops any pre-existing server of the same name
+        first so a re-run refreshes the options cleanly."""
+        conn = self.connection
+        with conn.cursor() as cur:
+            cur.execute(build_create_extension_sql(wrapper))
+            cur.execute(f"DROP SERVER IF EXISTS {_quote_ident(server)} CASCADE")  # nosec B608
+            cur.execute(build_create_server_sql(server, wrapper, server_options))
+            cur.execute(build_create_user_mapping_sql(server, user_mapping_options))
+        conn.commit()
+
+    def fdw_create_stage_schema(self, stage):
+        with self.connection.cursor() as cur:
+            cur.execute(build_create_schema_sql(stage))
+        self.connection.commit()
+
+    def fdw_create_foreign_table(self, stage, ftname, columns, server, options):
+        conn = self.connection
+        with conn.cursor() as cur:
+            cur.execute(f"DROP FOREIGN TABLE IF EXISTS {_qualified(stage, ftname)}")  # nosec B608
+            cur.execute(build_create_foreign_table_sql(stage, ftname, columns,
+                                                       server, options))
+        conn.commit()
+
+    def fdw_insert_select(self, tgt_schema, tgt_table, insert_cols, stage, ftname,
+                          select_exprs, pk=None, lo=None, hi=None):
+        """Run the server-side INSERT ... SELECT from the foreign table into the
+        target and return the number of rows inserted."""
+        sql = build_fdw_insert_select_sql(tgt_schema, tgt_table, insert_cols,
+                                          stage, ftname, select_exprs, pk, lo, hi)
+        conn = self.connection
+        with conn.cursor() as cur:
+            cur.execute(sql)
+            n = cur.rowcount
+        conn.commit()
+        return int(n if n is not None and n >= 0 else 0)
+
+    def fdw_delete_range(self, schema, table, pk, lo, hi):
+        conn = self.connection
+        with conn.cursor() as cur:
+            cur.execute(build_fdw_delete_range_sql(schema, table, pk, lo, hi))
+        conn.commit()
+
+    def fdw_cleanup(self, server, stage):
+        """Remove the FDW objects created for a load: the server (CASCADE, which
+        drops the user mapping and all foreign tables) and the staging schema. This
+        also removes the source credentials stored in the user mapping."""
+        conn = self.connection
+        with conn.cursor() as cur:
+            cur.execute(f"DROP SERVER IF EXISTS {_quote_ident(server)} CASCADE")  # nosec B608
+            if stage:
+                cur.execute(f"DROP SCHEMA IF EXISTS {_quote_ident(stage)} CASCADE")  # nosec B608
         conn.commit()
 
     # ---- live target introspection (for diff-target / capture) --------------

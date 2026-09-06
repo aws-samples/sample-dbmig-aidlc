@@ -65,6 +65,16 @@ testing:
   # framework -> dbmig migrate-data does a one-time load (dev/test)
   # dms       -> user runs AWS DMS externally; dbmig only tests what's loaded
   data_load: framework
+  # HOW the framework moves data (ignored when data_load: dms):
+  #   toolkit (default) -> pull rows through the host running dbmig, then COPY into
+  #                        the target.
+  #   fdw               -> the target PostgreSQL reads directly from the source via
+  #                        a foreign data wrapper (oracle_fdw / tds_fdw) — data moves
+  #                        source->target server-side (cloud-to-cloud). Best when the
+  #                        toolkit host is on-prem across a slow VPN. PostgreSQL
+  #                        target only (MySQL has no heterogeneous FDW).
+  # Override per run with `migrate-data --method {toolkit,fdw}`.
+  data_method: toolkit
   data_volume: sample          # full | sample
   sample_rows_per_table: 1000
   equivalence:

@@ -14,6 +14,14 @@ drivers change.
 | `sqlserver-to-postgresql` | SQL Server → PostgreSQL (Aurora PostgreSQL compatible) | [sqlserver-to-postgresql.md](sqlserver-to-postgresql.md) | Available |
 | `sqlserver-to-mysql` | SQL Server → MySQL (Aurora MySQL compatible) | [sqlserver-to-mysql.md](sqlserver-to-mysql.md) | Available |
 
+## Cross-cutting guides
+
+Not specific to one engine pair:
+
+| Topic | Guide |
+|---|---|
+| Creating the **source read-only** and **target read-write** users, the privileges each needs, and the **extra permissions for the PostgreSQL FDW method** | [database-users-and-permissions.md](database-users-and-permissions.md) |
+
 ## Adding a guide for a new engine pair
 
 The dbmig package uses a thin **engine adapter** pattern (`scripts/dbmig/engines/base.py`

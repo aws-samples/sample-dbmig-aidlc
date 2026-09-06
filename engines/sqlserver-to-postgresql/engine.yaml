@@ -29,6 +29,11 @@ target:
   ping_sql: "SELECT 1"
   ingestion: COPY protocol (psycopg cursor.copy)
   catalog: information_schema / pg_catalog
+  # Cloud-to-cloud push-down load: the target can read the source directly via a
+  # foreign data wrapper, so `migrate-data --method fdw` moves data server-side
+  # (source->target) instead of through the dbmig host. Ideal when dbmig runs
+  # on-prem across a slow VPN. Requires the extension on the target (rds_superuser).
+  fdw_wrapper: tds_fdw        # CREATE EXTENSION tds_fdw (RDS/Aurora PostgreSQL)
 
 conversion:
   mode: llm
@@ -48,6 +53,7 @@ commands:
   convert_code:    "python -m dbmig convert-code --schema <SCHEMA> --project <PROJECT>"
   apply_schema:    "python -m dbmig apply-schema --schema <SCHEMA> --project <PROJECT>"
   migrate_data:    "python -m dbmig migrate-data --schema <SCHEMA> --workers 8 --project <PROJECT>"
+  migrate_data_fdw: "python -m dbmig migrate-data --schema <SCHEMA> --method fdw --shards 16 --workers 16 --project <PROJECT>"
   gen_tests:       "python -m dbmig gen-tests --schema <SCHEMA> --project <PROJECT>"
   run_tests:       "python -m dbmig run-tests --schema <SCHEMA> --project <PROJECT>"
   compare:         "python -m dbmig compare --schema <SCHEMA> --project <PROJECT>"

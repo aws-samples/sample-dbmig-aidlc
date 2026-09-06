@@ -110,6 +110,13 @@ def build_parser() -> argparse.ArgumentParser:
     # migrate-data
     p = sub.add_parser("migrate-data", help="parallel data copy with COPY + resume")
     _add_common(p, tables=True)
+    p.add_argument("--method", choices=["toolkit", "fdw"], default=None,
+                   help="data-movement method: 'toolkit' (default) pulls rows through "
+                        "this host and COPYs into the target; 'fdw' makes the target "
+                        "PostgreSQL read directly from the source via oracle_fdw/tds_fdw "
+                        "(cloud-to-cloud, best when the toolkit host is on a slow VPN; "
+                        "PostgreSQL target only). Overrides testing.data_method in "
+                        "migration-config.")
     p.add_argument("--exclude", default=None,
                    help="comma-separated tables to skip (e.g. ones needing custom "
                         "read-time conversion); applied after --tables")
@@ -117,7 +124,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="max concurrent work units (default 4). Each unit is a table or "
                         "a table's PK shard and opens its own source+target connections")
     p.add_argument("--batch-size", type=int, default=50000,
-                   help="rows per COPY batch (default 50000)")
+                   help="rows per COPY batch (default 50000); toolkit method only")
     p.add_argument("--shards", type=int, default=1,
                    help="split each large single-numeric-PK table into N disjoint PK-range "
                         "readers (default 1 = no intra-table split). Lets one big table be "
@@ -125,9 +132,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--mode-parallel", dest="mode_parallel",
                    choices=["process", "thread"], default="process",
                    help="'process' (default) gives each unit its own core/GIL for real "
-                        "parallel throughput; 'thread' is the legacy GIL-bound pool")
+                        "parallel throughput; 'thread' is the legacy GIL-bound pool "
+                        "(toolkit method only; fdw always uses threads)")
     p.add_argument("--truncate", action="store_true",
                    help="truncate non-resumable target tables before copy")
+    p.add_argument("--fdw-keep", dest="fdw_keep", action="store_true",
+                   help="(--method fdw) keep the FDW server/user-mapping/foreign-tables "
+                        "after the load instead of dropping them. NOTE: the user mapping "
+                        "stores the SOURCE credentials on the target — remove them later "
+                        "with --fdw-cleanup. Default: drop after load.")
+    p.add_argument("--fdw-cleanup", dest="fdw_cleanup", action="store_true",
+                   help="(--method fdw) drop the FDW server (CASCADE) and staging schema "
+                        "for --schema, then exit without loading (tidy up a --fdw-keep run)")
 
     # compare
     p = sub.add_parser("compare", help="reconcile source vs target row counts")

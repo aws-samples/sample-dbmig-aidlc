@@ -553,3 +553,30 @@ class OracleEngine(SourceEngine):
 
     def package_routines(self, schema):
         return package_routines(self.connection, schema)
+
+    # ---- FDW push-down descriptor (oracle_fdw) ----------------------------
+    def fdw_wrapper(self):
+        return "oracle_fdw"
+
+    def fdw_server_options(self):
+        """``dbserver`` connect string for oracle_fdw. EZConnect ``//host:port/service``
+        when a service name is configured; otherwise a full TNS DESCRIPTOR carrying
+        the SID (EZConnect cannot express a SID)."""
+        m = self.model
+        host = m.host
+        port = int(m.port or 1521)
+        if m.service_name:
+            dbserver = f"//{host}:{port}/{m.service_name}"
+        elif m.sid:
+            dbserver = (f"(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST={host})(PORT={port}))"
+                        f"(CONNECT_DATA=(SID={m.sid})))")
+        else:
+            dbserver = f"//{host}:{port}"
+        return {"dbserver": dbserver}
+
+    def fdw_user_mapping_options(self):
+        return {"user": self.model.username, "password": self.model.password}
+
+    def fdw_foreign_table_options(self, schema, table):
+        # oracle_fdw addresses the remote table by Oracle's (uppercase) catalog names.
+        return {"schema": schema.upper(), "table": table.upper()}

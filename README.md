@@ -13,6 +13,16 @@ additional pairs are added by composing existing source/target adapters (or addi
 an `engines/<pair>/` definition + a playbook — with no changes to the orchestration, CLI, or
 data-movement code.
 
+> ⚠️ **Non-production use, and AI-generated output.** This toolkit is designed for
+> **development, test, and proof-of-concept** migrations — not production. Its data mover is a
+> dev/test loader (production data movement hands off to AWS DMS), and every artifact it
+> produces — the conversion, the equivalence tests, and especially the **Operations guides
+> (cutover runbook, rollback plan, monitoring checklist)** — is **AI-generated from your
+> migration's context and is a starting point, not an authoritative runbook.** You are
+> responsible for reviewing, adapting, and validating everything against your own environment,
+> and testing it in a non-production environment, before relying on it. See
+> [DISCLAIMER.txt](DISCLAIMER.txt).
+
 ## What it does
 
 When you start a migration, the framework interviews you (source/target engines,
@@ -185,6 +195,10 @@ python -m dbmig apply-schema    --schema APP --project myproject --code
 
 # 5) Migrate data (parallel COPY workers, PK-chunked, resumable)
 python -m dbmig migrate-data    --schema APP --workers 8 --project myproject
+#    cloud-to-cloud fast path (PostgreSQL target): let the target read directly from
+#    the source via a foreign data wrapper (oracle_fdw / tds_fdw) instead of pulling
+#    every row through this host — ideal when dbmig runs on-prem across a slow VPN:
+#      python -m dbmig migrate-data --schema APP --method fdw --shards 16 --workers 16 --project myproject
 
 # 6) Apply deferred foreign keys + triggers, now that the data is loaded
 python -m dbmig apply-schema    --schema APP --project myproject --post-data
@@ -213,6 +227,14 @@ reference, and troubleshooting — see:
 - **[guides/sqlserver-to-postgresql.md](guides/sqlserver-to-postgresql.md)** — SQL Server → PostgreSQL
 - **[guides/sqlserver-to-mysql.md](guides/sqlserver-to-mysql.md)** — SQL Server → MySQL
 - **[guides/README.md](guides/README.md)** — index of all engine-pair guides
+
+Cross-cutting (not pair-specific):
+
+- **[guides/database-users-and-permissions.md](guides/database-users-and-permissions.md)** —
+  how to create a least-privilege **read-only source user** and a **read-write target user**,
+  the exact privileges each engine needs, and the **extra permissions for the PostgreSQL FDW
+  method** (includes a warning that a read-only user which can execute data-modifying
+  procedures/functions can still change data).
 
 ## Repository layout
 

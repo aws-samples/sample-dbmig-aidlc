@@ -237,7 +237,31 @@ def _plan_units(source, target, schema: str, table: str, shards: int, batch_size
 
 # ---- command --------------------------------------------------------------
 
+def _resolve_method(args) -> str:
+    """Data-movement method: CLI --method, else migration-config testing.data_method,
+    else 'toolkit'. Only 'toolkit' and 'fdw' are valid."""
+    m = (getattr(args, "method", None) or "").strip().lower()
+    if not m:
+        try:
+            m = str(((config.load_migration_config().get("testing") or {})
+                     .get("data_method") or "")).strip().lower()
+        except Exception:
+            m = ""
+    return m or "toolkit"
+
+
 def run(args) -> int:
+    # Delegate to the FDW push-down loader when selected (server-side load; the
+    # target PostgreSQL reads directly from the source). Everything else below is
+    # the default 'toolkit' method (pull rows through this host, COPY into target).
+    method = _resolve_method(args)
+    if method == "fdw":
+        from . import migrate_data_fdw
+        return migrate_data_fdw.run(args)
+    if method != "toolkit":
+        console.err(f"unknown data method '{method}' (expected 'toolkit' or 'fdw')")
+        return 2
+
     try:
         pair = load_pair()
         engines.get_source_engine(pair)

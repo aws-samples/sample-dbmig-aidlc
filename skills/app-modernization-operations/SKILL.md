@@ -24,6 +24,11 @@ app-side half of that contract.
 
 ## Write `04-operations/app-cutover.md` covering
 
+> **Required:** `app-cutover.md` **MUST begin, verbatim, with the AI-generated disclaimer block
+> defined in `db-migration-operations` ("Required disclaimer on every generated artifact") —**
+> it is an AI-generated plan for a high-risk production action and the human operator owns
+> validating it. Do not omit it.
+
 1. **Deploy artifact + configuration** — which build/tag carries the converted code, and the
    target connection configuration. Secrets by reference (environment variable / secrets manager),
    never inline; name the variable the config now expects (e.g. `DB_PASSWORD`).

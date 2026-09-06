@@ -438,3 +438,46 @@ class SQLServerEngine(SourceEngine):
             {"type": t, "name": n} for t, n in self.list_callables(schema)]
         result["cross_schema_dependencies"] = self.cross_schema_dependencies(schema)
         return result
+
+    # ---- FDW push-down descriptor (tds_fdw) -------------------------------
+    def fdw_wrapper(self):
+        return "tds_fdw"
+
+    def fdw_server_options(self):
+        m = self.model
+        opts = {"servername": m.host, "port": str(int(m.port or 1433)),
+                # 'blackhole' silences remote informational messages that would
+                # otherwise surface as PostgreSQL notices during the scan.
+                "msg_handler": "blackhole"}
+        if m.database:
+            opts["database"] = m.database
+        return opts
+
+    def fdw_user_mapping_options(self):
+        # tds_fdw's user-mapping option is 'username' (NOT 'user', unlike oracle_fdw).
+        return {"username": self.model.username, "password": self.model.password}
+
+    def fdw_foreign_table_options(self, schema, table):
+        # match_column_names '1' makes tds_fdw map by column name (so it also pushes
+        # down the shard WHERE and column list); row_estimate_method avoids a remote
+        # COUNT during planning. The foreign table is declared with the SOURCE column
+        # names, so name-matching resolves against SQL Server's catalog.
+        return {"schema_name": schema, "table_name": table,
+                "row_estimate_method": "showplan_all", "match_column_names": "1"}
+
+    def fdw_column_decl(self, target_type):
+        # tds_fdw returns SQL Server DATE/DATETIME/TIME values as locale-formatted
+        # strings, e.g. 'Sep  6 2026 10:17:19:500AM' (with ms) or 'Jan  1 1985
+        # 12:00:00:AM' (midnight/DATE, no ms). PostgreSQL cannot ingest either form
+        # directly into date/timestamp. So declare the foreign column as TEXT (tds_fdw
+        # hands over the raw string), then normalize on the target side to a form PG
+        # parses and CAST to the real target type. The two regexp_replace steps turn
+        # ':<ms>(AM|PM)' -> '.<ms> \1' and a bare ':(AM|PM)' -> ' \1', preserving
+        # sub-second precision and handling midnight. Non-temporal types map directly.
+        t = (target_type or "").lower()
+        if t.startswith(("date", "timestamp", "time")):
+            tmpl = ("CAST(regexp_replace(regexp_replace({col}, "
+                    "':([0-9]+)(AM|PM)$', '.\\1 \\2'), ':(AM|PM)$', ' \\1') AS "
+                    + target_type + ")")
+            return ("text", tmpl)
+        return (target_type, None)

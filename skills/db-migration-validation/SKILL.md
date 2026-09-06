@@ -24,6 +24,14 @@ Per `migration-config.yaml run.mode` (or `--mode`):
 ## Step 1 — Get data into the target
 Per `migration-config.yaml testing.data_load`:
 - **`framework`** (dev/test): `python -m dbmig migrate-data --schema <S> --workers 8 --project <P>`
+  - **Method** (`testing.data_method`, or `--method`): `toolkit` (default) pulls rows through
+    this host and `COPY`s into the target; **`fdw`** makes the target PostgreSQL read directly
+    from the source via a foreign data wrapper (`oracle_fdw`/`tds_fdw`) so data moves
+    source→target **server-side** — use it when the toolkit host is on-prem across a slow VPN
+    while source and target are both in the cloud (PostgreSQL target only). FDW objects are
+    dropped after the load by default (the user mapping stores the source credentials); pass
+    `--fdw-keep` to retain them and `--fdw-cleanup` to remove them later:
+    `python -m dbmig migrate-data --schema <S> --method fdw --shards 16 --workers 16 --project <P>`
 - **`dms`** (prod/large): the user runs AWS DMS externally; confirm the target is populated.
 
 ## Step 2 — Apply deferred foreign keys + triggers

@@ -187,6 +187,102 @@ Serverless v2 writer in `us-east-1b`), rows ≈ 1.1 KB, full loads with `--trunc
 built-in mover is now viable for substantially larger dev/test loads, though AWS DMS remains
 the path for production-scale movement and CDC.
 
+## v3 — FDW push-down path (`--method fdw`, cloud-to-cloud)
+
+Everything above measures the **`toolkit`** method (the default): the host running `dbmig`
+pulls every row from the source and pushes it into the target. That is fine when the toolkit
+runs *inside* the cloud (the same-AZ EC2 above reached ~85–90 MB/s), but it collapses when the
+toolkit host sits **on-premises across a slow VPN** — every row crosses the VPN **twice**
+(source → toolkit → target), so the VPN, not the databases, sets the ceiling.
+
+The **`--method fdw`** path removes the toolkit host from the data path entirely. The *target*
+Aurora PostgreSQL reads directly from the source through a foreign data wrapper (`oracle_fdw`
+for Oracle, `tds_fdw` for SQL Server): the toolkit only issues control SQL
+(`CREATE SERVER`/`FOREIGN TABLE`, then `INSERT INTO <target> SELECT FROM <foreign_table>`),
+while the bulk data moves **source → target server-side, cloud-to-cloud**. Intra-table PK
+sharding (`--shards`) still applies — each shard is one concurrent server-side `INSERT … SELECT`
+over a disjoint PK range (pushed down to the source).
+
+### Setup (this measurement)
+
+Deliberately measured from the **worst-case topology the feature targets**: the `dbmig` host
+was a workstation connected to the workshop VPC **over a VPN** (not an in-VPC EC2), so the
+`toolkit` numbers here are VPN-bound by design. Source/target are the same instances as above
+(RDS Oracle 19c → Aurora PostgreSQL 17.7, `us-east-1`). One table, single numeric PK, rows
+≈ 1.03 KB (`id bigint`, `filler varchar(1000)`, `n1 numeric`, `d1 timestamp`), **1,000,000 rows
+≈ 1.03 GB**, full loads with `--truncate`. The Aurora Serverless v2 target was pinned at
+**16–64 ACU** for this run (see the ACU note below).
+
+| Method | shards / workers | Time | rows/s | ~MB/s | Data path |
+|---|---|---|---|---|---|
+| `toolkit` (from VPN host) | 16 / 16 | 359.4 s | ~2,780 | ~2.9 | source → **VPN** → toolkit → **VPN** → target |
+| `fdw` | 8 / 8 | 29.7 s | ~33,600 | ~34.6 | source → target (server-side); toolkit issues control SQL only |
+| `fdw` | 16 / 16 | 30.7 s | ~32,600 | ~33.5 | source → target (server-side) |
+
+**≈12× faster in this VPN-bound scenario — and the FDW rate does not depend on the toolkit
+host's link at all.** `fdw` at 8 vs 16 shards is within noise (~34 vs ~33 MB/s): past ~8
+concurrent server-side streams the limit is the source fetch / target write, not shard count.
+The `fdw` figures include the fixed setup/teardown cost (create the
+extension/server/user-mapping/foreign-table, then `DROP … CASCADE` afterwards); the `toolkit`
+figure is pure VPN-bound transfer.
+
+> **Serverless v2 ACU matters — a lot.** An earlier pass at only **200 MB** against a target
+> floored at **1 ACU** measured `fdw` at just ~8–9 MB/s. That was two confounds stacked: (1)
+> Serverless v2 scales *reactively*, so a ~25 s load never gave it time to ramp from the 1-ACU
+> floor, and (2) at 200 MB the fixed create/drop overhead is a large fraction of the run.
+> Pinning the floor to **16 ACU** (≈ an `r8g.xlarge`-class writer) and using **1 GB** removed
+> both and lifted `fdw` to ~33–35 MB/s. If you benchmark this yourself on Serverless v2, set a
+> realistic ACU floor and use ≥1 GB or the numbers are dominated by scaling lag and overhead.
+
+Read this the right way: this is **not** a claim that `oracle_fdw` beats an in-VPC toolkit —
+the same-AZ EC2 `toolkit` (v2 above) hit ~85–90 MB/s, well above the ~33 MB/s server-side FDW
+rate seen here. FDW's `INSERT … SELECT` goes through the normal row executor (per-row + WAL +
+PK-index maintenance), whereas the toolkit uses the `COPY` fast path; and each `oracle_fdw`
+stream fetches over OCI one batch at a time. The point is **topological**: when the toolkit
+host is on a slow/remote link you **cannot** reach those in-VPC rates with `toolkit`, whereas
+`fdw` keeps the data movement cloud-side regardless of where `dbmig` runs. **Choose `fdw`**
+when source and target are both in the cloud but the toolkit host is not (or is far away);
+**choose `toolkit`** (or AWS DMS) when `dbmig` runs in-VPC/in-AZ; **choose AWS DMS** for
+production-scale volume and CDC either way.
+
+### Correctness (verified live)
+
+**Oracle → PostgreSQL (`oracle_fdw`).** A 5,000-row, 4-shard `fdw` load produced an **exact
+row-count match** and identical aggregates vs the source (`SUM(id)`, `SUM(n1)`, `filler`
+length), confirming the SOURCE→TARGET column mapping (Oracle `UPPER` → PostgreSQL `lower`) and
+value fidelity. A re-run without `--truncate` copied **0 new rows** (all 4 shards resumed).
+Foreign tables were created only in the isolated staging schema `dbmig_fdw_demo` (never the
+`demo` data schema), and the default teardown dropped the server + staging schema and **removed
+the source credentials** stored in the user mapping.
+
+**SQL Server → PostgreSQL (`tds_fdw`), live.** Against a real SQL Server 2019 instance
+(`tds_fdw 2.0.4` on the same Aurora target), AdventureWorks-style **`Person.Person`** (incl. a
+`datetime`) and **`HumanResources.Employee`** (incl. two `date`, a `datetime`, and a `bit`),
+**50,000 rows each, 4 shards**, both loaded to an **exact row-count match with sample values
+identical to the source**. This exercised the SQL Server specifics: mixed-case schema/column
+names (`BusinessEntityID` → `businessentityid`) resolved by `match_column_names`, `bit` →
+`boolean`, and a **temporal-type quirk** — `tds_fdw` returns `date`/`datetime` as locale
+strings (e.g. `Jan  1 1985 12:00:00:AM`) that PostgreSQL will not ingest directly, so for a
+SQL Server source the loader declares temporal foreign columns as `text` and normalizes +
+casts them on the target side (preserving sub-second precision and the fast sharded path).
+
+### Reproduce (FDW)
+
+```bash
+# dbmig host anywhere (on-prem/VPN or in-VPC); Oracle source + Aurora PG target reachable.
+# default method is 'toolkit'; select the push-down path with --method fdw.
+
+# one big single-numeric-PK table, 16 server-side PK-range streams
+python -m dbmig migrate-data --schema DEMO --tables T1 \
+  --method fdw --shards 16 --workers 16 --truncate --project demo
+
+# keep the FDW objects for inspection/repeat runs (leaves source creds on the target!) …
+python -m dbmig migrate-data --schema DEMO --tables T1 \
+  --method fdw --shards 16 --workers 16 --truncate --fdw-keep --project demo
+# … then remove them (server CASCADE + staging schema) when done:
+python -m dbmig migrate-data --schema DEMO --method fdw --fdw-cleanup --project demo
+```
+
 ## Reproduce
 
 ```bash

@@ -334,11 +334,53 @@ class SourceEngine(Engine, ABC):
         packages, e.g. SQL Server)."""
         return []
 
+    # ---- FDW push-down descriptor (PostgreSQL target pulls directly) --------
+    # These describe how a PostgreSQL target can read THIS source directly via a
+    # foreign data wrapper, so ``migrate-data --method fdw`` can move data
+    # server-side (target <- source) instead of pulling every row through the
+    # toolkit host. Default: not FDW-capable. Oracle and SQL Server override.
+
+    def fdw_wrapper(self) -> Optional[str]:
+        """Name of the PostgreSQL foreign-data-wrapper *extension* that reads this
+        source — ``'oracle_fdw'`` / ``'tds_fdw'`` — or ``None`` if push-down load
+        is not supported for this source engine."""
+        return None
+
+    def fdw_server_options(self) -> Dict[str, str]:
+        """OPTIONS for ``CREATE SERVER`` (how the wrapper reaches this source)."""
+        return {}
+
+    def fdw_user_mapping_options(self) -> Dict[str, str]:
+        """OPTIONS for ``CREATE USER MAPPING`` — the source credentials the target
+        uses to connect. These are written into the target catalog, so the loader
+        drops the mapping after the load unless told to keep it."""
+        return {}
+
+    def fdw_foreign_table_options(self, schema: str, table: str) -> Dict[str, str]:
+        """Per-table OPTIONS for ``CREATE FOREIGN TABLE`` (which remote table to
+        map, and any wrapper-specific read tuning)."""
+        return {}
+
+    def fdw_column_decl(self, target_type: str) -> Tuple[str, Optional[str]]:
+        """Given a TARGET column type (PostgreSQL ``format_type`` string), return
+        ``(foreign_declared_type, select_template)`` for the foreign-table column
+        that maps to it. ``select_template`` is either ``None`` (select the foreign
+        column directly) or a string containing ``{col}`` that produces the SELECT
+        expression (e.g. a target-side ``CAST``/normalization). Default: declare the
+        foreign column with the target type and select it directly."""
+        return (target_type, None)
+
 
 class TargetEngine(Engine, ABC):
     """Write-side adapter: schema/DDL apply and fast ingestion."""
 
     role = "target"
+
+    # True only for targets that can pull directly from a source via a foreign
+    # data wrapper (``migrate-data --method fdw``). PostgreSQL sets this True and
+    # implements the fdw_* DDL helpers + ``target_column_types``; MySQL leaves it
+    # False (no heterogeneous FDW), so the loader can guard with a clear error.
+    fdw_capable = False
 
     @abstractmethod
     def table_exists(self, schema: str, table: str):
