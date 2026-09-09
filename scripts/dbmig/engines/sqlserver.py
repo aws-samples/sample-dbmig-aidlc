@@ -115,6 +115,13 @@ class SQLServerEngine(SourceEngine):
             "ORDER BY ORDINAL_POSITION")
         return [(r[0], r[1]) for r in rows]
 
+    def virtual_columns(self, schema: str, table: str) -> set:
+        """Computed columns are derived on the source and are converted to GENERATED
+        columns on the target, which reject inserted values — so they are excluded
+        from data movement (see ``SourceEngine.data_columns``)."""
+        assert_identifier(schema, table)
+        return set(self._computed_columns(schema, table).keys())
+
     def primary_key_columns(self, schema: str, table: str) -> List[str]:
         assert_identifier(schema, table)
         _, rows = self.fetch(
@@ -331,7 +338,9 @@ class SQLServerEngine(SourceEngine):
     def chunk_iterator(self, schema, table, pk_cols, batch_size,
                        pk_lo=None, pk_hi=None):
         assert_identifier(schema, table, *pk_cols)
-        typed = self.table_columns(schema, table)
+        # data_columns excludes computed columns: they are derived on the source
+        # and land in a GENERATED target column, which rejects writes.
+        typed = self.data_columns(schema, table)
         # Convert hierarchyid/geography/geometry to portable text at read time so
         # a generic COPY into a target text column works (no opaque binary).
         col_list = _select_list(typed)
@@ -346,7 +355,10 @@ class SQLServerEngine(SourceEngine):
             if isinstance(lo, Number) and isinstance(hi, Number) and hi >= lo:
                 lo_i, hi_i = int(lo), int(hi)
                 upper_excl = hi_i + 1  # exclusive end of this reader's range
-                step = max(1, int(batch_size))
+                # Size the step by estimated ROWS, not raw key span, so a sparse PK
+                # range does not explode into thousands of near-empty chunks.
+                step = self._adaptive_chunk_step(
+                    lo_i, hi_i, batch_size, self.row_estimate(schema, table))
                 cur = lo_i
                 while cur < upper_excl:
                     nxt = min(cur + step, upper_excl)  # clamp so shards never overlap
@@ -363,6 +375,9 @@ class SQLServerEngine(SourceEngine):
         if isinstance(lo, Number) and isinstance(hi, Number) and hi >= lo:
             return int(lo), int(hi)
         return None
+
+    def row_estimate(self, schema, table):
+        return self._row_count_estimate(schema, table)
 
     # ---- aggregate / inventory -------------------------------------------
     def count_rows(self, schema: str, table: str) -> int:

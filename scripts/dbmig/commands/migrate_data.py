@@ -27,6 +27,7 @@ import json
 import os
 import queue
 import threading
+import time
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -39,6 +40,19 @@ from ..engines.base import topological_tiers
 
 # Sentinel + default bound for the read-ahead row queue (pipelining).
 _QUEUE_MAXROWS = 20000
+
+# Observability: how often a long-running unit emits an in-flight progress line
+# from its worker (whichever comes first). Kept coarse so a big table still
+# reports "rows so far" for troubleshooting without flooding the log.
+_PROGRESS_SECS = 5.0
+_PROGRESS_ROWS = 100_000
+
+
+def _unit_label(schema: str, table: str, shard: Optional[int]) -> str:
+    """Human label for a work unit in logs: ``SCHEMA.TABLE`` or, for a sharded
+    unit, ``SCHEMA.TABLE[sNNN]``."""
+    base = f"{schema}.{table}"
+    return base if shard is None else f"{base}[s{shard:03d}]"
 
 
 # ---- resume state ---------------------------------------------------------
@@ -125,6 +139,7 @@ def _copy_unit(unit: Dict) -> Dict:
         return result
     source = engines.get_source_engine(pair)
     target = engines.get_target_engine(pair)
+    label = _unit_label(schema, table, shard)
     try:
         pk = unit["pk"]
         tgt_cols = unit["tgt_cols"]
@@ -140,9 +155,16 @@ def _copy_unit(unit: Dict) -> Dict:
         if state and state.get("signature") == signature:
             if state.get("complete"):
                 result["status"] = "skipped"; result["copied"] = int(state.get("copied", 0))
+                console.info(f"skip  {label}: already loaded ({result['copied']:,} row(s))")
                 return result
             done = int(state.get("done_chunks", 0))
             copied = int(state.get("copied", 0))
+        # Worker-side start line so an operator sees which table is in flight (and,
+        # on resume, from where) even before the first chunk commits.
+        resume_note = f", resuming from chunk {done}/{len(chunks)}" if done else ""
+        console.info(f"start {label}: {len(chunks)} chunk(s){resume_note}")
+        last_log = time.time()
+        last_logged_rows = copied
         for i, (sql, params) in enumerate(chunks):
             if i < done:
                 continue
@@ -151,6 +173,15 @@ def _copy_unit(unit: Dict) -> Dict:
             copied += n
             _save_state(wm, {"signature": signature, "done_chunks": i + 1,
                              "copied": copied, "complete": (i + 1) == len(chunks)})
+            # In-flight progress: emit at most every _PROGRESS_SECS or every
+            # _PROGRESS_ROWS, so a long-running unit reports "rows so far".
+            now = time.time()
+            if ((now - last_log) >= _PROGRESS_SECS
+                    or (copied - last_logged_rows) >= _PROGRESS_ROWS):
+                console.info(f"  ..  {label}: {copied:,} row(s) so far "
+                             f"({i + 1}/{len(chunks)} chunk(s))")
+                last_log = now
+                last_logged_rows = copied
         _save_state(wm, {"signature": signature, "done_chunks": len(chunks),
                          "copied": copied, "complete": True})
         result["copied"] = copied
@@ -195,11 +226,29 @@ def _shard_ranges(lo: int, hi: int, shards: int) -> List[tuple]:
     return out
 
 
+# A shard should carry a meaningful amount of estimated work; splitting a table
+# into more shards than this floor allows just creates tiny/empty units.
+_MIN_ROWS_PER_SHARD = 50_000
+
+
+def _effective_shards(requested: int, estimate: int) -> int:
+    """Cap the requested shard count by the source row estimate so a small table
+    that happens to sit in a wide/sparse PK range is not split into many empty
+    shards. Unknown estimate (-1) leaves the request untouched (span-only, as
+    before); a known estimate at/below the floor collapses to a single unit."""
+    requested = max(1, int(requested))
+    if requested <= 1 or estimate is None or estimate < 0:
+        return requested
+    if estimate <= _MIN_ROWS_PER_SHARD:
+        return 1
+    return max(1, min(requested, int(estimate // _MIN_ROWS_PER_SHARD)))
+
+
 def _plan_units(source, target, schema: str, table: str, shards: int, batch_size: int,
                 project: str, truncate: bool) -> List[Dict]:
     """Build work units for one table: align columns, (optionally) truncate, and split
     into PK shards when eligible. Returns [] with a raised error handled by the caller."""
-    columns = [c for c, _ in source.table_columns(schema, table)]
+    columns = [c for c, _ in source.data_columns(schema, table)]
     tgt_cols = [c.lower() for c in columns]
     # Column-alignment guard (fail fast, like the original single-pass loader).
     try:
@@ -229,7 +278,10 @@ def _plan_units(source, target, schema: str, table: str, shards: int, batch_size
     bounds = source.numeric_pk_bounds(schema, table, pk[0]) if (shards > 1 and len(pk) == 1) else None
     if bounds is not None:
         lo, hi = bounds
-        ranges = _shard_ranges(lo, hi, shards)
+        # Consult source statistics: cap shards by estimated rows so a sparse PK
+        # range is not split into many empty shards.
+        eff = _effective_shards(shards, source.row_estimate(schema, table))
+        ranges = _shard_ranges(lo, hi, eff)
         if len(ranges) > 1:
             return [dict(base, shard=i, pk_lo=a, pk_hi=b) for i, (a, b) in enumerate(ranges)]
     return [dict(base, shard=None)]
@@ -311,13 +363,29 @@ def run(args) -> int:
 
     Executor = ProcessPoolExecutor if mode == "process" else ThreadPoolExecutor
     results: List[Dict] = []
+    done_units = 0
+    running_rows = 0
     for ti, tier_units in enumerate(units_by_tier, start=1):
         if len(units_by_tier) > 1:
             console.info(f"tier {ti}/{len(units_by_tier)}: {len(tier_units)} unit(s)")
         with Executor(max_workers=workers) as pool:
             futures = {pool.submit(_copy_unit, u): u for u in tier_units}
             for fut in as_completed(futures):
-                results.append(fut.result())
+                r = fut.result()
+                results.append(r)
+                done_units += 1
+                running_rows += r.get("copied", 0)
+                label = _unit_label(args.schema.upper(), r["table"], r.get("shard"))
+                progress = f"[{done_units}/{total_units}]"
+                if r["status"] == "error":
+                    console.err(f"{progress} FAILED {label}: {r['error']}")
+                elif r["status"] == "skipped":
+                    console.info(f"{progress} skipped {label} "
+                                 f"({r['copied']:,} row(s) already loaded); "
+                                 f"running total {running_rows:,} row(s)")
+                else:
+                    console.ok(f"{progress} done {label}: {r['copied']:,} row(s); "
+                               f"running total {running_rows:,} row(s)")
 
     # Aggregate per table (sum shards).
     per_table: Dict[str, Dict] = {}

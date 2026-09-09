@@ -188,6 +188,34 @@ def table_columns(conn, schema: str, table: str) -> List[Tuple[str, str]]:
         cur.close()
 
 
+def virtual_columns(conn, schema: str, table: str) -> set:
+    """Return the names of VIRTUAL (computed) columns for a table.
+
+    A virtual column's value is derived from an expression and is not stored, so
+    it must be excluded from data movement — the converted PostgreSQL/MySQL target
+    defines it as a GENERATED column, which rejects an explicit inserted value.
+
+    Read from ALL_TAB_COLS, which (unlike ALL_TAB_COLUMNS) exposes the
+    VIRTUAL_COLUMN flag. Hidden columns are skipped: the system-generated virtual
+    columns backing function-based indexes (SYS_NC...) are HIDDEN and never appear
+    in ``table_columns``, so they must not be reported here either."""
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "SELECT column_name FROM all_tab_cols "
+            "WHERE owner = :o AND table_name = :t "
+            "  AND virtual_column = 'YES' AND hidden_column = 'NO'",
+            o=schema.upper(), t=table.upper(),
+        )
+        return {r[0] for r in cur.fetchall()}
+    except Exception:
+        # If the catalog view/flag is unavailable, fail open (copy everything) —
+        # the alignment guard still protects against true mismatches.
+        return set()
+    finally:
+        cur.close()
+
+
 def _get_ddl(conn, object_type: str, name: str, schema: str) -> str:
     cur = conn.cursor()
     try:
@@ -496,13 +524,18 @@ class OracleEngine(SourceEngine):
     def table_columns(self, schema, table):
         return table_columns(self.connection, schema, table)
 
+    def virtual_columns(self, schema, table):
+        return virtual_columns(self.connection, schema, table)
+
     def chunk_iterator(self, schema, table, pk_cols, batch_size,
                        pk_lo=None, pk_hi=None):
         # Identifiers are interpolated (not bound), so validate them. Oracle is
         # case-insensitive for unquoted names, so schema/table stay unquoted to
         # preserve the catalog's folding behavior.
         assert_identifier(schema, table, *pk_cols)
-        cols = [c for c, _ in self.table_columns(schema, table)]
+        # data_columns excludes VIRTUAL (computed) columns: they are derived on the
+        # source and land in a GENERATED target column, which rejects writes.
+        cols = [c for c, _ in self.data_columns(schema, table)]
         col_list = ", ".join(f'"{c}"' for c in cols) or "*"
         base = f"SELECT {col_list} FROM {schema}.{table}"  # nosec B608
         if len(pk_cols) == 1:
@@ -516,7 +549,10 @@ class OracleEngine(SourceEngine):
             if isinstance(lo, _Number) and isinstance(hi, _Number) and hi >= lo:
                 lo_i, hi_i = int(lo), int(hi)
                 upper_excl = hi_i + 1  # exclusive end of this reader's range
-                step = max(1, int(batch_size))
+                # Size the step by estimated ROWS, not raw key span, so a sparse PK
+                # range does not explode into thousands of near-empty chunks.
+                step = self._adaptive_chunk_step(
+                    lo_i, hi_i, batch_size, self.row_estimate(schema, table))
                 cur = lo_i
                 while cur < upper_excl:
                     nxt = min(cur + step, upper_excl)  # clamp so shards never overlap
@@ -534,6 +570,9 @@ class OracleEngine(SourceEngine):
         if isinstance(lo, _Number) and isinstance(hi, _Number) and hi >= lo:
             return int(lo), int(hi)
         return None
+
+    def row_estimate(self, schema, table):
+        return table_row_estimate(self.connection, schema, table)
 
     def inventory(self, schema):
         return inventory(self.connection, schema)

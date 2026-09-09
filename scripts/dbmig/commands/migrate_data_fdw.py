@@ -47,8 +47,8 @@ from ..connections import load_pair
 from ..engines.base import topological_tiers
 from ..engines.postgresql import _quote_ident
 from .migrate_data import (
-    _load_state, _parse_list, _save_state, _select_tables, _shard_ranges,
-    _state_dir, _wm_path,
+    _effective_shards, _load_state, _parse_list, _save_state, _select_tables,
+    _shard_ranges, _state_dir, _unit_label, _wm_path,
 )
 
 # Fixed names for the FDW objects this loader creates. The staging schema is
@@ -70,11 +70,13 @@ def _load_unit(unit: Dict) -> Dict:
     result = {"table": table, "shard": shard, "copied": 0, "status": "ok", "error": None}
     lo = unit.get("pk_lo"); hi = unit.get("pk_hi")
     sig = f"{lo}:{hi}:fdw" if shard is not None else "full:fdw"
+    label = _unit_label(schema.upper(), table, shard)
 
     wm = _wm_path(unit["project"], schema, table, shard)
     state = _load_state(wm)
     if state.get("signature") == sig and state.get("complete"):
         result["status"] = "skipped"; result["copied"] = int(state.get("copied", 0))
+        console.info(f"skip  {label}: already loaded ({result['copied']:,} row(s))")
         return result
 
     try:
@@ -85,6 +87,7 @@ def _load_unit(unit: Dict) -> Dict:
         return result
     try:
         sch = schema.lower(); tbl = table.lower()
+        console.info(f"start {label}: server-side INSERT ... SELECT via FDW")
         if shard is not None:
             # Idempotent resume: clear this shard's PK range, then (re)load it. On a
             # first run the range is empty so the DELETE is a no-op. DELETE targets
@@ -121,7 +124,7 @@ def _plan_table(source, target, schema: str, table: str, stage: str, server: str
     column with no matching target column is a hard mismatch (the target schema was
     not applied, or a column was renamed in conversion) and raises.
     """
-    src_cols = source.table_columns(schema.upper(), table)  # [(name, type)] source order
+    src_cols = source.data_columns(schema.upper(), table)  # [(name, type)] source order, minus virtual/computed
     tgt_types = target.target_column_types(schema.lower(), table.lower())
     if not tgt_types:
         raise RuntimeError(f"target table {schema.lower()}.{table.lower()} not found "
@@ -173,7 +176,10 @@ def _plan_table(source, target, schema: str, table: str, stage: str, server: str
                 pk_target = pk_hit[0]      # target column name (DELETE side)
                 pk_select = pk[0]          # source/foreign column name (SELECT side)
                 lo, hi = bounds
-                ranges = _shard_ranges(lo, hi, shards)
+                # Consult source statistics: cap shards by estimated rows so a
+                # sparse PK range is not split into many empty shards.
+                eff = _effective_shards(shards, source.row_estimate(schema.upper(), table))
+                ranges = _shard_ranges(lo, hi, eff)
                 if len(ranges) > 1:
                     return [dict(base, shard=i, pk_target=pk_target,
                                  pk_select=pk_select, pk_lo=a, pk_hi=b)
@@ -273,6 +279,8 @@ def run(args) -> int:
 
     # Run each dependency tier in turn; units within a tier run concurrently.
     results: List[Dict] = []
+    done_units = 0
+    running_rows = 0
     for ti, tier_units in enumerate(units_by_tier, start=1):
         if not tier_units:
             continue
@@ -281,7 +289,21 @@ def run(args) -> int:
         with ThreadPoolExecutor(max_workers=workers) as pool:
             futures = {pool.submit(_load_unit, u): u for u in tier_units}
             for fut in as_completed(futures):
-                results.append(fut.result())
+                r = fut.result()
+                results.append(r)
+                done_units += 1
+                running_rows += r.get("copied", 0)
+                label = _unit_label(args.schema.upper(), r["table"], r.get("shard"))
+                progress = f"[{done_units}/{total_units}]"
+                if r["status"] == "error":
+                    console.err(f"{progress} FAILED {label}: {r['error']}")
+                elif r["status"] == "skipped":
+                    console.info(f"{progress} skipped {label} "
+                                 f"({r['copied']:,} row(s) already loaded); "
+                                 f"running total {running_rows:,} row(s)")
+                else:
+                    console.ok(f"{progress} loaded {label}: {r['copied']:,} row(s); "
+                               f"running total {running_rows:,} row(s)")
 
     # Aggregate per table (sum shards).
     per_table: Dict[str, Dict] = {}

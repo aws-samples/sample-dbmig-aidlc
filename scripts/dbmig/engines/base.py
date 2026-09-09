@@ -295,6 +295,34 @@ class SourceEngine(Engine, ABC):
     def table_columns(self, schema: str, table: str) -> List[Tuple[str, str]]:
         ...
 
+    def virtual_columns(self, schema: str, table: str) -> set:
+        """Return the set of column names (in the source catalog's case, matching
+        ``table_columns``) that are VIRTUAL / computed on the source — their value
+        is derived from an expression rather than stored.
+
+        These MUST be excluded from data movement: the converted target defines
+        such a column as a GENERATED column, and both PostgreSQL COPY and MySQL
+        INSERT reject writing an explicit value into a generated column (the copy
+        fails on the whole table). Even where the target keeps it as a plain
+        column, copying a derived value is redundant — the source value is not
+        independent data. Default: none (engines without virtual columns)."""
+        return set()
+
+    def data_columns(self, schema: str, table: str) -> List[Tuple[str, str]]:
+        """``table_columns`` with VIRTUAL / computed columns removed — the columns
+        that carry stored data and are therefore the ones copied during a data
+        load. Matching is case-insensitive so it is robust to catalog case folding.
+
+        All data-movement paths (toolkit ``chunk_iterator`` SELECT lists,
+        ``migrate_data`` target column alignment, and the FDW ``INSERT ... SELECT``)
+        use this instead of ``table_columns`` so generated target columns are never
+        written to."""
+        virtual = {c.lower() for c in self.virtual_columns(schema, table)}
+        if not virtual:
+            return self.table_columns(schema, table)
+        return [(name, typ) for name, typ in self.table_columns(schema, table)
+                if name.lower() not in virtual]
+
     @abstractmethod
     def chunk_iterator(self, schema: str, table: str, pk_cols: List[str],
                        batch_size: int, pk_lo: Optional[int] = None,
@@ -313,6 +341,39 @@ class SourceEngine(Engine, ABC):
         sharding, or ``None`` when the table is not shardable this way (non-numeric
         / composite / no PK). Default: not shardable."""
         return None
+
+    def row_estimate(self, schema: str, table: str) -> int:
+        """Best-effort estimated row count from the source's own optimizer
+        statistics (cheap catalog read, no COUNT(*)). Returns -1 when unknown.
+
+        Used to size chunking/sharding by *rows* rather than by PK span alone: a
+        wide but sparse PK range (e.g. an IDENTITY that has recycled/large seed
+        values, so keys run 1..200,000,000 for only 100,000 live rows) would
+        otherwise be sliced into thousands of near-empty key-range chunks. Default:
+        unknown."""
+        return -1
+
+    def _adaptive_chunk_step(self, lo: int, hi: int, batch_size: int,
+                             estimate: int) -> int:
+        """Key-space step for range chunking that targets ~``batch_size`` ROWS per
+        chunk, not ``batch_size`` KEY VALUES.
+
+        When the PK is dense (span ≈ rows) this returns ``batch_size`` unchanged —
+        identical to the previous behaviour. When the PK range is sparse relative to
+        the estimated row count (``span > estimate``), the step is widened by the
+        density factor ``span / estimate`` so each chunk still spans about
+        ``batch_size`` real rows. This collapses the "200M-wide range, 100k rows"
+        case from ~thousands of empty chunks to a handful of populated ones. The
+        step is never smaller than ``batch_size`` and never larger than the span."""
+        batch_size = max(1, int(batch_size))
+        span = hi - lo + 1
+        if span <= 0:
+            return batch_size
+        if estimate and estimate > 0 and span > estimate:
+            # rows-per-key < 1 (sparse); scale the step up to keep ~batch_size rows.
+            step = int(batch_size * (span / estimate))
+            return max(batch_size, min(step, span))
+        return batch_size
 
     @abstractmethod
     def inventory(self, schema: str) -> Dict[str, Any]:
