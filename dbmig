@@ -1,0 +1,41 @@
+#!/usr/bin/env sh
+# Repo-root launcher for the dbmig toolkit — run it from anywhere in the repo:
+#   ./dbmig test-connection --side both
+#   ./dbmig --conn ./connections.yaml inventory --schema APP --project demo
+#
+# Python selection (first match wins):
+#   1. $PYTHON, if set
+#   2. <repo>/.venv — the documented, isolated environment (see README "Getting started"):
+#        python3 -m venv .venv && .venv/bin/pip install -e scripts/      (Python 3.10+)
+#   3. python3 on PATH (dependencies must already be importable there)
+# You do NOT need to activate the venv; this script uses it directly, so every shell
+# (including Kiro's) gets the same isolated environment. Relative paths (--conn,
+# --config, CONN_FILE) resolve against YOUR current directory, not scripts/.
+here="$(cd "$(dirname "$0")" && pwd)"
+setup="cd \"$here\" && rm -rf .venv && python3 -m venv .venv && .venv/bin/pip install -e scripts/"
+
+if [ -n "$PYTHON" ]; then
+  py="$PYTHON"
+elif [ -x "$here/.venv/bin/python" ]; then
+  py="$here/.venv/bin/python"
+elif [ -x "$here/.venv/Scripts/python.exe" ]; then        # Git Bash / MSYS on Windows
+  py="$here/.venv/Scripts/python.exe"
+else
+  py="python3"
+fi
+
+# Fail fast with an actionable message instead of a raw ImportError traceback:
+# an empty/half-installed venv (e.g. built with a too-old Python, so pip could not
+# resolve the drivers) is the common case.
+if ! "$py" -c 'import sys; assert sys.version_info >= (3, 10); import yaml' >/dev/null 2>&1; then
+  ver="$("$py" -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null || echo '?')"
+  echo "dbmig: the toolkit's Python environment is not ready ($py, Python $ver)." >&2
+  case "$ver" in 3.[0-9]) echo "       Python 3.10+ is required (found $ver)." >&2 ;; esac
+  echo "       Set up the isolated repo venv once (does not touch your other Python projects):" >&2
+  echo "         $setup" >&2
+  echo "       If python3 is older than 3.10, use a newer interpreter, e.g. python3.12 -m venv .venv" >&2
+  exit 3
+fi
+# PYTHONPATH makes the in-repo package importable even if the venv only has the
+# dependencies (e.g. installed from scripts/requirements.txt, not `pip install -e`).
+PYTHONPATH="$here/scripts${PYTHONPATH:+:$PYTHONPATH}" exec "$py" -m dbmig "$@"

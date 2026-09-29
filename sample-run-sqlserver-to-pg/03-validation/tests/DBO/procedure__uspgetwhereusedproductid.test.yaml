@@ -1,0 +1,35 @@
+object: uspGetWhereUsedProductID
+schema: DBO
+type: function
+notes: recursive BOM walk (result-set procedure -> set-returning function); count + weighted checksum per real product.
+cases:
+- id: r1
+  type: function
+  source_sql: SET NOCOUNT ON; DECLARE @t TABLE (ProductAssemblyID int, ComponentID int, ComponentDesc nvarchar(100), TotalQuantity decimal(18,2), StandardCost money, ListPrice money, BOMLevel smallint,
+    RecursionLevel int); INSERT INTO @t EXEC dbo.uspGetWhereUsedProductID @StartProductID = 327, @CheckDate = '2010-12-01'; SELECT COUNT(*) FROM @t
+  target_sql: SELECT count(*) FROM dbo.uspgetwhereusedproductid(327, '2010-12-01')
+- id: r1q
+  type: function
+  source_sql: SET NOCOUNT ON; DECLARE @t TABLE (ProductAssemblyID int, ComponentID int, ComponentDesc nvarchar(100), TotalQuantity decimal(18,2), StandardCost money, ListPrice money, BOMLevel smallint,
+    RecursionLevel int); INSERT INTO @t EXEC dbo.uspGetWhereUsedProductID @StartProductID = 327, @CheckDate = '2010-12-01'; SELECT ISNULL(SUM(TotalQuantity * (RecursionLevel + 1)),0) FROM @t
+  target_sql: SELECT coalesce(sum(totalquantity * (recursionlevel + 1)),0) FROM dbo.uspgetwhereusedproductid(327, '2010-12-01')
+- id: r2
+  type: function
+  source_sql: SET NOCOUNT ON; DECLARE @t TABLE (ProductAssemblyID int, ComponentID int, ComponentDesc nvarchar(100), TotalQuantity decimal(18,2), StandardCost money, ListPrice money, BOMLevel smallint,
+    RecursionLevel int); INSERT INTO @t EXEC dbo.uspGetWhereUsedProductID @StartProductID = 324, @CheckDate = '2010-12-01'; SELECT COUNT(*) FROM @t
+  target_sql: SELECT count(*) FROM dbo.uspgetwhereusedproductid(324, '2010-12-01')
+- id: r2q
+  type: function
+  source_sql: SET NOCOUNT ON; DECLARE @t TABLE (ProductAssemblyID int, ComponentID int, ComponentDesc nvarchar(100), TotalQuantity decimal(18,2), StandardCost money, ListPrice money, BOMLevel smallint,
+    RecursionLevel int); INSERT INTO @t EXEC dbo.uspGetWhereUsedProductID @StartProductID = 324, @CheckDate = '2010-12-01'; SELECT ISNULL(SUM(TotalQuantity * (RecursionLevel + 1)),0) FROM @t
+  target_sql: SELECT coalesce(sum(totalquantity * (recursionlevel + 1)),0) FROM dbo.uspgetwhereusedproductid(324, '2010-12-01')
+- id: r3
+  type: function
+  source_sql: SET NOCOUNT ON; DECLARE @t TABLE (ProductAssemblyID int, ComponentID int, ComponentDesc nvarchar(100), TotalQuantity decimal(18,2), StandardCost money, ListPrice money, BOMLevel smallint,
+    RecursionLevel int); INSERT INTO @t EXEC dbo.uspGetWhereUsedProductID @StartProductID = 533, @CheckDate = '2010-12-01'; SELECT COUNT(*) FROM @t
+  target_sql: SELECT count(*) FROM dbo.uspgetwhereusedproductid(533, '2010-12-01')
+- id: r3q
+  type: function
+  source_sql: SET NOCOUNT ON; DECLARE @t TABLE (ProductAssemblyID int, ComponentID int, ComponentDesc nvarchar(100), TotalQuantity decimal(18,2), StandardCost money, ListPrice money, BOMLevel smallint,
+    RecursionLevel int); INSERT INTO @t EXEC dbo.uspGetWhereUsedProductID @StartProductID = 533, @CheckDate = '2010-12-01'; SELECT ISNULL(SUM(TotalQuantity * (RecursionLevel + 1)),0) FROM @t
+  target_sql: SELECT coalesce(sum(totalquantity * (recursionlevel + 1)),0) FROM dbo.uspgetwhereusedproductid(533, '2010-12-01')

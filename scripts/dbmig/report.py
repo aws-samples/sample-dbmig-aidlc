@@ -68,7 +68,7 @@ def _render(project: str, sections: Dict[str, Tuple[int, str]]) -> str:
         "",
         f"_Last updated: {_now()} · maintained automatically by dbmig._",
         "",
-        "This report is refreshed after each phase. It summarizes what has been done, "
+        "This report is refreshed after each phase. It summarizes what has been done, "  # nosemgrep: string-concat-in-list -- intentional: one long message split across lines
         "the current state, and what you should be aware of or do next. It complements "
         "(does not replace) the per-phase artifacts under this workspace.",
         "",

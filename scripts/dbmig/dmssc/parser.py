@@ -305,6 +305,8 @@ def load_apply_results(dms_sc_dir: str) -> Dict[str, dict]:
                             "status": (row.get("Status") or "").strip(),
                             "error": (row.get("Error") or "").strip(),
                         }
-        except Exception:
-            continue
+        except (OSError, csv.Error) as exc:
+            # One unreadable apply-result file must not abort the import; report it.
+            from .. import console
+            console.warn(f"skipped unreadable DMS SC apply-result {f.name}: {exc}")
     return out

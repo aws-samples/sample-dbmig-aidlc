@@ -1,0 +1,13 @@
+object: VwTopMembers
+schema: DBO
+type: function
+notes: 'TOP 50 PERCENT: row count (rounded up) and total.'
+cases:
+- id: v1
+  type: function
+  source_sql: SELECT COUNT(*) FROM dbo.VwTopMembers
+  target_sql: SELECT count(*) FROM dbo.vwtopmembers
+- id: v2
+  type: function
+  source_sql: SELECT SUM(TotalSpent) FROM dbo.VwTopMembers
+  target_sql: SELECT sum(totalspent) FROM dbo.vwtopmembers

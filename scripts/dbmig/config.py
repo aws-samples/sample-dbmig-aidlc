@@ -51,7 +51,7 @@ def expand_env(value: Any) -> Any:
             from . import console
             console.warn("unset environment variable(s) referenced in config, using "
                          "empty string: " + ", ".join("${%s}" % n for n in missing))
-        except Exception:
+        except ImportError:   # console unavailable during early import
             pass
     return out
 
@@ -111,7 +111,7 @@ def find_repo_root(start: Optional[Path] = None) -> Path:
         console.warn("could not locate the repo root (no directory with both "
                      "skills/ and engines/ found upward); falling back to the current "
                      "directory — conversion context may be incomplete.")
-    except Exception:
+    except ImportError:   # console unavailable during early import
         pass
     return Path.cwd().resolve()
 

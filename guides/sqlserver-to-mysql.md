@@ -16,12 +16,12 @@ skill (the LLM is Kiro).
 
 ## 1. Prerequisites
 
-- **Python 3.9+**; network access to the source SQL Server and target MySQL.
-- Install deps (pure-Python drivers — no native clients):
+- **Python 3.10+** (`python3 --version`; the PostgreSQL driver floor needs 3.10 — on Amazon Linux 2023 the system `/usr/bin/python3` is 3.9, use `python3.12 -m venv .venv`); network access to the source SQL Server and target MySQL.
+- Install into a **repo-local virtual environment** (never your global Python; pure-Python drivers — no native clients):
   ```bash
-  pip install -r scripts/requirements.txt   # oracledb, psycopg, pymysql, python-tds, pyyaml
+  python3 -m venv .venv && .venv/bin/pip install -e scripts/   # isolated; see README "Getting started"
   ```
-- Run commands from the **repository root**.
+- Run commands from the **repository root** via `./dbmig` (it uses `.venv` automatically).
 
 ## 2. Configure connections
 
@@ -61,17 +61,17 @@ Conversationally: in Kiro say *"start a database migration from SQL Server to My
 orchestrator runs the phases with approval gates. Or drive the CLI:
 
 ```bash
-python -m dbmig test-connection --side both
-python -m dbmig inventory       --schema dbo --project myproject
-python -m dbmig convert-schema  --schema dbo --project myproject
-python -m dbmig apply-schema    --schema dbo --project myproject
-python -m dbmig convert-code    --schema dbo --project myproject
-python -m dbmig apply-schema    --schema dbo --project myproject --code
-python -m dbmig migrate-data    --schema dbo --workers 8 --project myproject
-python -m dbmig apply-schema    --schema dbo --project myproject --post-data
-python -m dbmig compare         --schema dbo --project myproject
-python -m dbmig gen-tests       --schema dbo --project myproject
-python -m dbmig run-tests       --schema dbo --project myproject
+./dbmig test-connection --side both
+./dbmig inventory       --schema dbo --project myproject
+./dbmig convert-schema  --schema dbo --project myproject
+./dbmig apply-schema    --schema dbo --project myproject
+./dbmig convert-code    --schema dbo --project myproject
+./dbmig apply-schema    --schema dbo --project myproject --code
+./dbmig migrate-data    --schema dbo --workers 8 --project myproject
+./dbmig apply-schema    --schema dbo --project myproject --post-data
+./dbmig compare         --schema dbo --project myproject
+./dbmig gen-tests       --schema dbo --project myproject
+./dbmig run-tests       --schema dbo --project myproject
 ```
 
 The conversion hand-off, object-unit grouping, multi-pass apply, **error-retry loop**,

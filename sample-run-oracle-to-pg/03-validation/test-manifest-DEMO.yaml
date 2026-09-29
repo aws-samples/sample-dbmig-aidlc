@@ -1,113 +1,183 @@
-project: demo
+project: o2pg
 schema: DEMO
 phase: validation-tests
-generated_at: '2026-08-17T04:46:18Z'
+generated_at: '2026-09-28T15:43:23Z'
 provider: kiro
 unit_count: 15
 units:
 - name: CALCULATE_DISCOUNT_PCT
   object_type: FUNCTION
   schema: DEMO
-  prompt_file: test_prompts/DEMO/function__calculate_discount_pct.prompt.md
+  batch_id: 1
+  prompt_file: test_prompts/DEMO/batch_0001.prompt.md
   spec_file: tests/DEMO/function__calculate_discount_pct.test.yaml
   status: generated
+  data_coverage:
+    level: n/a
+    tables: {}
 - name: GET_CONDITION_NAME
   object_type: FUNCTION
   schema: DEMO
-  prompt_file: test_prompts/DEMO/function__get_condition_name.prompt.md
+  batch_id: 1
+  prompt_file: test_prompts/DEMO/batch_0001.prompt.md
   spec_file: tests/DEMO/function__get_condition_name.test.yaml
   status: generated
+  data_coverage:
+    level: OK
+    tables:
+      CONDITIONS: 4
 - name: GET_CUSTOMER_FULL_NAME
   object_type: FUNCTION
   schema: DEMO
-  prompt_file: test_prompts/DEMO/function__get_customer_full_name.prompt.md
+  batch_id: 1
+  prompt_file: test_prompts/DEMO/batch_0001.prompt.md
   spec_file: tests/DEMO/function__get_customer_full_name.test.yaml
   status: generated
+  data_coverage:
+    level: OK
+    tables:
+      CUSTOMERS: 3
 - name: GET_CUSTOMER_LIFETIME_VALUE
   object_type: FUNCTION
   schema: DEMO
-  prompt_file: test_prompts/DEMO/function__get_customer_lifetime_value.prompt.md
+  batch_id: 1
+  prompt_file: test_prompts/DEMO/batch_0001.prompt.md
   spec_file: tests/DEMO/function__get_customer_lifetime_value.test.yaml
   status: generated
+  data_coverage:
+    level: LOW_COVERAGE
+    tables:
+      ORDERS: 0
 - name: GET_GENRE_NAME
   object_type: FUNCTION
   schema: DEMO
-  prompt_file: test_prompts/DEMO/function__get_genre_name.prompt.md
+  batch_id: 1
+  prompt_file: test_prompts/DEMO/batch_0001.prompt.md
   spec_file: tests/DEMO/function__get_genre_name.test.yaml
   status: generated
+  data_coverage:
+    level: OK
+    tables:
+      GENRES: 8
 - name: BOOK_PKG
   object_type: PACKAGE
   schema: DEMO
-  prompt_file: test_prompts/DEMO/package__book_pkg.prompt.md
+  batch_id: 1
+  prompt_file: test_prompts/DEMO/batch_0001.prompt.md
   spec_file: tests/DEMO/package__book_pkg.test.yaml
   status: generated
+  data_coverage:
+    level: OK
+    tables:
+      BOOKS: 56
+      LISTINGS: 56
 - name: INVENTORY_PKG
   object_type: PACKAGE
   schema: DEMO
-  prompt_file: test_prompts/DEMO/package__inventory_pkg.prompt.md
+  batch_id: 2
+  prompt_file: test_prompts/DEMO/batch_0002.prompt.md
   spec_file: tests/DEMO/package__inventory_pkg.test.yaml
   status: generated
+  data_coverage:
+    level: OK
+    tables:
+      LISTINGS: 56
 - name: ORDER_PKG
   object_type: PACKAGE
   schema: DEMO
-  prompt_file: test_prompts/DEMO/package__order_pkg.prompt.md
+  batch_id: 2
+  prompt_file: test_prompts/DEMO/batch_0002.prompt.md
   spec_file: tests/DEMO/package__order_pkg.test.yaml
   status: generated
+  data_coverage:
+    level: PARTIAL
+    tables:
+      LISTINGS: 56
+      ORDERS: 0
+      ORDER_ITEMS: 0
 - name: REPORTING_PKG
   object_type: PACKAGE
   schema: DEMO
-  prompt_file: test_prompts/DEMO/package__reporting_pkg.prompt.md
+  batch_id: 3
+  prompt_file: test_prompts/DEMO/batch_0003.prompt.md
   spec_file: tests/DEMO/package__reporting_pkg.test.yaml
   status: generated
+  data_coverage:
+    level: PARTIAL
+    tables:
+      BOOKS: 56
+      ORDERS: 0
+      ORDER_ITEMS: 0
 - name: VALIDATION_PKG
   object_type: PACKAGE
   schema: DEMO
-  prompt_file: test_prompts/DEMO/package__validation_pkg.prompt.md
+  batch_id: 3
+  prompt_file: test_prompts/DEMO/batch_0003.prompt.md
   spec_file: tests/DEMO/package__validation_pkg.test.yaml
   status: generated
+  data_coverage:
+    level: n/a
+    tables: {}
 - name: ARCHIVE_OLD_ORDERS
   object_type: PROCEDURE
   schema: DEMO
-  prompt_file: test_prompts/DEMO/procedure__archive_old_orders.prompt.md
+  batch_id: 3
+  prompt_file: test_prompts/DEMO/batch_0003.prompt.md
   spec_file: tests/DEMO/procedure__archive_old_orders.test.yaml
   status: generated
+  data_coverage:
+    level: LOW_COVERAGE
+    tables:
+      ORDERS: 0
   transaction_managed: true
   test_mode: manual
 - name: CLEAR_SHOPPING_CART
   object_type: PROCEDURE
   schema: DEMO
-  prompt_file: test_prompts/DEMO/procedure__clear_shopping_cart.prompt.md
+  batch_id: 3
+  prompt_file: test_prompts/DEMO/batch_0003.prompt.md
   spec_file: tests/DEMO/procedure__clear_shopping_cart.test.yaml
   status: generated
+  data_coverage:
+    level: LOW_COVERAGE
+    tables:
+      SHOPPING_CART_ITEMS: 0
   transaction_managed: true
   test_mode: manual
 - name: GENERATE_SALES_REPORT
   object_type: PROCEDURE
   schema: DEMO
-  prompt_file: test_prompts/DEMO/procedure__generate_sales_report.prompt.md
+  batch_id: 3
+  prompt_file: test_prompts/DEMO/batch_0003.prompt.md
   spec_file: tests/DEMO/procedure__generate_sales_report.test.yaml
   status: generated
+  data_coverage:
+    level: LOW_COVERAGE
+    tables:
+      ORDERS: 0
 - name: PROCESS_CUSTOMER_OFFER
   object_type: PROCEDURE
   schema: DEMO
-  prompt_file: test_prompts/DEMO/procedure__process_customer_offer.prompt.md
+  batch_id: 3
+  prompt_file: test_prompts/DEMO/batch_0003.prompt.md
   spec_file: tests/DEMO/procedure__process_customer_offer.test.yaml
   status: generated
+  data_coverage:
+    level: OK
+    tables:
+      LISTINGS: 56
   transaction_managed: true
   test_mode: manual
 - name: SET_BOOK_FEATURED
   object_type: PROCEDURE
   schema: DEMO
+  batch_id: 4
   prompt_file: test_prompts/DEMO/procedure__set_book_featured.prompt.md
   spec_file: tests/DEMO/procedure__set_book_featured.test.yaml
   status: generated
+  data_coverage:
+    level: OK
+    tables:
+      LISTINGS: 56
   transaction_managed: true
   test_mode: manual
-- name: INVENTORY_PKG_FUNCTIONS
-  object_type: PACKAGE
-  schema: DEMO
-  prompt_file: test_prompts/DEMO/package__inventory_pkg.prompt.md
-  spec_file: tests/DEMO/package__inventory_pkg_functions.test.yaml
-  status: generated
-  note: 'added by Kiro: scalar cases for the package read-only functions (the base
-    unit is procedure-typed for reduce_inventory)'

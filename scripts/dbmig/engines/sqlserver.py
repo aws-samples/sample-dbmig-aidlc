@@ -335,6 +335,18 @@ class SQLServerEngine(SourceEngine):
         except Exception:
             return [], []
 
+    def standalone_sequences(self, schema):
+        # SQL Server identity columns do not use sequence objects, so every row
+        # of sys.sequences is a standalone user sequence.
+        try:
+            _, rows = self.fetch(
+                "SELECT s.name, CAST(s.current_value AS BIGINT) FROM sys.sequences s "
+                "JOIN sys.schemas sc ON sc.schema_id = s.schema_id "
+                f"WHERE sc.name = {_lit(schema)} ORDER BY s.name")  # nosec B608
+        except Exception:
+            return []
+        return [{"name": r[0], "last_value": int(r[1])} for r in rows]
+
     def chunk_iterator(self, schema, table, pk_cols, batch_size,
                        pk_lo=None, pk_hi=None):
         assert_identifier(schema, table, *pk_cols)
@@ -452,6 +464,34 @@ class SQLServerEngine(SourceEngine):
         result["code_units"] = [
             {"type": t, "name": n} for t, n in self.list_callables(schema)]
         result["cross_schema_dependencies"] = self.cross_schema_dependencies(schema)
+        # Collation: SQL Server defaults are case-INSENSITIVE (…_CI_…); PostgreSQL compares
+        # case-sensitively (LIKE, =, ORDER BY, unique indexes). A silent behaviour change for
+        # every string comparison — surfaced as a first-class decision item.
+        try:
+            coll = self.scalar("SELECT CONVERT(varchar(128), DATABASEPROPERTYEX(DB_NAME(), 'Collation'))")
+            _, crows = self.fetch(
+                "SELECT c.TABLE_NAME, c.COLUMN_NAME, c.COLLATION_NAME FROM INFORMATION_SCHEMA.COLUMNS c "  # nosec B608
+                f"WHERE c.TABLE_SCHEMA = {_lit(schema)} AND c.COLLATION_NAME IS NOT NULL")
+        except Exception:  # noqa: BLE001
+            coll, crows = None, []
+        result["collation"] = coll
+        ci_cols = [f"{t}.{c}" for t, c, cn in crows if "_CI_" in str(cn).upper()]
+        if ci_cols:
+            result["decision_items"] = [{
+                "id": f"case_insensitive_collation:{schema}",
+                "kind": "case_insensitive_collation",
+                "object": schema,
+                "collation": coll,
+                "columns": len(ci_cols),
+                "summary": (f"{len(ci_cols)} string column(s) use a case-insensitive collation ({coll}); "
+                            "PostgreSQL compares case-sensitively, so LIKE/=/IN/ORDER BY/unique "
+                            "indexes change behaviour. Choose: (a) citext for the columns that are "
+                            "searched/compared, (b) ICU nondeterministic collation (no LIKE before "
+                            "PostgreSQL 18), or (c) keep case-sensitive and make the application use "
+                            "ILIKE / lower() at the call sites."),
+                "app_impact": ("every string comparison in app code/ORM queries (EF `.Contains`/"
+                               "`.StartsWith`/`==`, JPA LIKE, raw SQL) becomes case-sensitive unless (a)/(b)"),
+                "status": "open"}]
         return result
 
     # ---- FDW push-down descriptor (tds_fdw) -------------------------------

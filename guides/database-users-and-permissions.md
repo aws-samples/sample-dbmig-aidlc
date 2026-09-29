@@ -240,7 +240,7 @@ commented template (including TLS options).
 ## 6. Verify the accounts
 
 ```bash
-python -m dbmig test-connection --side both   # exits non-zero on failure
+./dbmig test-connection --side both   # exits non-zero on failure
 ```
 
 A successful run prints the server versions for both sides. If you plan to use `--method fdw`,

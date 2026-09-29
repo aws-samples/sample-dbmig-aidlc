@@ -1,44 +1,26 @@
-# Build Report — JavaBobsUsedBooks (Validation)
+# Build & validation report — JavaBobsUsedBooks on Aurora PostgreSQL
 
-## Build
-- `mvn -q -B clean compile` → **exit 0, 0 errors** (baseline before conversion also passed, so
-  the conversion introduced no compile regressions).
-- `mvn -q -B test` → exit 0. **No `src/test` directory exists** — a green test run proves
-  nothing here; recorded as a gap, not as evidence.
-
-## Live-target verification (read-only PREPARE against demodb.demo)
-| Statement | Result |
-|---|---|
-| Full-text main query (site 1) | **PREPARE OK** — and `EXPLAIN` confirms `books_text_idx` (GIN) is used; sample term `iron` returns 1 hit, matching the DB-phase parity tests |
-| Full-text countQuery | **PREPARE OK** |
-| Demo-class queries (sites 2, B3–B5) | PREPARE FAIL — `b.name`, `is_featured`, `quantity`, `created_date` do not exist in the migrated `books` table |
-
-The demo-class failures are the **pre-existing phantom schema** documented at Inception: those
-classes reference columns and a `sales` table that never existed in the Oracle `DEMO` schema
-either. They were equally broken before conversion; the dialect conversion is still correct and
-the failure mode is unchanged. Decision on deleting/repairing the demo package is with the app
-owner.
+1. **Build:** `mvn -q -B clean compile` → exit 0 (one intermediate failure: missing `JdbcTypeCode` imports — fixed).
+2. **Boot (required):** `mvn spring-boot:run` with `SPRING_JPA_HIBERNATE_DDL_AUTO=validate`, credentials
+   from env → `Started BobsUsedBooksApplication in 9.3 seconds`. **Zero boot-time mapping failures** —
+   all 16 required type fixes were planned from `app-scan`'s C1 table (the previous workshop found three
+   of these only at boot, one failure per table).
+3. **Endpoints (read-only):** `/` 200 · `/books` 200 · `/api/books/43/cover` 200 (bytea image) ·
+   `/search?query=circus&sort=title` 200 (Night Circus) · `/fulltextsearch?query=gothic` 200 (Mexican Gothic) ·
+   `/fulltextsearch?query=magic circus` 200 (2 hits) · `/fulltextsearch?query=circus & (` 200 (no syntax error).
+4. **Full-text plan:** `EXPLAIN … @@ …` → `Bitmap Index Scan on books_text_idx` (query and index expressions match).
+5. **Found during validation (fixed):** first full-text run returned 0 hits — `BookService` wrapped terms
+   in Oracle Text `fuzzy(t, 40)` syntax. Not SQL, so the first scan missed it; `app-scan` now flags
+   full-text query-language fragments (Tier 3).
 
 ## Verification matrix
 | Site | Status |
 |---|---|
-| 1 (full-text, both queries) | compiled + **prepared against target** + index-use verified |
-| 4 (datasource config) | compiled; will be exercised at app startup |
-| 5 (pom) | compiled (dependency resolution passed) |
-| 2, B3–B8 (demo classes) | compiled; **UNVERIFIED at runtime** — phantom schema, pre-existing |
-| URL-parser fixes (2 files) | compiled; logic verified by inspection against both URL formats |
-| 12 (get_customer_history) | not converted — **BLOCKED**, needs decision |
+| config / driver / dialect | booted |
+| 16 entity type fixes | booted (validate) |
+| full-text query + builder | booted + endpoint + EXPLAIN |
+| URL parsing | compiled |
+| demo/Oracle* classes, get_customer_history | **UNVERIFIED** — pre-existing broken, not reachable |
 
-## Remaining behavioural risks (owners needed)
-1. Search semantics: `plainto_tsquery` ANDs terms; Oracle Text default differed. Ranking is
-   `ts_rank`, not `SCORE`. UI relevance ordering may shift. Owner: app team.
-2. `LIMIT`-after-sort vs `ROWNUM`-before-sort in `findBooksByGenre` (intent-preserving, results
-   may differ vs Oracle). Owner: app team.
-3. `customer_age_months` epoch approximation vs Oracle calendar months (demo code). Owner: app team.
-
-## Residual work
-- Decide the fate of `get_customer_history` (blocked item).
-- Decide the fate of the `demo/` package (phantom schema).
-- Add a test suite — currently none exists; the converted search path deserves one.
-- Delete the 5 stale `.bak` files (separate cleanup).
-- Set `DB_PASSWORD` in the runtime environment (plaintext credential removed from properties).
+## Remaining behavioural risks (owner: app team)
+ROWNUM→LIMIT intent in demo class; fuzzy matching lost in search; `ts_rank` ordering ≠ Oracle `SCORE`.

@@ -1,0 +1,615 @@
+schema: DBO
+mode: silent
+summary:
+  cases: 68
+  passed: 68
+  failed: 0
+  skipped: 0
+  low_coverage_objects: 1
+low_coverage:
+- DBO.uspLogError
+results:
+- object: DBO.ufnCalculateCustomerLifetimeValue
+  type: function
+  case: c1
+  status: pass
+  coverage: OK
+  detail:
+    source: '105.36'
+    target: '105.36'
+- object: DBO.ufnCalculateCustomerLifetimeValue
+  type: function
+  case: c2
+  status: pass
+  coverage: OK
+  detail:
+    source: '90.34'
+    target: '90.34'
+- object: DBO.ufnCalculateCustomerLifetimeValue
+  type: function
+  case: c3
+  status: pass
+  coverage: OK
+  detail:
+    source: '2095.66'
+    target: '2095.66'
+- object: DBO.ufnCalculateCustomerLifetimeValue
+  type: function
+  case: c4
+  status: pass
+  coverage: OK
+  detail:
+    source: null
+    target: null
+- object: DBO.ufnGetAccountingEndDate
+  type: function
+  case: c1
+  status: pass
+  coverage: n/a
+  detail:
+    source: '2004-06-30 23:59:59.997000'
+    target: '2004-06-30 23:59:59.997000'
+- object: DBO.ufnGetAccountingStartDate
+  type: function
+  case: c1
+  status: pass
+  coverage: n/a
+  detail:
+    source: '2003-07-01 00:00:00'
+    target: '2003-07-01 00:00:00'
+- object: DBO.ufnGetDocumentStatusText
+  type: function
+  case: c1
+  status: pass
+  coverage: n/a
+  detail:
+    source: Pending approval
+    target: Pending approval
+- object: DBO.ufnGetDocumentStatusText
+  type: function
+  case: c2
+  status: pass
+  coverage: n/a
+  detail:
+    source: Obsolete
+    target: Obsolete
+- object: DBO.ufnGetDocumentStatusText
+  type: function
+  case: c3
+  status: pass
+  coverage: n/a
+  detail:
+    source: '** Invalid **'
+    target: '** Invalid **'
+- object: DBO.ufnGetPurchaseOrderStatusText
+  type: function
+  case: c1
+  status: pass
+  coverage: n/a
+  detail:
+    source: Approved
+    target: Approved
+- object: DBO.ufnGetPurchaseOrderStatusText
+  type: function
+  case: c2
+  status: pass
+  coverage: n/a
+  detail:
+    source: Complete
+    target: Complete
+- object: DBO.ufnGetPurchaseOrderStatusText
+  type: function
+  case: c3
+  status: pass
+  coverage: n/a
+  detail:
+    source: '** Invalid **'
+    target: '** Invalid **'
+- object: DBO.ufnGetSalesOrderStatusText
+  type: function
+  case: c1
+  status: pass
+  coverage: n/a
+  detail:
+    source: In process
+    target: In process
+- object: DBO.ufnGetSalesOrderStatusText
+  type: function
+  case: c2
+  status: pass
+  coverage: n/a
+  detail:
+    source: Shipped
+    target: Shipped
+- object: DBO.ufnGetSalesOrderStatusText
+  type: function
+  case: c3
+  status: pass
+  coverage: n/a
+  detail:
+    source: Cancelled
+    target: Cancelled
+- object: DBO.ufnGetSalesOrderStatusText
+  type: function
+  case: c4
+  status: pass
+  coverage: n/a
+  detail:
+    source: '** Invalid **'
+    target: '** Invalid **'
+- object: DBO.ufnLeadingZeros
+  type: function
+  case: c1
+  status: pass
+  coverage: n/a
+  detail:
+    source: '00000123'
+    target: '00000123'
+- object: DBO.ufnLeadingZeros
+  type: function
+  case: c2
+  status: pass
+  coverage: n/a
+  detail:
+    source: '00000000'
+    target: '00000000'
+- object: DBO.ufnLeadingZeros
+  type: function
+  case: c3
+  status: pass
+  coverage: n/a
+  detail:
+    source: '12345678'
+    target: '12345678'
+- object: DBO.ufnLeadingZeros
+  type: function
+  case: c4
+  status: pass
+  coverage: n/a
+  detail:
+    source: 0000000*
+    target: 0000000*
+- object: DBO.VwCustomerShopping
+  type: function
+  case: v1
+  status: pass
+  coverage: OK
+  detail:
+    source: '95'
+    target: '95'
+- object: DBO.VwCustomerShopping
+  type: function
+  case: v2
+  status: pass
+  coverage: OK
+  detail:
+    source: '8942.75'
+    target: '8942.75'
+- object: DBO.VwCustomerShopping
+  type: function
+  case: v3
+  status: pass
+  coverage: OK
+  detail:
+    source: 'Hi, Bob! Your order #2 for $75.50 will be shipped shortly. Thank you!'
+    target: 'Hi, Bob! Your order #2 for $75.50 will be shipped shortly. Thank you!'
+- object: DBO.VwCustomerShopping
+  type: function
+  case: v4
+  status: pass
+  coverage: OK
+  detail:
+    source: Bob Marley
+    target: Bob Marley
+- object: DBO.VwOpenCoupons
+  type: function
+  case: v1
+  status: pass
+  coverage: OK
+  detail:
+    source: '0'
+    target: '0'
+- object: DBO.VwOpenCoupons
+  type: function
+  case: v2
+  status: pass
+  coverage: OK
+  detail:
+    source: '26056'
+    target: '26056'
+- object: DBO.VwRegionalSales
+  type: function
+  case: v1
+  status: pass
+  coverage: OK
+  detail:
+    source: '10'
+    target: '10'
+- object: DBO.VwRegionalSales
+  type: function
+  case: v2
+  status: pass
+  coverage: OK
+  detail:
+    source: '42194.34'
+    target: '42194.34'
+- object: DBO.VwRegionalSales
+  type: function
+  case: v3
+  status: pass
+  coverage: OK
+  detail:
+    source: '3648'
+    target: '3648.00'
+- object: DBO.VwTopMembers
+  type: function
+  case: v1
+  status: pass
+  coverage: OK
+  detail:
+    source: '10'
+    target: '10'
+- object: DBO.VwTopMembers
+  type: function
+  case: v2
+  status: pass
+  coverage: OK
+  detail:
+    source: '4987.75'
+    target: '4987.75'
+- object: DBO.uspDeleteAuthor
+  type: procedure
+  case: p1
+  status: pass
+  coverage: OK
+  detail:
+    authors:
+      source_delta: '-1.0'
+      target_delta: '-1.0'
+      match: true
+    author5:
+      source_delta: '-1.0'
+      target_delta: '-1.0'
+      match: true
+- object: DBO.uspDeleteOldCoupons
+  type: procedure
+  case: p1
+  status: pass
+  coverage: OK
+  detail:
+    coupons:
+      source_delta: '-26.0'
+      target_delta: '-26.0'
+      match: true
+    closed:
+      source_delta: '-26.0'
+      target_delta: '-26.0'
+      match: true
+- object: DBO.uspDeleteOldCoupons
+  type: procedure
+  case: p2
+  status: pass
+  coverage: OK
+  detail:
+    coupons:
+      source_delta: '0.0'
+      target_delta: '0.0'
+      match: true
+- object: DBO.uspGetAuthorManagers
+  type: function
+  case: r1
+  status: pass
+  coverage: OK
+  detail:
+    source: '0'
+    target: '0'
+- object: DBO.uspGetAuthorManagers
+  type: function
+  case: r2
+  status: pass
+  coverage: OK
+  detail:
+    source: '0'
+    target: '0'
+- object: DBO.uspGetAuthorManagers
+  type: function
+  case: r3
+  status: pass
+  coverage: OK
+  detail:
+    source: '0'
+    target: '0'
+- object: DBO.uspGetAuthorManagers
+  type: function
+  case: r4
+  status: pass
+  coverage: OK
+  detail:
+    source: '0'
+    target: '0'
+- object: DBO.uspGetBillOfMaterials
+  type: function
+  case: r1
+  status: pass
+  coverage: OK
+  detail:
+    source: '0'
+    target: '0'
+- object: DBO.uspGetBillOfMaterials
+  type: function
+  case: r1q
+  status: pass
+  coverage: OK
+  detail:
+    source: '0'
+    target: '0'
+- object: DBO.uspGetBillOfMaterials
+  type: function
+  case: r2
+  status: pass
+  coverage: OK
+  detail:
+    source: '0'
+    target: '0'
+- object: DBO.uspGetBillOfMaterials
+  type: function
+  case: r2q
+  status: pass
+  coverage: OK
+  detail:
+    source: '0'
+    target: '0'
+- object: DBO.uspGetBillOfMaterials
+  type: function
+  case: r3
+  status: pass
+  coverage: OK
+  detail:
+    source: '2'
+    target: '2'
+- object: DBO.uspGetBillOfMaterials
+  type: function
+  case: r3q
+  status: pass
+  coverage: OK
+  detail:
+    source: '3'
+    target: '3.00'
+- object: DBO.uspGetManagerAuthors
+  type: function
+  case: r1
+  status: pass
+  coverage: OK
+  detail:
+    source: '0'
+    target: '0'
+- object: DBO.uspGetManagerAuthors
+  type: function
+  case: r2
+  status: pass
+  coverage: OK
+  detail:
+    source: '0'
+    target: '0'
+- object: DBO.uspGetManagerAuthors
+  type: function
+  case: r3
+  status: pass
+  coverage: OK
+  detail:
+    source: '0'
+    target: '0'
+- object: DBO.uspGetManagerAuthors
+  type: function
+  case: r4
+  status: pass
+  coverage: OK
+  detail:
+    source: '0'
+    target: '0'
+- object: DBO.uspGetProductData
+  type: function
+  case: r1
+  status: pass
+  coverage: OK
+  detail:
+    source: '50669716'
+    target: '50669716'
+- object: DBO.uspGetTopRegion
+  type: function
+  case: r1
+  status: pass
+  coverage: OK
+  detail:
+    source: '0'
+    target: '0'
+- object: DBO.uspGetTopRegion
+  type: function
+  case: r2
+  status: pass
+  coverage: OK
+  detail:
+    source: '0'
+    target: '0'
+- object: DBO.uspGetTopRegion
+  type: function
+  case: r3
+  status: pass
+  coverage: OK
+  detail:
+    source: '4'
+    target: '4'
+- object: DBO.uspGetWhereUsedProductID
+  type: function
+  case: r1
+  status: pass
+  coverage: OK
+  detail:
+    source: '0'
+    target: '0'
+- object: DBO.uspGetWhereUsedProductID
+  type: function
+  case: r1q
+  status: pass
+  coverage: OK
+  detail:
+    source: '0'
+    target: '0'
+- object: DBO.uspGetWhereUsedProductID
+  type: function
+  case: r2
+  status: pass
+  coverage: OK
+  detail:
+    source: '2'
+    target: '2'
+- object: DBO.uspGetWhereUsedProductID
+  type: function
+  case: r2q
+  status: pass
+  coverage: OK
+  detail:
+    source: '4'
+    target: '4.00'
+- object: DBO.uspGetWhereUsedProductID
+  type: function
+  case: r3
+  status: pass
+  coverage: OK
+  detail:
+    source: '37'
+    target: '37'
+- object: DBO.uspGetWhereUsedProductID
+  type: function
+  case: r3q
+  status: pass
+  coverage: OK
+  detail:
+    source: '43'
+    target: '43.00'
+- object: DBO.uspLogError
+  type: procedure
+  case: l1
+  status: pass
+  coverage: LOW_COVERAGE
+  detail:
+    errorlog:
+      source_delta: '0.0'
+      target_delta: '0.0'
+      match: true
+- object: DBO.uspLogError
+  type: procedure
+  case: l2
+  status: pass
+  coverage: LOW_COVERAGE
+  detail:
+    errorlog:
+      source_delta: '1.0'
+      target_delta: '1.0'
+      match: true
+    errnum:
+      source_delta: '8134.0'
+      target_delta: '8134.0'
+      match: true
+- object: DBO.uspPrintError
+  type: procedure
+  case: p1
+  status: pass
+  coverage: n/a
+  detail:
+    errorlog:
+      source_delta: '0.0'
+      target_delta: '0.0'
+      match: true
+- object: DBO.uspProcessRefunds
+  type: procedure
+  case: p1
+  status: pass
+  coverage: OK
+  detail:
+    coupons:
+      source_delta: '3.0'
+      target_delta: '3.0'
+      match: true
+    refunded:
+      source_delta: '3.0'
+      target_delta: '3.0'
+      match: true
+    max_ticket:
+      source_delta: '3.0'
+      target_delta: '3.0'
+      match: true
+    refund_orders:
+      source_delta: '68.0'
+      target_delta: '68.0'
+      match: true
+    refund_text:
+      source_delta: (True, 'Refund processed for $95.50')
+      target_delta: (True, 'Refund processed for $95.50')
+      match: true
+- object: DBO.uspShoppingLevelAmount
+  type: function
+  case: r1
+  status: pass
+  coverage: OK
+  detail:
+    source: '36'
+    target: '36'
+- object: DBO.uspShoppingLevelAmount
+  type: function
+  case: r2
+  status: pass
+  coverage: OK
+  detail:
+    source: '95'
+    target: '95'
+- object: DBO.uspShoppingLevelAmount
+  type: function
+  case: r3
+  status: pass
+  coverage: OK
+  detail:
+    source: '0'
+    target: '0'
+- object: DBO.uspUpdateAuthorLogin
+  type: procedure
+  case: u1
+  status: pass
+  coverage: OK
+  detail:
+    login2:
+      source_delta: (True, 'adventure-works\\terri9')
+      target_delta: (True, 'adventure-works\\terri9')
+      match: true
+    flag2:
+      source_delta: '-1.0'
+      target_delta: '-1.0'
+      match: true
+    errorlog:
+      source_delta: '0.0'
+      target_delta: '0.0'
+      match: true
+- object: DBO.uspUpdateAuthorLogin
+  type: procedure
+  case: u2
+  status: pass
+  coverage: OK
+  detail:
+    login2:
+      source_delta: (False, 'adventure-works\\terri0')
+      target_delta: (False, 'adventure-works\\terri0')
+      match: true
+    errorlog:
+      source_delta: '1.0'
+      target_delta: '1.0'
+      match: true
+- object: DBO.uspUpdateAuthorPersonalInfo
+  type: procedure
+  case: u1
+  status: pass
+  coverage: OK
+  detail:
+    marital3:
+      source_delta: (True, 'S')
+      target_delta: (True, 'S')
+      match: true

@@ -77,8 +77,22 @@ result_set:
       throws or truncates. Use long / Int64, or cast in SQL.
   boolean_representation:
     note: >
-      0/1 flags mapped to smallint on the target keep working; only a change to the
-      native boolean type would require app edits (see the migration's conversion log).
+      0/1 flags mapped to smallint on the target keep working in SQL; only a change to
+      the native boolean type would require SQL edits. BUT a JPA Boolean field on a
+      smallint column fails ddl-auto=validate (Hibernate expects BOOLEAN) — it needs
+      @JdbcTypeCode(SqlTypes.SMALLINT). See app-sql-rules.md §5a.
+
+# ---- ORM type obligations -------------------------------------------------
+# Datatype decisions the DB migration makes that ALWAYS create an app-side
+# obligation for ORM-mapped fields. App Inception cross-checks every entity field
+# on a column of these target types (live catalog or the conversion log) and
+# lists each as a change-plan row. Fix recipes: app-sql-rules.md §5a.
+orm_type_obligations:
+  - {source: "NUMBER(1)", target: "smallint", java: "Boolean", fix: "@JdbcTypeCode(SqlTypes.SMALLINT)"}
+  - {source: "DATE", target: "timestamp", java: "LocalDate", fix: "@JdbcTypeCode(SqlTypes.TIMESTAMP)"}
+  - {source: "BLOB", target: "bytea", java: "@Lob byte[]", fix: "drop @Lob; @JdbcTypeCode(SqlTypes.VARBINARY)"}
+  - {source: "CLOB", target: "text", java: "@Lob String", fix: "drop @Lob"}
+  - {source: "NUMBER(10)", target: "bigint", java: "Integer", fix: "Long, or @JdbcTypeCode(SqlTypes.BIGINT)"}
 
 # ---- error handling -------------------------------------------------------
 errors:

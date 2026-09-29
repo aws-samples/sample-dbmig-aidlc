@@ -17,7 +17,7 @@
 - `mysqldump` / `mysql` for manual schema/data export-import; `LOAD DATA [LOCAL] INFILE` for
   bulk loads; Aurora supports `LOAD DATA FROM S3`.
 - dbmig instead applies converted DDL and bulk-loads rows via `pymysql` (batched
-  `executemany` INSERT) — see `python -m dbmig apply-schema`, `migrate-data`.
+  `executemany` INSERT) — see `./dbmig apply-schema`, `migrate-data`.
 
 ## Conversion notes
 - Connectivity, DDL apply, data load, and reconciliation all run through the Python drivers;

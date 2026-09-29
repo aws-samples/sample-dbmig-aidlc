@@ -1,14 +1,18 @@
 """dbmig command-line interface (argparse).
 
-Usage: ``python -m dbmig <command> [options]``. Every command exits non-zero on
+Usage: ``dbmig [--conn PATH] [--config PATH] <command> [options]`` — via the
+console script (``pip install -e scripts/``), the repo-root ``./dbmig`` wrapper,
+or ``python -m dbmig`` from ``scripts/``. Every command exits non-zero on
 failure. The connections file defaults to ``./connections.yaml`` (override with
-the ``CONN_FILE`` env var); the migration config defaults to
-``./migration-config.yaml`` (override with ``MIGRATION_CONFIG``).
+``--conn`` or the ``CONN_FILE`` env var); the migration config defaults to
+``./migration-config.yaml`` (override with ``--config`` or ``MIGRATION_CONFIG``).
 """
 from __future__ import annotations
 
 import argparse
+import os
 import sys
+from pathlib import Path
 from typing import List, Optional
 
 from . import __version__, console, config
@@ -45,6 +49,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--version", action="version",
                         version=f"dbmig {__version__}")
+    parser.add_argument("--conn", default=None, metavar="PATH",
+                        help="connections file (default ./connections.yaml; same as "
+                             "the CONN_FILE env var, which this flag overrides)")
+    parser.add_argument("--config", default=None, metavar="PATH",
+                        help="migration config (default ./migration-config.yaml; same "
+                             "as the MIGRATION_CONFIG env var, which this flag overrides)")
     sub = parser.add_subparsers(dest="command", metavar="<command>")
     sub.required = True
 
@@ -145,6 +155,16 @@ def build_parser() -> argparse.ArgumentParser:
                    help="(--method fdw) drop the FDW server (CASCADE) and staging schema "
                         "for --schema, then exit without loading (tidy up a --fdw-keep run)")
 
+    # reset-identity
+    p = sub.add_parser("reset-identity",
+                       help="sync identity/serial/AUTO_INCREMENT counters on the target "
+                            "to MAX(key) and verify (dry-run unless --apply)")
+    _add_common(p, tables=True)
+    p.add_argument("--target-schema", dest="target_schema", default=None,
+                   help="target schema/database name (default: --schema lower-cased)")
+    p.add_argument("--apply", action="store_true",
+                   help="actually sync the counters, then re-verify (default: report only)")
+
     # compare
     p = sub.add_parser("compare", help="reconcile source vs target row counts")
     _add_common(p, tables=True)
@@ -197,6 +217,28 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--method", default=None,
                    help="verification method, e.g. 'equivalence-test' or 'manual'")
     p.add_argument("--note", default=None, help="free-text note recorded with the verdict")
+
+    # app-scan (application modernization pre-scan)
+    p = sub.add_parser("app-scan",
+                       help="read-only pre-scan of an application: dialect SQL sites, routine "
+                            "calls, config, entity<->target column type cross-check")
+    p.add_argument("--app-dir", dest="app_dir", required=True,
+                   help="application root directory")
+    p.add_argument("--project", default=None, help="run workspace under migrations/")
+    p.add_argument("--target-schema", dest="target_schema", default=None,
+                   help="migrated target schema to cross-check entities against "
+                        "(default: target default_schema)")
+    p.add_argument("--no-target", dest="no_target", action="store_true",
+                   help="skip the live target catalog cross-check")
+
+    # status
+    p = sub.add_parser("status",
+                       help="compact progress per phase + next pending prompt files "
+                            "(read this instead of large manifests)")
+    _add_common(p)
+    p.add_argument("--phase", choices=["schema", "code", "tests"], default=None)
+    p.add_argument("--next", type=int, default=3,
+                   help="how many pending prompt files to list (default 3)")
 
     # mark
     p = sub.add_parser("mark",
@@ -265,6 +307,15 @@ def _dispatch(args) -> int:
     if cmd == "compare":
         from .commands import compare
         return compare.run(args)
+    if cmd == "reset-identity":
+        from .commands import reset_identity
+        return reset_identity.run(args)
+    if cmd == "app-scan":
+        from .commands import app_scan
+        return app_scan.run(args)
+    if cmd == "status":
+        from .commands import status
+        return status.run(args)
     if cmd == "mark":
         from .commands import mark
         return mark.run(args)
@@ -272,9 +323,61 @@ def _dispatch(args) -> int:
     return 2
 
 
+def package_repo_root() -> Optional[Path]:
+    """The dbmig-aidlc checkout this package was loaded from (the ancestor of
+    this file that holds skills/ + engines/ + scripts/dbmig), or None if the
+    package is running outside a checkout (e.g. a non-editable install)."""
+    for d in Path(__file__).resolve().parents:
+        if (d / "skills").is_dir() and (d / "engines").is_dir() \
+                and (d / "scripts" / "dbmig").is_dir():
+            return d
+    return None
+
+
+def _check_location() -> int:
+    """Guard against running the toolkit from the wrong directory.
+
+    The connections file and migration config default to the CURRENT directory,
+    while run artifacts go to <repo>/migrations. From outside the checkout that
+    silently splits a run (or fails with a bare 'file not found'). So: if the
+    current directory is not inside the checkout and the user did not point at
+    a connections file explicitly (--conn / CONN_FILE), stop with the fix.
+    An explicit --conn/CONN_FILE is honoured (with a note where artifacts go)."""
+    root = package_repo_root()
+    if root is None:
+        return 0
+    cwd = Path.cwd().resolve()
+    if cwd == root or root in cwd.parents:
+        return 0
+    if os.environ.get("CONN_FILE"):
+        mig = os.environ.get("DBMIG_MIGRATIONS_DIR") or str(root / "migrations")
+        console.warn(f"running outside the dbmig-aidlc folder ({root}); using "
+                     f"connections file {os.environ['CONN_FILE']}; run artifacts go "
+                     f"to {mig}")
+        return 0
+    console.err(f"you are in {cwd}, which is outside the dbmig-aidlc folder ({root}).")
+    console.err("dbmig reads ./connections.yaml and ./migration-config.yaml from the "
+                "current directory, so run it from the repo root:")
+    console.err(f'    cd "{root}" && ./dbmig <command>')
+    console.err("or point at your connections file explicitly with "
+                "--conn <path> (before the command).")
+    return 2
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
+    # --conn / --config are global flags that override the env vars. They are
+    # applied via the env so every command (and FDW/process-pool workers, which
+    # re-load config in a child process) sees the same paths. Resolved to
+    # absolute paths so a worker's cwd cannot change their meaning.
+    if getattr(args, "conn", None):
+        os.environ["CONN_FILE"] = str(Path(args.conn).expanduser().resolve())
+    if getattr(args, "config", None):
+        os.environ["MIGRATION_CONFIG"] = str(Path(args.config).expanduser().resolve())
+    rc = _check_location()
+    if rc:
+        return rc
     # Resolve the run workspace name once: CLI --project, else migration-config
     # 'project:', else 'default' — sanitized to a safe folder name.
     if hasattr(args, "project"):
@@ -285,8 +388,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         console.err("interrupted")
         return 130
     except ModuleNotFoundError as exc:
-        console.err(f"missing dependency: {exc.name}. Install with: "
-                    "pip install -r scripts/requirements.txt")
+        console.err(f"missing dependency: {exc.name}. Install the toolkit into its "
+                    "virtual environment (from the repo root): python3 -m venv .venv "
+                    "&& .venv/bin/pip install -e scripts/  — then run ./dbmig <command>")
         return 3
     except Exception as exc:  # noqa: BLE001 - top-level safety net
         console.err(f"unexpected error: {exc}")

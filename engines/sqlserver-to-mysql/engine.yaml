@@ -49,15 +49,15 @@ conversion:
     - skills/sqlserver-to-mysql-playbook/references/
 
 commands:
-  test_connection: "python -m dbmig test-connection --side both"
-  inventory:       "python -m dbmig inventory --schema <SCHEMA> --project <PROJECT>"
-  convert_schema:  "python -m dbmig convert-schema --schema <SCHEMA> --project <PROJECT>"
-  convert_code:    "python -m dbmig convert-code --schema <SCHEMA> --project <PROJECT>"
-  apply_schema:    "python -m dbmig apply-schema --schema <SCHEMA> --project <PROJECT>"
-  migrate_data:    "python -m dbmig migrate-data --schema <SCHEMA> --workers 8 --project <PROJECT>"
-  gen_tests:       "python -m dbmig gen-tests --schema <SCHEMA> --project <PROJECT>"
-  run_tests:       "python -m dbmig run-tests --schema <SCHEMA> --project <PROJECT>"
-  compare:         "python -m dbmig compare --schema <SCHEMA> --project <PROJECT>"
+  test_connection: "./dbmig test-connection --side both"
+  inventory:       "./dbmig inventory --schema <SCHEMA> --project <PROJECT>"
+  convert_schema:  "./dbmig convert-schema --schema <SCHEMA> --project <PROJECT>"
+  convert_code:    "./dbmig convert-code --schema <SCHEMA> --project <PROJECT>"
+  apply_schema:    "./dbmig apply-schema --schema <SCHEMA> --project <PROJECT>"
+  migrate_data:    "./dbmig migrate-data --schema <SCHEMA> --workers 8 --project <PROJECT>"
+  gen_tests:       "./dbmig gen-tests --schema <SCHEMA> --project <PROJECT>"
+  run_tests:       "./dbmig run-tests --schema <SCHEMA> --project <PROJECT>"
+  compare:         "./dbmig compare --schema <SCHEMA> --project <PROJECT>"
 
 phases:
   - id: inception

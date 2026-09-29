@@ -59,7 +59,7 @@ def _target_schema(ws: Path, schema: str, fallback_default: Optional[str]) -> st
             ts = (json.loads(p.read_text()).get("target_schema") or "").strip()
             if ts:
                 return ts
-        except Exception:
+        except (OSError, ValueError, AttributeError):   # unreadable/invalid map -> default
             pass
     return fallback_default or schema.lower()
 
@@ -134,7 +134,7 @@ def _script_header(title: str, tschema: str, counts: Dict[str, int]) -> List[str
     return [
         f"-- dbmig target-prep — {title}",
         f"-- target schema: {tschema}   generated: {_now()}",
-        f"-- foreign_keys={counts['foreign_keys']} indexes={counts['indexes']} "
+        f"-- foreign_keys={counts['foreign_keys']} indexes={counts['indexes']} "  # nosemgrep: string-concat-in-list -- intentional: one long message split across lines
         f"triggers={counts['triggers']}  (primary/unique keys are intentionally kept)",
     ]
 
@@ -239,13 +239,13 @@ def _update_report(project: str, schema: str, tschema: str,
     body = [
         "### Target preparation — secondary objects (drop before load / recreate after)",
         "",
-        f"- Schema `{schema}` (target `{tschema}`): captured "
+        f"- Schema `{schema}` (target `{tschema}`): captured "  # nosemgrep: string-concat-in-list -- intentional: one long message split across lines
         f"**{counts['foreign_keys']}** foreign key(s), **{counts['indexes']}** non-unique "
         f"index(es), **{counts['triggers']}** trigger(s) for drop/recreate around the "
         "data load. Primary/unique keys are kept.",
         "",
         "Scripts: `03-validation/target-prep/" + schema.upper() +
-        "/{drop-preload,restore-postload}-" + schema.upper() + ".sql`. Run "
+        "/{drop-preload,restore-postload}-" + schema.upper() + ".sql`. Run "  # nosemgrep: string-concat-in-list -- intentional: one long message split across lines
         "`pre-load-drop` before loading data and `post-load-restore` afterwards "
         "(dry-run unless `--apply`).",
         "",

@@ -1,0 +1,21 @@
+object: ufnGetSalesOrderStatusText
+schema: DBO
+type: function
+notes: every mapped status plus an out-of-range value; called with a plain integer literal as an application would.
+cases:
+- id: c1
+  type: function
+  source_sql: SELECT dbo.ufnGetSalesOrderStatusText(1)
+  target_sql: SELECT dbo.ufngetsalesorderstatustext(1)
+- id: c2
+  type: function
+  source_sql: SELECT dbo.ufnGetSalesOrderStatusText(5)
+  target_sql: SELECT dbo.ufngetsalesorderstatustext(5)
+- id: c3
+  type: function
+  source_sql: SELECT dbo.ufnGetSalesOrderStatusText(6)
+  target_sql: SELECT dbo.ufngetsalesorderstatustext(6)
+- id: c4
+  type: function
+  source_sql: SELECT dbo.ufnGetSalesOrderStatusText(7)
+  target_sql: SELECT dbo.ufngetsalesorderstatustext(7)

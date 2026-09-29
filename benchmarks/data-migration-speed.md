@@ -15,7 +15,7 @@ for production-scale movement the framework still hands off to AWS DMS (full-loa
 | Target | Aurora PostgreSQL 17.7, **Serverless v2 (2–64 ACU)**, writer in `us-east-1b` |
 | Compute | EC2 **`m7i.4xlarge`** (16 vCPU, 12.5 Gbps) running `dbmig`, `us-east-1a` (same AZ as source) |
 | Data | rows ≈ **1.1 KB** (`id bigint`, `filler varchar(1000)`, `n1 numeric`, `d1 timestamp`) |
-| Tool | `python -m dbmig migrate-data` (PK-range chunked, psycopg `COPY`), `--truncate` per run |
+| Tool | `./dbmig migrate-data` (PK-range chunked, psycopg `COPY`), `--truncate` per run |
 
 Row shape and scenarios were chosen per the request: **(1) one ~100 GB table**, and
 **(2) ten ~10 GB tables** (to exercise parallelism). Source and the EC2 running the tool are
@@ -124,11 +124,11 @@ independently; a plain `COPY` (no `ON CONFLICT`) means a re-run without `--trunc
 
 ```bash
 # one 100 GB table, split into 16 parallel PK-range streams across 16 processes
-python -m dbmig migrate-data --schema BENCH --tables T1 \
+./dbmig migrate-data --schema BENCH --tables T1 \
   --shards 16 --workers 16 --batch-size 100000 --truncate
 
 # ten 10 GB tables, each split into 4 shards (40 units), 16 processes at a time
-python -m dbmig migrate-data --schema BENCH --tables S1,...,S10 \
+./dbmig migrate-data --schema BENCH --tables S1,...,S10 \
   --shards 4 --workers 16 --batch-size 100000 --truncate
 ```
 
@@ -273,14 +273,14 @@ casts them on the target side (preserving sub-second precision and the fast shar
 # default method is 'toolkit'; select the push-down path with --method fdw.
 
 # one big single-numeric-PK table, 16 server-side PK-range streams
-python -m dbmig migrate-data --schema DEMO --tables T1 \
+./dbmig migrate-data --schema DEMO --tables T1 \
   --method fdw --shards 16 --workers 16 --truncate --project demo
 
 # keep the FDW objects for inspection/repeat runs (leaves source creds on the target!) …
-python -m dbmig migrate-data --schema DEMO --tables T1 \
+./dbmig migrate-data --schema DEMO --tables T1 \
   --method fdw --shards 16 --workers 16 --truncate --fdw-keep --project demo
 # … then remove them (server CASCADE + staging schema) when done:
-python -m dbmig migrate-data --schema DEMO --method fdw --fdw-cleanup --project demo
+./dbmig migrate-data --schema DEMO --method fdw --fdw-cleanup --project demo
 ```
 
 ## Reproduce
@@ -291,15 +291,15 @@ python -m dbmig migrate-data --schema DEMO --method fdw --fdw-cleanup --project 
 #            gen.py --tables 8  --rows 2000000  --prefix S    # scenario 2 (8 x ~2.2 GB)
 
 # v1 single-stream reference
-python -m dbmig migrate-data --schema BENCH --tables T1 \
+./dbmig migrate-data --schema BENCH --tables T1 \
   --workers 1 --shards 1 --mode-parallel thread --batch-size 100000 --truncate
 
 # v2 single big table: 16 PK-range shards across 16 processes (~7x)
-python -m dbmig migrate-data --schema BENCH --tables T1 \
+./dbmig migrate-data --schema BENCH --tables T1 \
   --workers 16 --shards 16 --batch-size 100000 --truncate
 
 # v2 many tables: one stream per table, 8 at a time
-python -m dbmig migrate-data --schema BENCH --tables S1,S2,S3,S4,S5,S6,S7,S8 \
+./dbmig migrate-data --schema BENCH --tables S1,S2,S3,S4,S5,S6,S7,S8 \
   --workers 8 --shards 1 --batch-size 100000 --truncate
 ```
 

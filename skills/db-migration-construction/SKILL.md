@@ -1,13 +1,13 @@
 ---
 name: db-migration-construction
-description: Construction phase (conversion) of an AI-DLC database migration. Use after the Inception migration plan is approved, or when the user asks to convert/translate a source database schema, tables, datatypes, views, or stored code (PL/SQL, T-SQL, etc.) to the target engine. Engine-agnostic across all supported pairs (Oracle or SQL Server → PostgreSQL or MySQL). The conversion is LLM-driven and YOU (Kiro) are the LLM: the dbmig Python tool extracts source object-units and writes prompt bundles, you convert each bundle to target DDL using the active pair's playbook references as context, then dbmig applies the DDL to the target. Writes artifacts to migrations/<project>/02-construction/.
+description: Construction phase (conversion) of an AI-DLC database migration. Use after the Inception migration plan is approved, or when the user asks to convert/translate a source database schema, tables, datatypes, views, or stored code (PL/SQL, T-SQL, etc.) to the target engine. Engine-agnostic across all supported pairs (Oracle or SQL Server → PostgreSQL or MySQL). The conversion is LLM-driven and YOU (the AI assistant) are the LLM: the dbmig Python tool extracts source object-units and writes prompt bundles, you convert each bundle to target DDL using the active pair's playbook references as context, then dbmig applies the DDL to the target. Writes artifacts to migrations/<project>/02-construction/.
 ---
 
 # Construction — Conversion (LLM-driven; you are the LLM)
 
 This is the **Construction** phase. Conversion is **not rule-based** — the `dbmig`
 Python package does the deterministic work (extract object-units, write prompt bundles,
-apply DDL, report errors), and **you (Kiro) perform the actual source→target conversion**
+apply DDL, report errors), and **you (the AI assistant) perform the actual source→target conversion**
 using the active pair's playbook references as your knowledge base.
 
 The package never calls a hosted LLM. It runs with `provider: kiro` (hand-off mode).
@@ -22,16 +22,43 @@ substitute that pair for `<pair>`:
 - Knowledge base / playbook references: `skills/<pair>-playbook/references/...`
 - Engine definition + datatype map: `engines/<pair>/`
 
-The prompt bundles `dbmig` writes already inject the **correct** pair's context, so you
-mostly read the bundle; open the pair's playbook topic files when you need more detail.
+The prompt bundles `dbmig` writes carry only the object-specific part; the pair's context
+(customer-specific rules, datatype map, engine checks, relevant playbook topic index) is
+written **once per run** to a shared file that each bundle references:
+`02-construction/_context-schema.md` (tables) and `02-construction/_context-code.md`
+(stored code). **Read the shared context file once per session before converting** (and
+again after a context reset/compaction) — the bundles are not self-contained. Each bundle
+also lists the **constructs detected** in its source (e.g. `PIPELINED`, `CONNECT BY`,
+`IDENTITY`) so you apply the matching guidance; open the pair's playbook topic files only
+when you need more detail.
+
+### Working at scale (hundreds or thousands of objects)
+- **Batched prompts.** Small tables, small code objects and small test objects share one
+  bundle (size-capped; large objects stay alone). One bundle = several units, each with its
+  own output file listed in the bundle header — write every one, then mark each unit.
+- **Track progress with `status`, not by reading manifests** (a 1,000-unit manifest is
+  ~150 KB):
+  ```bash
+  ./dbmig status --schema <SCHEMA> --project <project> --phase code --next 5
+  ```
+  It prints counts by status and the next pending bundles. Mark progress with
+  `./dbmig mark --status converted --code --tables A,B,C --schema <SCHEMA> --project <project>`.
+- **Fan out.** When there are more than ~20 pending bundles and sub-agents are available,
+  split the pending bundle list into disjoint slices and give each sub-agent: the shared
+  context file path, its slice of bundle paths, and the rule "write each output file; do not
+  edit the manifest". Then mark the converted units centrally (`dbmig mark
+  --only-existing-output`) and run `apply-schema` once. Sub-agents never apply to the target.
+- **Command output is capped.** Per-item success lines are limited (`DBMIG_ITEM_LIMIT`,
+  default 25); failures always print. Read reports/`status` for the full picture rather than
+  raising the limit.
 
 ## The conversion loop
 
 ### 1. Prepare (dbmig extracts + builds prompts)
 ```bash
-python -m dbmig convert-schema --schema <SCHEMA> --project <project>
+./dbmig convert-schema --schema <SCHEMA> --project <project>
 # or a subset:
-python -m dbmig convert-schema --schema <SCHEMA> --tables ORDERS,CUSTOMERS --project <project>
+./dbmig convert-schema --schema <SCHEMA> --tables ORDERS,CUSTOMERS --project <project>
 ```
 This extracts each **object-unit** (one table + its indexes + constraints (PK/UK/CHECK)
 + foreign keys + DML triggers + comments/grants), batches small tables together, and
@@ -45,8 +72,8 @@ writes:
 
 ### 2. Convert (YOU do this — the core LLM step)
 For each `pending` unit in the manifest:
-1. Read its prompt bundle. It already injects the construction guidance, the active pair's
-   datatype map, and the pair's playbook topic index. Open the specific
+1. Read its prompt bundle (after reading the shared `_context-schema.md` / `_context-code.md`
+   once). Open the specific
    `skills/<pair>-playbook/references/...` topic files the unit needs (datatypes,
    constraints, triggers, sequences/identity, indexes, etc.).
 2. Convert the whole object-unit **holistically** to the **target** engine's DDL — choose
@@ -57,7 +84,7 @@ For each `pending` unit in the manifest:
    to its own output file.
    - **Customer-specific knowledge wins.** Apply any rules under
      `skills/<pair>-playbook/references/customer-specific/` first — they OVERRIDE the general
-     playbook (and the datatype map) on conflict. The prompt bundle already injects them at
+     playbook (and the datatype map) on conflict. The shared context file carries them at
      the top, labeled highest precedence.
 3. **Write the target DDL** to the unit's `output_file`
    (`02-construction/ddl/<schema>/<table>.sql`). Return only SQL (fenced or plain).
@@ -67,7 +94,7 @@ For each `pending` unit in the manifest:
 
 ### 3. Apply (dbmig applies to the target — gated)
 ```bash
-python -m dbmig apply-schema --schema <SCHEMA> --project <project>
+./dbmig apply-schema --schema <SCHEMA> --project <project>
 ```
 - Applying DDL writes to the target — a **gated action**. Confirm before the first run.
 - `apply-schema` is **status-aware**: it skips units already `applied` (so re-running after
@@ -81,6 +108,15 @@ python -m dbmig apply-schema --schema <SCHEMA> --project <project>
   field (independently idempotent).
 - It writes `02-construction/apply_report.yaml` and updates each unit's status/attempts in
   the manifest. Use `--dry-run` to preview the DDL without executing it.
+- **FK guard — never invent a dependency.** `convert-schema` records each unit's
+  `source_fk_count`; `apply-schema` refuses (holds back + logs a `fk_guard` follow-up) any
+  unit whose converted DDL declares **more** foreign keys than its source. If the source has
+  no FK section in the prompt bundle (e.g. an `ORDERS` table with no enforced FKs), emit none —
+  even if the relationship is "obvious". Adding one is a design change: ask the user, record
+  the approval in the conversion log, and only then raise `source_fk_count` in the manifest.
+- **Advisories.** A unit whose prompt shows an `ADVISORIES` block (e.g. an Oracle Text
+  `fulltext_redesign`) requires the user's decision first (ambiguity gate) — do not port the
+  domain index 1:1 and do not create its `DR$…` tables.
 
 **Automated error-retry loop (minimize human-in-the-loop).** When a unit fails to apply,
 `apply-schema` captures the **target database error** and writes a **remediation prompt** at
@@ -104,13 +140,28 @@ Use `--code` to run the same loop for code objects.
 Stored code (packages, procedures, functions, types — PL/SQL or T-SQL depending on the
 source) needs different context and often iterative refinement:
 ```bash
-python -m dbmig convert-code --schema <SCHEMA> --project <project>   # writes code_prompts/ + code-manifest.yaml
+./dbmig convert-code --schema <SCHEMA> --project <project>   # writes code_prompts/ + code-manifest.yaml
 # you convert each code object -> 02-construction/code/<schema>/*.sql, set status converted
-python -m dbmig apply-schema --schema <SCHEMA> --project <project> --code
+./dbmig apply-schema --schema <SCHEMA> --project <project> --code
 ```
 Constructs with no direct target equivalent (e.g. Oracle packages, SQL Server CLR/Service
 Broker) are redesigned per the pair's playbook (see its `sql-plsql/` or `tsql/` references).
 Expect convert → apply → test → refine cycles.
+
+**Set-returning functions — type the `RETURNS TABLE` from the converted columns.** A clean
+apply does **not** prove a `PIPELINED`→`RETURNS TABLE` (or TVF→`RETURNS TABLE`/`SETOF`)
+conversion: PostgreSQL only checks the query's row type against the declared columns when the
+function executes. In a real run `RETURNS TABLE(book_id numeric, …)` over `SELECT b.id …`
+(`bigint`) applied fine and failed at first call. Before marking such a unit `converted`,
+check every declared column against the type of the expression it returns (the converted
+table's column type, or the aggregate's result type: `COUNT`→`bigint`, `SUM/AVG`→`numeric`),
+or cast in the select list. If the target is reachable, run one read-only call
+(`SELECT * FROM <fn>(<args>) LIMIT 1` in a rolled-back transaction) right after apply.
+
+**Package spec + body = one unit (Oracle).** The extracted `PACKAGE` (and `TYPE`) DDL
+already contains its body, so `convert-code` converts spec and body as **one** unit
+(`includes_body: true`, output `code/<schema>/package__<name>.sql`) instead of two prompts
+that each carried the body. Convert all of its subprograms into that one output file.
 
 **Package-flattening naming conflicts (Oracle).** Packages are flattened to
 `<package>_<subprogram>` routines. `convert-code` automatically checks (via `ALL_PROCEDURES`)

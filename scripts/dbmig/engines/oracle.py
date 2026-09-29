@@ -46,9 +46,11 @@ def _set_metadata_transform(conn) -> None:
             END;
             """
         )
-    except Exception:
-        # Defaults still produce valid DDL if the session transform can't be set.
-        pass
+    except Exception as exc:  # noqa: BLE001
+        # Defaults still produce valid DDL if the session transform can't be set,
+        # but the DDL will carry storage clauses — say so.
+        from .. import console
+        console.warn(f"DBMS_METADATA session transform not set ({exc}); DDL keeps storage clauses")
     finally:
         cur.close()
 
@@ -112,22 +114,83 @@ def package_routines(conn, schema: str):
     return out
 
 
+# Oracle-generated internal/secondary tables that appear in ALL_TABLES but are
+# NOT user objects and must never be migrated: Oracle Text (CONTEXT) index
+# tables (DR$<idx>$I/K/N/U...), materialized-view logs (MLOG$/RUPD$), IOT
+# overflow segments, nested-table storage and domain-index secondary tables.
+# Applied (alias ``t``) to every ALL_TABLES read — list_tables AND inventory.
+INTERNAL_TABLE_FILTER = (
+    "t.table_name NOT LIKE 'DR$%' AND t.table_name NOT LIKE 'MLOG$%' AND t.table_name NOT LIKE 'RUPD$%' AND t.table_name NOT LIKE 'SYS_IOT_OVER_%' AND t.nested = 'NO' AND (t.secondary = 'N' OR t.secondary IS NULL)")
+
+# Same exclusion for ALL_OBJECTS names (DR$ tables *and* their DR$ indexes).
+INTERNAL_OBJECT_FILTER = (
+    "object_name NOT LIKE 'DR$%' AND object_name NOT LIKE 'MLOG$%' AND object_name NOT LIKE 'RUPD$%' AND object_name NOT LIKE 'SYS_IOT_OVER_%'")
+
+# Complete query texts are static literals (no string formatting); the filter text is
+# repeated verbatim and a unit test asserts each query embeds its filter exactly.
+SQL_LIST_TABLES = ("SELECT table_name FROM all_tables t WHERE owner = :owner AND t.table_name NOT LIKE 'DR$%' AND t.table_name NOT LIKE 'MLOG$%' AND t.table_name NOT LIKE 'RUPD$%' AND t.table_name NOT LIKE 'SYS_IOT_OVER_%' AND t.nested = 'NO' AND (t.secondary = 'N' OR t.secondary IS NULL) ORDER BY table_name")
+SQL_OBJECT_COUNTS = ("SELECT object_type, COUNT(*) FROM all_objects WHERE owner = :o AND object_name NOT LIKE 'DR$%' AND object_name NOT LIKE 'MLOG$%' AND object_name NOT LIKE 'RUPD$%' AND object_name NOT LIKE 'SYS_IOT_OVER_%' GROUP BY object_type ORDER BY object_type")
+SQL_EXCLUDED_COUNTS = ("SELECT object_type, COUNT(*) FROM all_objects WHERE owner = :o AND NOT (object_name NOT LIKE 'DR$%' AND object_name NOT LIKE 'MLOG$%' AND object_name NOT LIKE 'RUPD$%' AND object_name NOT LIKE 'SYS_IOT_OVER_%') GROUP BY object_type ORDER BY object_type")
+SQL_TABLES = ("SELECT t.table_name, NVL(t.num_rows, -1), (SELECT COUNT(*) FROM all_tab_columns c WHERE c.owner = t.owner AND c.table_name = t.table_name) FROM all_tables t WHERE t.owner = :o AND t.table_name NOT LIKE 'DR$%' AND t.table_name NOT LIKE 'MLOG$%' AND t.table_name NOT LIKE 'RUPD$%' AND t.table_name NOT LIKE 'SYS_IOT_OVER_%' AND t.nested = 'NO' AND (t.secondary = 'N' OR t.secondary IS NULL) ORDER BY t.table_name")
+SQL_DATATYPES = ("SELECT c.data_type, COUNT(*) FROM all_tab_columns c JOIN all_tables t ON t.owner = c.owner AND t.table_name = c.table_name WHERE c.owner = :o AND t.table_name NOT LIKE 'DR$%' AND t.table_name NOT LIKE 'MLOG$%' AND t.table_name NOT LIKE 'RUPD$%' AND t.table_name NOT LIKE 'SYS_IOT_OVER_%' AND t.nested = 'NO' AND (t.secondary = 'N' OR t.secondary IS NULL) GROUP BY c.data_type ORDER BY COUNT(*) DESC")
+
+FULLTEXT_DECISION = "fulltext_redesign"
+
+
+def domain_indexes(conn, schema: str) -> List[Dict[str, Any]]:
+    """Domain indexes (Oracle Text CONTEXT/CTXCAT, Spatial, ...) in ``schema``:
+    ``[{index, table, columns, indextype, parameters}]``. They have no 1:1 port —
+    each needs a target redesign decision."""
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "SELECT i.index_name, i.table_name, i.ityp_owner || '.' || i.ityp_name, "
+            "       i.parameters, "
+            "       (SELECT LISTAGG(c.column_name, ',') WITHIN GROUP "
+            "               (ORDER BY c.column_position) "
+            "          FROM all_ind_columns c "
+            "         WHERE c.index_owner = i.owner AND c.index_name = i.index_name) "
+            "FROM all_indexes i "
+            "WHERE i.owner = :o AND i.index_type = 'DOMAIN' "
+            "ORDER BY i.table_name, i.index_name", o=schema.upper())
+        return [{"index": r[0], "table": r[1], "indextype": r[2],
+                 "parameters": _read(r[3]).strip() if r[3] else "",
+                 "columns": (r[4] or "").split(",") if r[4] else []}
+                for r in cur.fetchall()]
+    except Exception:
+        return []
+    finally:
+        cur.close()
+
+
+def fulltext_advisory(idx: Dict[str, Any]) -> str:
+    """SQL-comment advisory injected into the owning table's object-unit so the
+    conversion stops at a decision instead of porting the domain index 1:1."""
+    cols = ", ".join(idx.get("columns") or []) or "?"
+    return "\n".join([
+        f"-- DECISION REQUIRED ({FULLTEXT_DECISION}): {idx['indextype']} domain index "  # nosemgrep: string-concat-in-list -- intentional: one long message split across lines
+        f"{idx['index']} ON {idx['table']}({cols})",
+        f"--   parameters: {idx.get('parameters') or '(none)'}",
+        "--   This is Oracle Text. It has NO 1:1 equivalent and must be redesigned on",
+        "--   the target (see the engine checks: PostgreSQL = tsvector + GIN index,",
+        "--   MySQL = FULLTEXT index). Its DR$" + idx['index'] + "$* internal tables are",
+        "--   excluded from migration automatically — do NOT create them. Any trigger",
+        "--   that only maintains the indexed text column and any ROWID/TOKEN_INFO",
+        "--   columns belong to Oracle Text, not to the application data model.",
+        "--   ASK the user to confirm the redesign before converting (ambiguity gate).",
+        "--   Application counterpart: every CONTAINS(" + cols + ", ...) / SCORE(n)",
+        "--   query must be rewritten so its expression matches the new index",
+        "--   expression VERBATIM, or the planner silently falls back to a seq scan.",
+    ])
+
+
 def list_tables(conn, schema: str, only: Optional[List[str]] = None) -> List[str]:
     cur = conn.cursor()
     try:
         # Exclude Oracle-generated secondary/internal tables that show up in
         # all_tables but are not user objects: Oracle Text (CONTEXT) index tables
         # (DR$...), materialized-view logs (MLOG$/RUPD$), and IOT overflow segments.
-        sql = ("SELECT table_name FROM all_tables "
-               "WHERE owner = :owner "
-               "  AND table_name NOT LIKE 'DR$%' "
-               "  AND table_name NOT LIKE 'MLOG$%' "
-               "  AND table_name NOT LIKE 'RUPD$%' "
-               "  AND table_name NOT LIKE 'SYS_IOT_OVER_%' "
-               "  AND nested = 'NO' "
-               "  AND (secondary = 'N' OR secondary IS NULL) "
-               "ORDER BY table_name")
-        cur.execute(sql, owner=schema.upper())
+        cur.execute(SQL_LIST_TABLES, owner=schema.upper())
         tables = [r[0] for r in cur.fetchall()]
     finally:
         cur.close()
@@ -409,32 +472,23 @@ def inventory(conn, schema: str) -> Dict[str, Any]:
     sch = schema.upper()
     result: Dict[str, Any] = {"schema": sch}
     try:
-        cur.execute(
-            "SELECT object_type, COUNT(*) FROM all_objects "
-            "WHERE owner = :o GROUP BY object_type ORDER BY object_type",
-            o=sch,
-        )
+        cur.execute(SQL_OBJECT_COUNTS, o=sch)
         result["object_counts"] = {r[0]: int(r[1]) for r in cur.fetchall()}
 
-        cur.execute(
-            """
-            SELECT t.table_name, NVL(t.num_rows, -1),
-                   (SELECT COUNT(*) FROM all_tab_columns c
-                    WHERE c.owner = t.owner AND c.table_name = t.table_name)
-            FROM all_tables t WHERE t.owner = :o ORDER BY t.table_name
-            """,
-            o=sch,
-        )
+        # Report what was excluded, so the counts above are explainable.
+        cur.execute(SQL_EXCLUDED_COUNTS, o=sch)
+        excluded = {r[0]: int(r[1]) for r in cur.fetchall()}
+        if excluded:
+            result["excluded_internal_objects"] = excluded
+
+        cur.execute(SQL_TABLES, o=sch)
         result["tables"] = [
             {"name": r[0], "num_rows": int(r[1]), "columns": int(r[2])}
             for r in cur.fetchall()
         ]
 
-        cur.execute(
-            "SELECT data_type, COUNT(*) FROM all_tab_columns "
-            "WHERE owner = :o GROUP BY data_type ORDER BY COUNT(*) DESC",
-            o=sch,
-        )
+        # Datatypes of USER tables only (DR$ tables would add ROWID/BLOB noise).
+        cur.execute(SQL_DATATYPES, o=sch)
         result["datatypes"] = {r[0]: int(r[1]) for r in cur.fetchall()}
 
         cur.execute(
@@ -463,6 +517,27 @@ def inventory(conn, schema: str) -> Dict[str, Any]:
             result["cross_schema_dependencies"] = []
     finally:
         cur.close()
+
+    # Domain indexes → first-class decision items (not a model-noticed detail).
+    didx = domain_indexes(conn, schema)
+    if didx:
+        result["domain_indexes"] = didx
+        result["decision_items"] = [
+            {"id": f"{FULLTEXT_DECISION}:{d['table']}.{d['index']}",
+             "kind": FULLTEXT_DECISION if "CTXSYS" in d["indextype"].upper()
+             else "domain_index_redesign",
+             "object": f"{sch}.{d['table']}",
+             "index": d["index"], "columns": d["columns"],
+             "indextype": d["indextype"],
+             "summary": (f"{d['indextype']} index {d['index']} on "
+                         f"{d['table']}({', '.join(d['columns'])}) has no 1:1 target "
+                         "equivalent — choose a redesign (e.g. PostgreSQL tsvector + "
+                         "GIN, MySQL FULLTEXT); internal DR$ tables are excluded."),
+             "app_impact": ("rewrite application CONTAINS()/SCORE() queries on "
+                            f"{d['table']}.{', '.join(d['columns'])} to the chosen "
+                            "target full-text expression, matching the index verbatim"),
+             "status": "open"}
+            for d in didx]
     return result
 
 
@@ -495,9 +570,14 @@ class OracleEngine(SourceEngine):
                  "columns": t["columns"]} for t in inv.get("tables", [])]
 
     def extract_object_unit(self, schema, table) -> ObjectUnit:
+        components = object_unit_ddl(self.connection, schema, table)
+        notes = [fulltext_advisory(d) for d in self._domain_indexes(schema)
+                 if d["table"].upper() == table.upper()]
+        if notes:
+            components["advisories"] = "\n\n".join(notes)
         return ObjectUnit(
             schema=schema.upper(), name=table,
-            components=object_unit_ddl(self.connection, schema, table),
+            components=components,
             num_rows=table_row_estimate(self.connection, schema, table))
 
     def extract_code_objects(self, schema):
@@ -517,6 +597,33 @@ class OracleEngine(SourceEngine):
     def sample_rows(self, schema, table, n=5):
         assert_identifier(schema, table)
         return sample_rows(self.connection, schema, table, n=n)
+
+    def _domain_indexes(self, schema):
+        # Cached per schema: extract_units calls extract_object_unit per table.
+        cache = self.__dict__.setdefault("_didx_cache", {})
+        key = schema.upper()
+        if key not in cache:
+            cache[key] = domain_indexes(self.connection, schema)
+        return cache[key]
+
+    def set_session_schema(self, schema):
+        # ALTER SESSION is not transactional, so it survives the per-case
+        # rollbacks in run-tests. The schema name cannot be a bind in ALTER SESSION,
+        # so a static PL/SQL block receives it as a BIND and validates it server-side
+        # with DBMS_ASSERT.SIMPLE_SQL_NAME before use (plus the client-side check).
+        assert_identifier(schema)
+        self.execute(
+            "BEGIN EXECUTE IMMEDIATE 'ALTER SESSION SET CURRENT_SCHEMA = ' || "
+            "DBMS_ASSERT.SIMPLE_SQL_NAME(:s); END;", {"s": schema.upper()})
+
+    def standalone_sequences(self, schema):
+        # System identity sequences are ISEQ$$_<n>; everything else is a
+        # user sequence the identity reset does not cover.
+        _, rows = self.fetch(
+            "SELECT sequence_name, last_number FROM all_sequences "
+            "WHERE sequence_owner = :o AND sequence_name NOT LIKE 'ISEQ$$%' "
+            "ORDER BY sequence_name", {"o": schema.upper()})
+        return [{"name": r[0], "last_value": int(r[1])} for r in rows]
 
     def primary_key_columns(self, schema, table):
         return primary_key_columns(self.connection, schema, table)

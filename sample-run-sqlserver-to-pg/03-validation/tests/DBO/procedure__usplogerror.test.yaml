@@ -1,0 +1,26 @@
+object: uspLogError
+schema: DBO
+type: procedure
+notes: 'REDESIGNED signature (errors are passed, not read ambiently). l1: called with no active error -> no row on both. l2: a real error (divide by zero) caught and logged -> ErrorLog +1 on both; SQL Server
+  reads ERROR_*() ambiently, PostgreSQL passes GET STACKED DIAGNOSTICS fields.'
+cases:
+- id: l1
+  type: procedure
+  call_source: EXEC dbo.uspLogError
+  call_target: CALL dbo.usplogerror()
+  verify:
+  - name: errorlog
+    source_sql: SELECT COUNT(*) FROM dbo.ErrorLog
+    target_sql: SELECT count(*) FROM dbo.errorlog
+- id: l2
+  type: procedure
+  call_source: BEGIN TRY SELECT 1/0; END TRY BEGIN CATCH EXEC dbo.uspLogError; END CATCH
+  call_target: 'DO $$ DECLARE m text; s text; v int := 0; BEGIN PERFORM 1/0; EXCEPTION WHEN OTHERS THEN GET STACKED DIAGNOSTICS m = MESSAGE_TEXT, s = RETURNED_SQLSTATE; CALL dbo.usplogerror(v, 8134, 16, 1, NULL, NULL,
+    s || '': '' || m); END $$'
+  verify:
+  - name: errorlog
+    source_sql: SELECT COUNT(*) FROM dbo.ErrorLog
+    target_sql: SELECT count(*) FROM dbo.errorlog
+  - name: errnum
+    source_sql: SELECT ISNULL(SUM(ErrorNumber),0) FROM dbo.ErrorLog
+    target_sql: SELECT coalesce(sum(errornumber),0) FROM dbo.errorlog

@@ -1,0 +1,9 @@
+object: ufnGetAccountingEndDate
+schema: DBO
+type: function
+notes: datetime tick rounding (…59.997) must be reproduced exactly.
+cases:
+- id: c1
+  type: function
+  source_sql: SELECT dbo.ufnGetAccountingEndDate()
+  target_sql: SELECT dbo.ufngetaccountingenddate()

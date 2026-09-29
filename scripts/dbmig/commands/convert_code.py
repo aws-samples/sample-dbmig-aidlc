@@ -66,6 +66,40 @@ def _check_naming_conflicts(routines, project: str) -> None:
                          f"{c['sources'][0]})")
 
 
+def merge_spec_and_body(objs):
+    """Convert a PACKAGE (or TYPE) and its BODY as ONE unit.
+
+    Oracle's DBMS_METADATA.GET_DDL('PACKAGE'|'TYPE') already returns the spec AND
+    the body, so a separate BODY unit re-sent the body in a second prompt (and
+    split one logical conversion across two outputs). When the spec's DDL contains
+    its body, the separate BODY unit is dropped and the combined unit takes the
+    BODY's position in the dependency order (bodies may reference anything).
+    Returns ``(objs, merged)`` where ``merged`` maps type -> set of names."""
+    import re as _re
+    pairs = {"PACKAGE BODY": "PACKAGE", "TYPE BODY": "TYPE"}
+    specs = {(o.object_type, o.name): o for o in objs if o.object_type in pairs.values()}
+    merged = {}
+    out = []
+    for o in objs:
+        if o.object_type in pairs.values():
+            body_type = next(b for b, sp in pairs.items() if sp == o.object_type)
+            has_body_unit = any(x.object_type == body_type and x.name == o.name for x in objs)
+            if has_body_unit and _re.search(rf"\b{body_type}\b", o.source_ddl, _re.I):
+                continue                      # emitted at the BODY's position
+            out.append(o)
+        elif o.object_type in pairs:
+            spec = specs.get((pairs[o.object_type], o.name))
+            if spec is not None and _re.search(rf"\b{o.object_type}\b",
+                                               spec.source_ddl, _re.I):
+                out.append(spec)
+                merged.setdefault(spec.object_type, set()).add(spec.name)
+            else:
+                out.append(o)
+        else:
+            out.append(o)
+    return out, merged
+
+
 def run(args) -> int:
     try:
         pair = load_pair()
@@ -96,6 +130,7 @@ def run(args) -> int:
         return 0
 
     _check_naming_conflicts(routines, args.project)
+    objs, merged = merge_spec_and_body(objs)
 
     root = config.find_repo_root()
     ws = config.workspace_dir(args.project) / "02-construction"
@@ -104,28 +139,49 @@ def run(args) -> int:
     prompts_dir.mkdir(parents=True, exist_ok=True)
     code_dir.mkdir(parents=True, exist_ok=True)
 
+    shared = prompt_builder.write_shared_context(ws, prompt_builder.CODE, root)
+    from .convert_schema import _target_label
+    from ..engines.base import batch_by_size
+    tdisp = _target_label()
+    llm = config.llm_config()
+    # Small code objects of the same type share one prompt (large ones stay alone),
+    # so a schema with thousands of routines does not become thousands of prompts.
+    batches = batch_by_size(
+        objs, lambda o: len(o.source_ddl),
+        max_items=int(llm.get("code_batch_max_units", 8)),
+        max_bytes=int(llm.get("code_batch_max_bytes", 12000)),
+        key_of=lambda o: o.object_type)
     manifest_units: List[dict] = []
-    for obj in objs:
-        base = f"{_safe(obj.object_type)}__{_safe(obj.name)}"
-        prompt_path = prompts_dir / f"{base}.prompt.md"
-        out = f"code/{args.schema.lower()}/{base}.sql"
-        body = prompt_builder.build_code_prompt(obj, repo_root=root)
+    for i, batch in enumerate(batches, start=1):
+        bases = [f"{_safe(o.object_type)}__{_safe(o.name)}" for o in batch]
+        outs = [f"code/{args.schema.lower()}/{b}.sql" for b in bases]
+        prompt_name = (f"{bases[0]}.prompt.md" if len(batch) == 1
+                       else f"batch_{i:04d}.prompt.md")
+        prompt_path = prompts_dir / prompt_name
+        body = prompt_builder.build_code_prompt(batch, repo_root=root,
+                                                shared_context=shared)
         header = (
             f"<!-- dbmig code conversion prompt\n"
-            f"     object: {obj.object_type} {obj.schema}.{obj.name}\n"
-            f"     Convert and SAVE PostgreSQL code to: {out}\n"
-            f"     Then set status to 'converted' in "
+            f"     batch: {i}/{len(batches)}\n"
+            f"     Convert each object and SAVE {tdisp} code to its output file:\n"
+            + "".join(f"       - {o.object_type} {o.schema}.{o.name} -> {out}\n"
+                      for o, out in zip(batch, outs))
+            + f"     Then set each unit's status to 'converted' in "
             f"{config.manifest_file('code-manifest', args.schema)}. -->\n\n"
         )
         prompt_path.write_text(header + body)
-        manifest_units.append({
-            "name": obj.name,
-            "object_type": obj.object_type,
-            "schema": obj.schema,
-            "prompt_file": str(prompt_path.relative_to(ws)),
-            "output_file": out,
-            "status": "pending",
-        })
+        for obj, out in zip(batch, outs):
+            manifest_units.append({
+                "name": obj.name,
+                "object_type": obj.object_type,
+                "schema": obj.schema,
+                "batch_id": i,
+                "prompt_file": str(prompt_path.relative_to(ws)),
+                "output_file": out,
+                "status": "pending",
+            })
+            if obj.name in merged.get(obj.object_type, set()):
+                manifest_units[-1]["includes_body"] = True
 
     manifest = {
         "project": args.project,
@@ -142,7 +198,11 @@ def run(args) -> int:
     write_manifest(manifest_path, manifest)
 
     console.heading("Code conversion prepared")
-    console.ok(f"{len(objs)} code object(s)")
+    console.ok(f"{len(objs)} code object(s) in {len(batches)} prompt(s)")
+    n_merged = sum(len(v) for v in merged.values())
+    if n_merged:
+        console.info(f"{n_merged} spec+body pair(s) converted as one unit "
+                     "(the extracted spec already contains its body)")
     console.ok(f"Prompt bundles: {prompts_dir}")
     console.ok(f"Manifest:       {manifest_path}")
     try:

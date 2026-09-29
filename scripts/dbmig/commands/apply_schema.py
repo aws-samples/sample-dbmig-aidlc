@@ -94,6 +94,8 @@ def run(args) -> int:
     # Build work list: units with a converted output file, not already applied,
     # not already exhausted (needs_human), honoring an optional --tables filter.
     work: List[Tuple[str, str]] = []
+    code = bool(args.code)
+    fk_violations: List[str] = []
     skipped_applied = 0
     skipped_exhausted = 0
     missing = 0
@@ -119,6 +121,26 @@ def run(args) -> int:
             missing += 1
             continue
         full = output_parser.parse_ddl(out_path.read_text())
+        # FK guard (table units only; recorded by convert-schema): a converted
+        # unit must not declare MORE foreign keys than its source — the model must
+        # never invent a dependency the source did not enforce. Checked on the
+        # pre-data pass (the whole unit is read either way).
+        src_fk = u.get("source_fk_count")
+        if not post and not code and src_fk is not None:
+            out_fk = ddl_split.count_foreign_keys(full)
+            if out_fk > int(src_fk):
+                fk_violations.append(u["name"])
+                console.err(f"{u['name']}: converted DDL declares {out_fk} foreign "
+                            f"key(s) but the source has {src_fk} — invented "
+                            "dependency? Not applying this unit.")
+                fu.handle_failure(
+                    mode, followup, phase="construction", kind="fk_guard",
+                    obj=f"{u.get('schema', args.schema)}.{u['name']}",
+                    detail=f"converted FK count {out_fk} > source FK count {src_fk}; "
+                           "remove FKs not present in the source (or record an "
+                           "explicit, user-approved design decision and set "
+                           "source_fk_count in the manifest)")
+                continue
         pre_sql, post_sql = ddl_split.partition_ddl(full)
         sql = post_sql if post else pre_sql
         if not sql.strip():
@@ -133,6 +155,9 @@ def run(args) -> int:
 
     if skipped_applied:
         console.info(f"skipping {skipped_applied} already-applied unit(s)")
+    if fk_violations:
+        console.warn(f"FK guard: {len(fk_violations)} unit(s) held back (more FKs than "
+                     "the source): " + ", ".join(fk_violations))
     if not_structural:
         console.warn(f"{not_structural} unit(s) not yet structurally applied — run "
                      "apply-schema (pre-data) before --post-data")
@@ -145,6 +170,10 @@ def run(args) -> int:
         console.warn(f"{missing} unit(s) not yet converted (no output file) — "
                      "have Kiro convert them first")
     if not work:
+        if fk_violations:
+            console.err("FK_GUARD: nothing applied — fix the held-back unit(s) above, "
+                        "then re-run")
+            return 1 if mode == fu.INTERACTIVE else 0
         if skipped_exhausted:
             console.err("MAX_RETRIES_EXHAUSTED: remaining failures recorded for "
                         f"follow-up ({followup.open_count()} open). See {followup.md.name}")

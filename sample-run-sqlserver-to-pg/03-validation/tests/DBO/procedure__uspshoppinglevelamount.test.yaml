@@ -1,0 +1,18 @@
+object: uspShoppingLevelAmount
+schema: DBO
+type: function
+notes: '@Amount NUMERIC(18,0) rounds 99.6 -> 100; @Percent <= 100 yields NULL levels.'
+cases:
+- id: r1
+  type: function
+  source_sql: SET NOCOUNT ON; DECLARE @t TABLE (OrderID int, AmountLevel varchar(20)); INSERT INTO @t EXEC dbo.uspShoppingLevelAmount @Percent = 150, @Amount = 99.6; SELECT SUM(CASE WHEN AmountLevel = '|more
+    than|' THEN 1 ELSE 0 END) FROM @t
+  target_sql: SELECT sum(CASE WHEN amountlevel = '|more than|' THEN 1 ELSE 0 END) FROM dbo.uspshoppinglevelamount(150, 99.6) t
+- id: r2
+  type: function
+  source_sql: SET NOCOUNT ON; DECLARE @t TABLE (OrderID int, AmountLevel varchar(20)); INSERT INTO @t EXEC dbo.uspShoppingLevelAmount @Percent = 150, @Amount = 99.6; SELECT COUNT(*) FROM @t
+  target_sql: SELECT count(*) FROM dbo.uspshoppinglevelamount(150, 99.6) t
+- id: r3
+  type: function
+  source_sql: SET NOCOUNT ON; DECLARE @t TABLE (OrderID int, AmountLevel varchar(20)); INSERT INTO @t EXEC dbo.uspShoppingLevelAmount @Percent = 50, @Amount = 10; SELECT COUNT(AmountLevel) FROM @t
+  target_sql: SELECT count(amountlevel) FROM dbo.uspshoppinglevelamount(50, 10) t

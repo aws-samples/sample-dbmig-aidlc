@@ -1,0 +1,183 @@
+total_rows: 2963
+tables:
+  Address:
+    copied: 0
+    status: ok
+    error: null
+  Book:
+    copied: 8
+    status: ok
+    error: null
+  Author:
+    copied: 290
+    status: ok
+    error: null
+  BillOfMaterials:
+    copied: 982
+    status: ok
+    error: null
+  Coupons:
+    copied: 54
+    status: ok
+    error: null
+  Customer:
+    copied: 1
+    status: ok
+    error: null
+  ErrorLog:
+    copied: 0
+    status: ok
+    error: null
+  DatabaseLog:
+    copied: 30
+    status: ok
+    error: null
+  Offer:
+    copied: 0
+    status: ok
+    error: null
+  Members:
+    copied: 20
+    status: ok
+    error: null
+  Order:
+    copied: 0
+    status: ok
+    error: null
+  OrderItem:
+    copied: 0
+    status: ok
+    error: null
+  ProductSaleRegions:
+    copied: 10
+    status: ok
+    error: null
+  Person:
+    copied: 930
+    status: ok
+    error: null
+  Product:
+    copied: 504
+    status: ok
+    error: null
+  ProductSales:
+    copied: 15
+    status: ok
+    error: null
+  ReferenceData:
+    copied: 24
+    status: ok
+    error: null
+  ShoppingCart:
+    copied: 0
+    status: ok
+    error: null
+  Shopping:
+    copied: 95
+    status: ok
+    error: null
+  ShoppingCartItem:
+    copied: 0
+    status: ok
+    error: null
+units:
+- table: Address
+  shard: null
+  copied: 0
+  status: ok
+  error: null
+- table: Book
+  shard: null
+  copied: 8
+  status: ok
+  error: null
+- table: Author
+  shard: null
+  copied: 290
+  status: ok
+  error: null
+- table: BillOfMaterials
+  shard: null
+  copied: 982
+  status: ok
+  error: null
+- table: Coupons
+  shard: null
+  copied: 54
+  status: ok
+  error: null
+- table: Customer
+  shard: null
+  copied: 1
+  status: ok
+  error: null
+- table: ErrorLog
+  shard: null
+  copied: 0
+  status: ok
+  error: null
+- table: DatabaseLog
+  shard: null
+  copied: 30
+  status: ok
+  error: null
+- table: Offer
+  shard: null
+  copied: 0
+  status: ok
+  error: null
+- table: Members
+  shard: null
+  copied: 20
+  status: ok
+  error: null
+- table: Order
+  shard: null
+  copied: 0
+  status: ok
+  error: null
+- table: OrderItem
+  shard: null
+  copied: 0
+  status: ok
+  error: null
+- table: ProductSaleRegions
+  shard: null
+  copied: 10
+  status: ok
+  error: null
+- table: Person
+  shard: null
+  copied: 930
+  status: ok
+  error: null
+- table: Product
+  shard: null
+  copied: 504
+  status: ok
+  error: null
+- table: ProductSales
+  shard: null
+  copied: 15
+  status: ok
+  error: null
+- table: ReferenceData
+  shard: null
+  copied: 24
+  status: ok
+  error: null
+- table: ShoppingCart
+  shard: null
+  copied: 0
+  status: ok
+  error: null
+- table: Shopping
+  shard: null
+  copied: 95
+  status: ok
+  error: null
+- table: ShoppingCartItem
+  shard: null
+  copied: 0
+  status: ok
+  error: null

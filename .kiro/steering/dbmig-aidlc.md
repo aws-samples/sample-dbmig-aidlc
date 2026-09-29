@@ -76,8 +76,17 @@ so the module extends to new engine pairs without changing any skill.
 
 ## Determinism vs. intelligence
 
-The `dbmig` Python package (`scripts/dbmig/`, run as `python -m dbmig <command>`) does all
+The `dbmig` Python package (`scripts/dbmig/`, run as `./dbmig <command>`) does all
 deterministic work — connect, inventory, extract, apply, copy, reconcile, test — and makes
 **no LLM API calls**. The genuinely intelligent step (schema/code conversion and equivalence
-test generation) is performed by **you (Kiro)** via the construction/validation skills, using
+test generation) is performed by **you (the AI assistant — Kiro or Claude Code)** via the construction/validation skills, using
 the pair's datatype map and playbook references as injected context.
+
+## Python environment
+
+Run the toolkit only from the repo-local virtual environment: create it once with
+`python3 -m venv .venv && .venv/bin/pip install -e scripts/`, then invoke every command as
+`./dbmig <command>` from the repo root (the launcher uses `.venv` automatically). Never
+`pip install` into the user's system/user Python and never `sudo pip` — the toolkit's
+dependency floors can upgrade packages other tools rely on. Do not use `python -m dbmig`
+from the repo root (it fails: the package lives in `scripts/`).

@@ -109,6 +109,11 @@ Create a task list with the four phases and their gates, plus intake.
    `obj/`, `dist/`, `out/`) and vendored dependencies are **always** excluded.
 6. **Git state** — if the app is a git repo, run `git status`. A dirty tree makes review hard;
    recommend committing or stashing first. Record the current commit.
+   **If it is NOT a git repo, say so loudly** in the intake summary: *the mirrored backup is the
+   only rollback.* Record `backup_mode: full-tree` — Construction then backs up the **whole
+   in-scope tree once, up front** (see Backup policy), not file-by-file. In a real run,
+   file-by-file backup of a non-git app led to editing files (discovered at boot-time fixing)
+   that had not been pre-backed-up.
 7. **Source-dialect state** — confirm the application still speaks the SOURCE dialect. If it was
    already converted for a different target (e.g. a PostgreSQL run preceding a MySQL one), do
    **not** convert the converted app: restore an original-state copy from that run's mirrored
@@ -143,7 +148,10 @@ migration, not to a dialect pair in the abstract.
 
 ### 1b. Inventory
 
-Invoke **`app-modernization-inception`** → `01-assessment/inventory.md`.
+Invoke **`app-modernization-inception`** → `01-assessment/inventory.md`. It starts with the
+deterministic `./dbmig app-scan --app-dir <APP_DIR> --project <project>` pre-scan (one pass over
+the whole tree, entity↔target type cross-check) and then reads only the flagged files — required
+for large code bases, where reading every file is not affordable.
 
 ### 1c. Change plan — and the gate
 
@@ -191,7 +199,12 @@ e.g. `src/main/resources/application.properties` →
 
 - One timestamped directory per run; never overwrite a previous run.
 - Copy a file immediately before its first edit, preserving the relative path and mode (`cp -p`).
-- Back up only files actually edited; write `MANIFEST.md` listing each with size and reason.
+- **git repo**: back up only files actually edited; write `MANIFEST.md` listing each with size
+  and reason.
+- **Not a git repo** (`backup_mode: full-tree`): copy the **whole in-scope source tree once,
+  before the first edit** (excluding build output/dependencies), so any file edited later —
+  including boot-time fixes — is already covered. `MANIFEST.md` then marks which files were
+  actually edited.
 - Never place a backup inside the application directory or inside build output.
 
 Restore is one mirrored copy back, and `diff -r` compares the whole tree at once.
@@ -200,9 +213,11 @@ Gate: **"Approve the converted application?"** — present the diff summary and 
 
 ## Phase 3 — Validation & Testing
 
-Invoke **`app-modernization-validation`**: compile, fix migration-caused failures, run tests, and record
-a per-site verification matrix. Compile errors from the migration (types, error codes, driver APIs)
-are expected, and fixing them is part of this module.
+Invoke **`app-modernization-validation`**: compile, fix migration-caused failures, **boot the app
+against the migrated target with schema validation on** (required for runnable ORM/framework apps
+— the only check that proves entity mappings), run tests, and record a per-site verification
+matrix. Compile and boot errors from the migration (types, error codes, driver APIs, ORM type
+mappings) are expected, and fixing them is part of this module.
 
 Gate: **"Approve the application validation results?"** Be explicit about what is `UNVERIFIED`.
 

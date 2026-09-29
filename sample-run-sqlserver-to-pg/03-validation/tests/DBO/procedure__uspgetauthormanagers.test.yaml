@@ -1,0 +1,26 @@
+object: uspGetAuthorManagers
+schema: DBO
+type: function
+notes: result-set procedure -> set-returning function. OrganizationNode holds hierarchyid HEX strings, so LEFT(node, LEN-1) rarely matches a parent even in SQL Server — pre-existing logic; equivalence is
+  still asserted over several real authors.
+cases:
+- id: r1
+  type: function
+  source_sql: SET NOCOUNT ON; DECLARE @t TABLE (RecursionLevel int, BusinessEntityID int, FirstName nvarchar(100), LastName nvarchar(100), OrganizationNode nvarchar(50), ManagerFirstName nvarchar(100),
+    ManagerLastName nvarchar(100)); INSERT INTO @t EXEC dbo.uspGetAuthorManagers @BusinessEntityID = 3; SELECT COUNT(*) FROM @t
+  target_sql: SELECT count(*) FROM dbo.uspgetauthormanagers(3)
+- id: r2
+  type: function
+  source_sql: SET NOCOUNT ON; DECLARE @t TABLE (RecursionLevel int, BusinessEntityID int, FirstName nvarchar(100), LastName nvarchar(100), OrganizationNode nvarchar(50), ManagerFirstName nvarchar(100),
+    ManagerLastName nvarchar(100)); INSERT INTO @t EXEC dbo.uspGetAuthorManagers @BusinessEntityID = 8; SELECT COUNT(*) FROM @t
+  target_sql: SELECT count(*) FROM dbo.uspgetauthormanagers(8)
+- id: r3
+  type: function
+  source_sql: SET NOCOUNT ON; DECLARE @t TABLE (RecursionLevel int, BusinessEntityID int, FirstName nvarchar(100), LastName nvarchar(100), OrganizationNode nvarchar(50), ManagerFirstName nvarchar(100),
+    ManagerLastName nvarchar(100)); INSERT INTO @t EXEC dbo.uspGetAuthorManagers @BusinessEntityID = 2; SELECT COUNT(*) FROM @t
+  target_sql: SELECT count(*) FROM dbo.uspgetauthormanagers(2)
+- id: r4
+  type: function
+  source_sql: SET NOCOUNT ON; DECLARE @t TABLE (RecursionLevel int, BusinessEntityID int, FirstName nvarchar(100), LastName nvarchar(100), OrganizationNode nvarchar(50), ManagerFirstName nvarchar(100),
+    ManagerLastName nvarchar(100)); INSERT INTO @t EXEC dbo.uspGetAuthorManagers @BusinessEntityID = 8; SELECT ISNULL(SUM(RecursionLevel),0) FROM @t
+  target_sql: SELECT coalesce(sum(recursionlevel),0) FROM dbo.uspgetauthormanagers(8)

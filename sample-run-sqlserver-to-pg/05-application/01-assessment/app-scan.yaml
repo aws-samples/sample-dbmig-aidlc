@@ -1,0 +1,1119 @@
+app_dir: <app-dir>/bobs-used-bookstore-sample
+pair: sqlserver-to-postgresql
+files_in_scope: 141
+bytes_scanned: 209007
+files_by_type:
+  .cs: 129
+  .csproj: 5
+  .js: 4
+  .json: 3
+excluded_dirs:
+  .git: 1
+  vendored-asset: 145
+leftovers: []
+frameworks:
+  EF Core:
+  - app/Bookstore.Data/ApplicationDbContext.cs
+  - app/Bookstore.Data/Bookstore.Data.csproj
+  - app/Bookstore.Data/PaginatedList.cs
+  - app/Bookstore.Data/Repositories/AddressRepository.cs
+  - app/Bookstore.Data/Repositories/BookRepository.cs
+  - app/Bookstore.Data/Repositories/CustomerRepository.cs
+  - app/Bookstore.Data/Repositories/OfferRepository.cs
+  - app/Bookstore.Data/Repositories/OrderRepository.cs
+  - app/Bookstore.Data/Repositories/ReferenceDataRepository.cs
+  - app/Bookstore.Data/Repositories/ShoppingCartRepository.cs
+  - app/Bookstore.Data/SeedData.cs
+  - app/Bookstore.Web/Bookstore.Web.csproj
+  - app/Bookstore.Web/Startup/MiddlewareSetup.cs
+  - app/Bookstore.Web/Startup/ServicesSetup.cs
+sites:
+  sql: []
+  routine: []
+  error: []
+  resultset: []
+  conn_code:
+  - file: app/Bookstore.Web/Startup/ServicesSetup.cs
+    line: 34
+    text: builder.Services.AddDbContext<ApplicationDbContext>(option => option.UseSqlServer(connString));
+  - file: app/Bookstore.Web/Startup/ServicesSetup.cs
+    line: 91
+    text: var partialConnString = $"Server={dbSecrets.Host},{dbSecrets.Port}; Initial
+      Catalog=BobsUsedBookStore;MultipleActiveResultSets=true; Integrated Security=false;TrustServerCertificate=true;";
+  - file: app/Bookstore.Web/Startup/ServicesSetup.cs
+    line: 93
+    text: var builder = new SqlConnectionStringBuilder(partialConnString)
+  config:
+  - file: app/Bookstore.Data/Bookstore.Data.csproj
+    line: 16
+    text: <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.11"
+      />
+  - file: app/Bookstore.Data/Bookstore.Data.csproj
+    line: 17
+    text: <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.11"
+      />
+  - file: app/Bookstore.Data/Bookstore.Data.csproj
+    line: 18
+    text: <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.11"
+      />
+  - file: app/Bookstore.Web/Bookstore.Web.csproj
+    line: 20
+    text: <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.11"
+      />
+  - file: app/Bookstore.Web/Bookstore.Web.csproj
+    line: 21
+    text: <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.11"
+      />
+  - file: app/Bookstore.Web/Bookstore.Web.csproj
+    line: 22
+    text: <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.20"
+      />
+  - file: app/Bookstore.Web/appsettings.Test.json
+    line: 2
+    text: '"ConnectionStrings": {'
+  - file: app/Bookstore.Web/appsettings.json
+    line: 19
+    kind: plaintext-secret
+    text: '"SaveToken": ***,'
+  db_scripts: []
+entities:
+- orm: EF Core
+  class: Address
+  table: Address
+  schema: null
+  file: app/Bookstore.Domain/Addresses/Address.cs
+  fields: 12
+- orm: EF Core
+  class: Book
+  table: Book
+  schema: null
+  file: app/Bookstore.Domain/Books/Book.cs
+  fields: 16
+- orm: EF Core
+  class: Customer
+  table: Customer
+  schema: null
+  file: app/Bookstore.Domain/Customers/Customer.cs
+  fields: 11
+- orm: EF Core
+  class: Offer
+  table: Offer
+  schema: null
+  file: app/Bookstore.Domain/Offers/Offer.cs
+  fields: 17
+- orm: EF Core
+  class: Order
+  table: Orders
+  schema: null
+  file: app/Bookstore.Domain/Orders/Order.cs
+  fields: 8
+- orm: EF Core
+  class: OrderItem
+  table: OrderItem
+  schema: null
+  file: app/Bookstore.Domain/Orders/OrderItem.cs
+  fields: 7
+- orm: EF Core
+  class: ReferenceDataItem
+  table: ReferenceData
+  schema: null
+  file: app/Bookstore.Domain/ReferenceData/ReferenceDataItem.cs
+  fields: 6
+- orm: EF Core
+  class: ShoppingCart
+  table: ShoppingCart
+  schema: null
+  file: app/Bookstore.Domain/Carts/ShoppingCart.cs
+  fields: 5
+- orm: EF Core
+  class: ShoppingCartItem
+  table: ShoppingCartItem
+  schema: null
+  file: app/Bookstore.Domain/Carts/ShoppingCartItem.cs
+  fields: 8
+type_crosscheck:
+  source: live target catalog (schema dbo)
+  fields_checked: 90
+  rows:
+  - orm: EF Core
+    entity: Address
+    field: AddressLine1
+    type: string
+    table: Address
+    column: AddressLine1
+    target_type: text
+    file: app/Bookstore.Domain/Addresses/Address.cs
+    line: 24
+    issue: 'identifier case: the ORM quotes "AddressLine1" but the target folded it
+      to addressline1 — fold names in the model'
+  - orm: EF Core
+    entity: Address
+    field: AddressLine2
+    type: string?
+    table: Address
+    column: AddressLine2
+    target_type: text
+    file: app/Bookstore.Domain/Addresses/Address.cs
+    line: 26
+    issue: 'identifier case: the ORM quotes "AddressLine2" but the target folded it
+      to addressline2 — fold names in the model'
+  - orm: EF Core
+    entity: Address
+    field: City
+    type: string
+    table: Address
+    column: City
+    target_type: text
+    file: app/Bookstore.Domain/Addresses/Address.cs
+    line: 28
+    issue: 'identifier case: the ORM quotes "City" but the target folded it to city
+      — fold names in the model'
+  - orm: EF Core
+    entity: Address
+    field: State
+    type: string
+    table: Address
+    column: State
+    target_type: text
+    file: app/Bookstore.Domain/Addresses/Address.cs
+    line: 30
+    issue: 'identifier case: the ORM quotes "State" but the target folded it to state
+      — fold names in the model'
+  - orm: EF Core
+    entity: Address
+    field: Country
+    type: string
+    table: Address
+    column: Country
+    target_type: text
+    file: app/Bookstore.Domain/Addresses/Address.cs
+    line: 32
+    issue: 'identifier case: the ORM quotes "Country" but the target folded it to
+      country — fold names in the model'
+  - orm: EF Core
+    entity: Address
+    field: ZipCode
+    type: string
+    table: Address
+    column: ZipCode
+    target_type: text
+    file: app/Bookstore.Domain/Addresses/Address.cs
+    line: 34
+    issue: 'identifier case: the ORM quotes "ZipCode" but the target folded it to
+      zipcode — fold names in the model'
+  - orm: EF Core
+    entity: Address
+    field: CustomerId
+    type: int
+    table: Address
+    column: CustomerId
+    target_type: integer
+    file: app/Bookstore.Domain/Addresses/Address.cs
+    line: 36
+    issue: 'identifier case: the ORM quotes "CustomerId" but the target folded it
+      to customerid — fold names in the model'
+  - orm: EF Core
+    entity: Address
+    field: IsActive
+    type: int
+    table: Address
+    column: IsActive
+    target_type: boolean
+    file: app/Bookstore.Domain/Addresses/Address.cs
+    line: 39
+    issue: 'identifier case: the ORM quotes "IsActive" but the target folded it to
+      isactive — fold names in the model'
+  - orm: EF Core
+    entity: Address
+    field: Id
+    type: int
+    table: Address
+    column: Id
+    target_type: integer
+    file: app/Bookstore.Domain/Entity.cs
+    line: 5
+    issue: 'identifier case: the ORM quotes "Id" but the target folded it to id —
+      fold names in the model'
+  - orm: EF Core
+    entity: Address
+    field: CreatedBy
+    type: string
+    table: Address
+    column: CreatedBy
+    target_type: text
+    file: app/Bookstore.Domain/Entity.cs
+    line: 7
+    issue: 'identifier case: the ORM quotes "CreatedBy" but the target folded it to
+      createdby — fold names in the model'
+  - orm: EF Core
+    entity: Address
+    field: CreatedOn
+    type: DateTime
+    table: Address
+    column: CreatedOn
+    target_type: timestamp without time zone
+    file: app/Bookstore.Domain/Entity.cs
+    line: 9
+    issue: 'identifier case: the ORM quotes "CreatedOn" but the target folded it to
+      createdon — fold names in the model'
+  - orm: EF Core
+    entity: Address
+    field: UpdatedOn
+    type: DateTime
+    table: Address
+    column: UpdatedOn
+    target_type: timestamp without time zone
+    file: app/Bookstore.Domain/Entity.cs
+    line: 11
+    issue: 'identifier case: the ORM quotes "UpdatedOn" but the target folded it to
+      updatedon — fold names in the model'
+  - orm: EF Core
+    entity: Book
+    field: Name
+    type: string
+    table: Book
+    column: Name
+    target_type: text
+    file: app/Bookstore.Domain/Books/Book.cs
+    line: 37
+    issue: 'identifier case: the ORM quotes "Name" but the target folded it to name
+      — fold names in the model'
+  - orm: EF Core
+    entity: Book
+    field: Author
+    type: string
+    table: Book
+    column: Author
+    target_type: text
+    file: app/Bookstore.Domain/Books/Book.cs
+    line: 39
+    issue: 'identifier case: the ORM quotes "Author" but the target folded it to author
+      — fold names in the model'
+  - orm: EF Core
+    entity: Book
+    field: Year
+    type: int?
+    table: Book
+    column: Year
+    target_type: integer
+    file: app/Bookstore.Domain/Books/Book.cs
+    line: 41
+    issue: 'identifier case: the ORM quotes "Year" but the target folded it to year
+      — fold names in the model'
+  - orm: EF Core
+    entity: Book
+    field: ISBN
+    type: string
+    table: Book
+    column: ISBN
+    target_type: text
+    file: app/Bookstore.Domain/Books/Book.cs
+    line: 43
+    issue: 'identifier case: the ORM quotes "ISBN" but the target folded it to isbn
+      — fold names in the model'
+  - orm: EF Core
+    entity: Book
+    field: PublisherId
+    type: int
+    table: Book
+    column: PublisherId
+    target_type: integer
+    file: app/Bookstore.Domain/Books/Book.cs
+    line: 46
+    issue: 'identifier case: the ORM quotes "PublisherId" but the target folded it
+      to publisherid — fold names in the model'
+  - orm: EF Core
+    entity: Book
+    field: BookTypeId
+    type: int
+    table: Book
+    column: BookTypeId
+    target_type: integer
+    file: app/Bookstore.Domain/Books/Book.cs
+    line: 49
+    issue: 'identifier case: the ORM quotes "BookTypeId" but the target folded it
+      to booktypeid — fold names in the model'
+  - orm: EF Core
+    entity: Book
+    field: GenreId
+    type: int
+    table: Book
+    column: GenreId
+    target_type: integer
+    file: app/Bookstore.Domain/Books/Book.cs
+    line: 52
+    issue: 'identifier case: the ORM quotes "GenreId" but the target folded it to
+      genreid — fold names in the model'
+  - orm: EF Core
+    entity: Book
+    field: ConditionId
+    type: int
+    table: Book
+    column: ConditionId
+    target_type: integer
+    file: app/Bookstore.Domain/Books/Book.cs
+    line: 55
+    issue: 'identifier case: the ORM quotes "ConditionId" but the target folded it
+      to conditionid — fold names in the model'
+  - orm: EF Core
+    entity: Book
+    field: CoverImageUrl
+    type: string?
+    table: Book
+    column: CoverImageUrl
+    target_type: text
+    file: app/Bookstore.Domain/Books/Book.cs
+    line: 57
+    issue: 'identifier case: the ORM quotes "CoverImageUrl" but the target folded
+      it to coverimageurl — fold names in the model'
+  - orm: EF Core
+    entity: Book
+    field: Summary
+    type: string?
+    table: Book
+    column: Summary
+    target_type: text
+    file: app/Bookstore.Domain/Books/Book.cs
+    line: 59
+    issue: 'identifier case: the ORM quotes "Summary" but the target folded it to
+      summary — fold names in the model'
+  - orm: EF Core
+    entity: Book
+    field: Price
+    type: decimal
+    table: Book
+    column: Price
+    target_type: numeric
+    file: app/Bookstore.Domain/Books/Book.cs
+    line: 61
+    issue: 'identifier case: the ORM quotes "Price" but the target folded it to price
+      — fold names in the model'
+  - orm: EF Core
+    entity: Book
+    field: Quantity
+    type: int
+    table: Book
+    column: Quantity
+    target_type: integer
+    file: app/Bookstore.Domain/Books/Book.cs
+    line: 63
+    issue: 'identifier case: the ORM quotes "Quantity" but the target folded it to
+      quantity — fold names in the model'
+  - orm: EF Core
+    entity: Book
+    field: Id
+    type: int
+    table: Book
+    column: Id
+    target_type: integer
+    file: app/Bookstore.Domain/Entity.cs
+    line: 5
+    issue: 'identifier case: the ORM quotes "Id" but the target folded it to id —
+      fold names in the model'
+  - orm: EF Core
+    entity: Book
+    field: CreatedBy
+    type: string
+    table: Book
+    column: CreatedBy
+    target_type: text
+    file: app/Bookstore.Domain/Entity.cs
+    line: 7
+    issue: 'identifier case: the ORM quotes "CreatedBy" but the target folded it to
+      createdby — fold names in the model'
+  - orm: EF Core
+    entity: Book
+    field: CreatedOn
+    type: DateTime
+    table: Book
+    column: CreatedOn
+    target_type: timestamp without time zone
+    file: app/Bookstore.Domain/Entity.cs
+    line: 9
+    issue: 'identifier case: the ORM quotes "CreatedOn" but the target folded it to
+      createdon — fold names in the model'
+  - orm: EF Core
+    entity: Book
+    field: UpdatedOn
+    type: DateTime
+    table: Book
+    column: UpdatedOn
+    target_type: timestamp without time zone
+    file: app/Bookstore.Domain/Entity.cs
+    line: 11
+    issue: 'identifier case: the ORM quotes "UpdatedOn" but the target folded it to
+      updatedon — fold names in the model'
+  - orm: EF Core
+    entity: Customer
+    field: Sub
+    type: string
+    table: Customer
+    column: Sub
+    target_type: character varying
+    file: app/Bookstore.Domain/Customers/Customer.cs
+    line: 13
+    issue: 'identifier case: the ORM quotes "Sub" but the target folded it to sub
+      — fold names in the model'
+  - orm: EF Core
+    entity: Customer
+    field: Username
+    type: string?
+    table: Customer
+    column: Username
+    target_type: text
+    file: app/Bookstore.Domain/Customers/Customer.cs
+    line: 15
+    issue: 'identifier case: the ORM quotes "Username" but the target folded it to
+      username — fold names in the model'
+  - orm: EF Core
+    entity: Customer
+    field: FirstName
+    type: string?
+    table: Customer
+    column: FirstName
+    target_type: text
+    file: app/Bookstore.Domain/Customers/Customer.cs
+    line: 17
+    issue: 'identifier case: the ORM quotes "FirstName" but the target folded it to
+      firstname — fold names in the model'
+  - orm: EF Core
+    entity: Customer
+    field: LastName
+    type: string?
+    table: Customer
+    column: LastName
+    target_type: text
+    file: app/Bookstore.Domain/Customers/Customer.cs
+    line: 19
+    issue: 'identifier case: the ORM quotes "LastName" but the target folded it to
+      lastname — fold names in the model'
+  - orm: EF Core
+    entity: Customer
+    field: Email
+    type: string?
+    table: Customer
+    column: Email
+    target_type: text
+    file: app/Bookstore.Domain/Customers/Customer.cs
+    line: 23
+    issue: 'identifier case: the ORM quotes "Email" but the target folded it to email
+      — fold names in the model'
+  - orm: EF Core
+    entity: Customer
+    field: DateOfBirth
+    type: DateTime?
+    table: Customer
+    column: DateOfBirth
+    target_type: timestamp without time zone
+    file: app/Bookstore.Domain/Customers/Customer.cs
+    line: 25
+    issue: 'identifier case: the ORM quotes "DateOfBirth" but the target folded it
+      to dateofbirth — fold names in the model'
+  - orm: EF Core
+    entity: Customer
+    field: Phone
+    type: string?
+    table: Customer
+    column: Phone
+    target_type: text
+    file: app/Bookstore.Domain/Customers/Customer.cs
+    line: 27
+    issue: 'identifier case: the ORM quotes "Phone" but the target folded it to phone
+      — fold names in the model'
+  - orm: EF Core
+    entity: Customer
+    field: Id
+    type: int
+    table: Customer
+    column: Id
+    target_type: integer
+    file: app/Bookstore.Domain/Entity.cs
+    line: 5
+    issue: 'identifier case: the ORM quotes "Id" but the target folded it to id —
+      fold names in the model'
+  - orm: EF Core
+    entity: Customer
+    field: CreatedBy
+    type: string
+    table: Customer
+    column: CreatedBy
+    target_type: text
+    file: app/Bookstore.Domain/Entity.cs
+    line: 7
+    issue: 'identifier case: the ORM quotes "CreatedBy" but the target folded it to
+      createdby — fold names in the model'
+  - orm: EF Core
+    entity: Customer
+    field: CreatedOn
+    type: DateTime
+    table: Customer
+    column: CreatedOn
+    target_type: timestamp without time zone
+    file: app/Bookstore.Domain/Entity.cs
+    line: 9
+    issue: 'identifier case: the ORM quotes "CreatedOn" but the target folded it to
+      createdon — fold names in the model'
+  - orm: EF Core
+    entity: Customer
+    field: UpdatedOn
+    type: DateTime
+    table: Customer
+    column: UpdatedOn
+    target_type: timestamp without time zone
+    file: app/Bookstore.Domain/Entity.cs
+    line: 11
+    issue: 'identifier case: the ORM quotes "UpdatedOn" but the target folded it to
+      updatedon — fold names in the model'
+  - orm: EF Core
+    entity: Offer
+    field: Author
+    type: string
+    table: Offer
+    column: Author
+    target_type: text
+    file: app/Bookstore.Domain/Offers/Offer.cs
+    line: 31
+    issue: 'identifier case: the ORM quotes "Author" but the target folded it to author
+      — fold names in the model'
+  - orm: EF Core
+    entity: Offer
+    field: ISBN
+    type: string
+    table: Offer
+    column: ISBN
+    target_type: text
+    file: app/Bookstore.Domain/Offers/Offer.cs
+    line: 33
+    issue: 'identifier case: the ORM quotes "ISBN" but the target folded it to isbn
+      — fold names in the model'
+  - orm: EF Core
+    entity: Offer
+    field: BookName
+    type: string
+    table: Offer
+    column: BookName
+    target_type: text
+    file: app/Bookstore.Domain/Offers/Offer.cs
+    line: 35
+    issue: 'identifier case: the ORM quotes "BookName" but the target folded it to
+      bookname — fold names in the model'
+  - orm: EF Core
+    entity: Offer
+    field: FrontUrl
+    type: string?
+    table: Offer
+    column: FrontUrl
+    target_type: text
+    file: app/Bookstore.Domain/Offers/Offer.cs
+    line: 37
+    issue: 'identifier case: the ORM quotes "FrontUrl" but the target folded it to
+      fronturl — fold names in the model'
+  - orm: EF Core
+    entity: Offer
+    field: GenreId
+    type: int
+    table: Offer
+    column: GenreId
+    target_type: integer
+    file: app/Bookstore.Domain/Offers/Offer.cs
+    line: 40
+    issue: 'identifier case: the ORM quotes "GenreId" but the target folded it to
+      genreid — fold names in the model'
+  - orm: EF Core
+    entity: Offer
+    field: ConditionId
+    type: int
+    table: Offer
+    column: ConditionId
+    target_type: integer
+    file: app/Bookstore.Domain/Offers/Offer.cs
+    line: 43
+    issue: 'identifier case: the ORM quotes "ConditionId" but the target folded it
+      to conditionid — fold names in the model'
+  - orm: EF Core
+    entity: Offer
+    field: PublisherId
+    type: int
+    table: Offer
+    column: PublisherId
+    target_type: integer
+    file: app/Bookstore.Domain/Offers/Offer.cs
+    line: 46
+    issue: 'identifier case: the ORM quotes "PublisherId" but the target folded it
+      to publisherid — fold names in the model'
+  - orm: EF Core
+    entity: Offer
+    field: BookTypeId
+    type: int
+    table: Offer
+    column: BookTypeId
+    target_type: integer
+    file: app/Bookstore.Domain/Offers/Offer.cs
+    line: 49
+    issue: 'identifier case: the ORM quotes "BookTypeId" but the target folded it
+      to booktypeid — fold names in the model'
+  - orm: EF Core
+    entity: Offer
+    field: Summary
+    type: string?
+    table: Offer
+    column: Summary
+    target_type: text
+    file: app/Bookstore.Domain/Offers/Offer.cs
+    line: 51
+    issue: 'identifier case: the ORM quotes "Summary" but the target folded it to
+      summary — fold names in the model'
+  - orm: EF Core
+    entity: Offer
+    field: OfferStatus
+    type: OfferStatus
+    table: Offer
+    column: OfferStatus
+    target_type: integer
+    file: app/Bookstore.Domain/Offers/Offer.cs
+    line: 54
+    issue: 'identifier case: table "Offer" is quoted by the ORM; target has offer
+      — fold names in the model'
+  - orm: EF Core
+    entity: Offer
+    field: Comment
+    type: string?
+    table: Offer
+    column: Comment
+    target_type: text
+    file: app/Bookstore.Domain/Offers/Offer.cs
+    line: 56
+    issue: 'identifier case: the ORM quotes "Comment" but the target folded it to
+      comment — fold names in the model'
+  - orm: EF Core
+    entity: Offer
+    field: CustomerId
+    type: int
+    table: Offer
+    column: CustomerId
+    target_type: integer
+    file: app/Bookstore.Domain/Offers/Offer.cs
+    line: 59
+    issue: 'identifier case: the ORM quotes "CustomerId" but the target folded it
+      to customerid — fold names in the model'
+  - orm: EF Core
+    entity: Offer
+    field: BookPrice
+    type: decimal
+    table: Offer
+    column: BookPrice
+    target_type: numeric
+    file: app/Bookstore.Domain/Offers/Offer.cs
+    line: 61
+    issue: 'identifier case: the ORM quotes "BookPrice" but the target folded it to
+      bookprice — fold names in the model'
+  - orm: EF Core
+    entity: Offer
+    field: Id
+    type: int
+    table: Offer
+    column: Id
+    target_type: integer
+    file: app/Bookstore.Domain/Entity.cs
+    line: 5
+    issue: 'identifier case: the ORM quotes "Id" but the target folded it to id —
+      fold names in the model'
+  - orm: EF Core
+    entity: Offer
+    field: CreatedBy
+    type: string
+    table: Offer
+    column: CreatedBy
+    target_type: text
+    file: app/Bookstore.Domain/Entity.cs
+    line: 7
+    issue: 'identifier case: the ORM quotes "CreatedBy" but the target folded it to
+      createdby — fold names in the model'
+  - orm: EF Core
+    entity: Offer
+    field: CreatedOn
+    type: DateTime
+    table: Offer
+    column: CreatedOn
+    target_type: timestamp without time zone
+    file: app/Bookstore.Domain/Entity.cs
+    line: 9
+    issue: 'identifier case: the ORM quotes "CreatedOn" but the target folded it to
+      createdon — fold names in the model'
+  - orm: EF Core
+    entity: Offer
+    field: UpdatedOn
+    type: DateTime
+    table: Offer
+    column: UpdatedOn
+    target_type: timestamp without time zone
+    file: app/Bookstore.Domain/Entity.cs
+    line: 11
+    issue: 'identifier case: the ORM quotes "UpdatedOn" but the target folded it to
+      updatedon — fold names in the model'
+  - orm: EF Core
+    entity: Order
+    field: CustomerId
+    type: int
+    table: Orders
+    column: CustomerId
+    target_type: null
+    file: app/Bookstore.Domain/Orders/Order.cs
+    line: 19
+    issue: table `Orders` not in target schema `dbo`
+  - orm: EF Core
+    entity: Order
+    field: AddressId
+    type: int
+    table: Orders
+    column: AddressId
+    target_type: null
+    file: app/Bookstore.Domain/Orders/Order.cs
+    line: 23
+    issue: table `Orders` not in target schema `dbo`
+  - orm: EF Core
+    entity: Order
+    field: DeliveryDate
+    type: DateTime
+    table: Orders
+    column: DeliveryDate
+    target_type: null
+    file: app/Bookstore.Domain/Orders/Order.cs
+    line: 29
+    issue: table `Orders` not in target schema `dbo`
+  - orm: EF Core
+    entity: Order
+    field: OrderStatus
+    type: OrderStatus
+    table: Orders
+    column: OrderStatus
+    target_type: null
+    file: app/Bookstore.Domain/Orders/Order.cs
+    line: 32
+    issue: table `Orders` not in target schema `dbo`
+  - orm: EF Core
+    entity: Order
+    field: Id
+    type: int
+    table: Orders
+    column: Id
+    target_type: null
+    file: app/Bookstore.Domain/Entity.cs
+    line: 5
+    issue: table `Orders` not in target schema `dbo`
+  - orm: EF Core
+    entity: Order
+    field: CreatedBy
+    type: string
+    table: Orders
+    column: CreatedBy
+    target_type: null
+    file: app/Bookstore.Domain/Entity.cs
+    line: 7
+    issue: table `Orders` not in target schema `dbo`
+  - orm: EF Core
+    entity: Order
+    field: CreatedOn
+    type: DateTime
+    table: Orders
+    column: CreatedOn
+    target_type: null
+    file: app/Bookstore.Domain/Entity.cs
+    line: 9
+    issue: table `Orders` not in target schema `dbo`
+  - orm: EF Core
+    entity: Order
+    field: UpdatedOn
+    type: DateTime
+    table: Orders
+    column: UpdatedOn
+    target_type: null
+    file: app/Bookstore.Domain/Entity.cs
+    line: 11
+    issue: table `Orders` not in target schema `dbo`
+  - orm: EF Core
+    entity: OrderItem
+    field: OrderId
+    type: int
+    table: OrderItem
+    column: OrderId
+    target_type: integer
+    file: app/Bookstore.Domain/Orders/OrderItem.cs
+    line: 19
+    issue: 'identifier case: the ORM quotes "OrderId" but the target folded it to
+      orderid — fold names in the model'
+  - orm: EF Core
+    entity: OrderItem
+    field: BookId
+    type: int
+    table: OrderItem
+    column: BookId
+    target_type: integer
+    file: app/Bookstore.Domain/Orders/OrderItem.cs
+    line: 22
+    issue: 'identifier case: the ORM quotes "BookId" but the target folded it to bookid
+      — fold names in the model'
+  - orm: EF Core
+    entity: OrderItem
+    field: Quantity
+    type: int
+    table: OrderItem
+    column: Quantity
+    target_type: integer
+    file: app/Bookstore.Domain/Orders/OrderItem.cs
+    line: 25
+    issue: 'identifier case: the ORM quotes "Quantity" but the target folded it to
+      quantity — fold names in the model'
+  - orm: EF Core
+    entity: OrderItem
+    field: Id
+    type: int
+    table: OrderItem
+    column: Id
+    target_type: integer
+    file: app/Bookstore.Domain/Entity.cs
+    line: 5
+    issue: 'identifier case: the ORM quotes "Id" but the target folded it to id —
+      fold names in the model'
+  - orm: EF Core
+    entity: OrderItem
+    field: CreatedBy
+    type: string
+    table: OrderItem
+    column: CreatedBy
+    target_type: text
+    file: app/Bookstore.Domain/Entity.cs
+    line: 7
+    issue: 'identifier case: the ORM quotes "CreatedBy" but the target folded it to
+      createdby — fold names in the model'
+  - orm: EF Core
+    entity: OrderItem
+    field: CreatedOn
+    type: DateTime
+    table: OrderItem
+    column: CreatedOn
+    target_type: timestamp without time zone
+    file: app/Bookstore.Domain/Entity.cs
+    line: 9
+    issue: 'identifier case: the ORM quotes "CreatedOn" but the target folded it to
+      createdon — fold names in the model'
+  - orm: EF Core
+    entity: OrderItem
+    field: UpdatedOn
+    type: DateTime
+    table: OrderItem
+    column: UpdatedOn
+    target_type: timestamp without time zone
+    file: app/Bookstore.Domain/Entity.cs
+    line: 11
+    issue: 'identifier case: the ORM quotes "UpdatedOn" but the target folded it to
+      updatedon — fold names in the model'
+  - orm: EF Core
+    entity: ReferenceDataItem
+    field: DataType
+    type: ReferenceDataType
+    table: ReferenceData
+    column: DataType
+    target_type: integer
+    file: app/Bookstore.Domain/ReferenceData/ReferenceDataItem.cs
+    line: 17
+    issue: 'identifier case: table "ReferenceData" is quoted by the ORM; target has
+      referencedata — fold names in the model'
+  - orm: EF Core
+    entity: ReferenceDataItem
+    field: Text
+    type: string
+    table: ReferenceData
+    column: Text
+    target_type: text
+    file: app/Bookstore.Domain/ReferenceData/ReferenceDataItem.cs
+    line: 19
+    issue: 'identifier case: the ORM quotes "Text" but the target folded it to text
+      — fold names in the model'
+  - orm: EF Core
+    entity: ReferenceDataItem
+    field: Id
+    type: int
+    table: ReferenceData
+    column: Id
+    target_type: integer
+    file: app/Bookstore.Domain/Entity.cs
+    line: 5
+    issue: 'identifier case: the ORM quotes "Id" but the target folded it to id —
+      fold names in the model'
+  - orm: EF Core
+    entity: ReferenceDataItem
+    field: CreatedBy
+    type: string
+    table: ReferenceData
+    column: CreatedBy
+    target_type: text
+    file: app/Bookstore.Domain/Entity.cs
+    line: 7
+    issue: 'identifier case: the ORM quotes "CreatedBy" but the target folded it to
+      createdby — fold names in the model'
+  - orm: EF Core
+    entity: ReferenceDataItem
+    field: CreatedOn
+    type: DateTime
+    table: ReferenceData
+    column: CreatedOn
+    target_type: timestamp without time zone
+    file: app/Bookstore.Domain/Entity.cs
+    line: 9
+    issue: 'identifier case: the ORM quotes "CreatedOn" but the target folded it to
+      createdon — fold names in the model'
+  - orm: EF Core
+    entity: ReferenceDataItem
+    field: UpdatedOn
+    type: DateTime
+    table: ReferenceData
+    column: UpdatedOn
+    target_type: timestamp without time zone
+    file: app/Bookstore.Domain/Entity.cs
+    line: 11
+    issue: 'identifier case: the ORM quotes "UpdatedOn" but the target folded it to
+      updatedon — fold names in the model'
+  - orm: EF Core
+    entity: ShoppingCart
+    field: CorrelationId
+    type: string
+    table: ShoppingCart
+    column: CorrelationId
+    target_type: text
+    file: app/Bookstore.Domain/Carts/ShoppingCart.cs
+    line: 7
+    issue: 'identifier case: the ORM quotes "CorrelationId" but the target folded
+      it to correlationid — fold names in the model'
+  - orm: EF Core
+    entity: ShoppingCart
+    field: Id
+    type: int
+    table: ShoppingCart
+    column: Id
+    target_type: integer
+    file: app/Bookstore.Domain/Entity.cs
+    line: 5
+    issue: 'identifier case: the ORM quotes "Id" but the target folded it to id —
+      fold names in the model'
+  - orm: EF Core
+    entity: ShoppingCart
+    field: CreatedBy
+    type: string
+    table: ShoppingCart
+    column: CreatedBy
+    target_type: text
+    file: app/Bookstore.Domain/Entity.cs
+    line: 7
+    issue: 'identifier case: the ORM quotes "CreatedBy" but the target folded it to
+      createdby — fold names in the model'
+  - orm: EF Core
+    entity: ShoppingCart
+    field: CreatedOn
+    type: DateTime
+    table: ShoppingCart
+    column: CreatedOn
+    target_type: timestamp without time zone
+    file: app/Bookstore.Domain/Entity.cs
+    line: 9
+    issue: 'identifier case: the ORM quotes "CreatedOn" but the target folded it to
+      createdon — fold names in the model'
+  - orm: EF Core
+    entity: ShoppingCart
+    field: UpdatedOn
+    type: DateTime
+    table: ShoppingCart
+    column: UpdatedOn
+    target_type: timestamp without time zone
+    file: app/Bookstore.Domain/Entity.cs
+    line: 11
+    issue: 'identifier case: the ORM quotes "UpdatedOn" but the target folded it to
+      updatedon — fold names in the model'
+  - orm: EF Core
+    entity: ShoppingCartItem
+    field: ShoppingCartId
+    type: int
+    table: ShoppingCartItem
+    column: ShoppingCartId
+    target_type: integer
+    file: app/Bookstore.Domain/Carts/ShoppingCartItem.cs
+    line: 19
+    issue: 'identifier case: the ORM quotes "ShoppingCartId" but the target folded
+      it to shoppingcartid — fold names in the model'
+  - orm: EF Core
+    entity: ShoppingCartItem
+    field: BookId
+    type: int
+    table: ShoppingCartItem
+    column: BookId
+    target_type: integer
+    file: app/Bookstore.Domain/Carts/ShoppingCartItem.cs
+    line: 22
+    issue: 'identifier case: the ORM quotes "BookId" but the target folded it to bookid
+      — fold names in the model'
+  - orm: EF Core
+    entity: ShoppingCartItem
+    field: Quantity
+    type: int
+    table: ShoppingCartItem
+    column: Quantity
+    target_type: integer
+    file: app/Bookstore.Domain/Carts/ShoppingCartItem.cs
+    line: 25
+    issue: 'identifier case: the ORM quotes "Quantity" but the target folded it to
+      quantity — fold names in the model'
+  - orm: EF Core
+    entity: ShoppingCartItem
+    field: WantToBuy
+    type: int
+    table: ShoppingCartItem
+    column: WantToBuy
+    target_type: boolean
+    file: app/Bookstore.Domain/Carts/ShoppingCartItem.cs
+    line: 27
+    issue: 'identifier case: the ORM quotes "WantToBuy" but the target folded it to
+      wanttobuy — fold names in the model'
+  - orm: EF Core
+    entity: ShoppingCartItem
+    field: Id
+    type: int
+    table: ShoppingCartItem
+    column: Id
+    target_type: integer
+    file: app/Bookstore.Domain/Entity.cs
+    line: 5
+    issue: 'identifier case: the ORM quotes "Id" but the target folded it to id —
+      fold names in the model'
+  - orm: EF Core
+    entity: ShoppingCartItem
+    field: CreatedBy
+    type: string
+    table: ShoppingCartItem
+    column: CreatedBy
+    target_type: text
+    file: app/Bookstore.Domain/Entity.cs
+    line: 7
+    issue: 'identifier case: the ORM quotes "CreatedBy" but the target folded it to
+      createdby — fold names in the model'
+  - orm: EF Core
+    entity: ShoppingCartItem
+    field: CreatedOn
+    type: DateTime
+    table: ShoppingCartItem
+    column: CreatedOn
+    target_type: timestamp without time zone
+    file: app/Bookstore.Domain/Entity.cs
+    line: 9
+    issue: 'identifier case: the ORM quotes "CreatedOn" but the target folded it to
+      createdon — fold names in the model'
+  - orm: EF Core
+    entity: ShoppingCartItem
+    field: UpdatedOn
+    type: DateTime
+    table: ShoppingCartItem
+    column: UpdatedOn
+    target_type: timestamp without time zone
+    file: app/Bookstore.Domain/Entity.cs
+    line: 11
+    issue: 'identifier case: the ORM quotes "UpdatedOn" but the target folded it to
+      updatedon — fold names in the model'

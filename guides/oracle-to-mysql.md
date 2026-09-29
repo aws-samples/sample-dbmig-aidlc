@@ -14,12 +14,12 @@ the schema conversion** via the `db-migration-construction` skill (the LLM is Ki
 
 ## 1. Prerequisites
 
-- **Python 3.9+**; network access to the source Oracle and target MySQL/Aurora MySQL.
-- Install deps (pure-Python drivers — no native clients):
+- **Python 3.10+** (`python3 --version`; the PostgreSQL driver floor needs 3.10 — on Amazon Linux 2023 the system `/usr/bin/python3` is 3.9, use `python3.12 -m venv .venv`); network access to the source Oracle and target MySQL/Aurora MySQL.
+- Install into a **repo-local virtual environment** (never your global Python; pure-Python drivers — no native clients):
   ```bash
-  pip install -r scripts/requirements.txt   # oracledb, psycopg, pymysql, pyyaml
+  python3 -m venv .venv && .venv/bin/pip install -e scripts/   # isolated; see README "Getting started"
   ```
-- Run commands from the **repository root**.
+- Run commands from the **repository root** via `./dbmig` (it uses `.venv` automatically).
 
 ## 2. Configure connections
 
@@ -59,21 +59,21 @@ Conversationally: in Kiro say *"start a database migration from Oracle to MySQL"
 orchestrator runs the phases with approval gates. Or drive the CLI:
 
 ```bash
-python -m dbmig test-connection --side both
-python -m dbmig inventory       --schema APP --project myproject
+./dbmig test-connection --side both
+./dbmig inventory       --schema APP --project myproject
 
 # Construction — Kiro converts each object-unit to MySQL DDL, then apply (auto error-retry)
-python -m dbmig convert-schema  --schema APP --project myproject
-python -m dbmig apply-schema    --schema APP --project myproject
-python -m dbmig convert-code    --schema APP --project myproject
-python -m dbmig apply-schema    --schema APP --project myproject --code
+./dbmig convert-schema  --schema APP --project myproject
+./dbmig apply-schema    --schema APP --project myproject
+./dbmig convert-code    --schema APP --project myproject
+./dbmig apply-schema    --schema APP --project myproject --code
 
 # Data + validation (foreign keys + triggers are deferred to --post-data, after the load)
-python -m dbmig migrate-data    --schema APP --workers 8 --project myproject
-python -m dbmig apply-schema    --schema APP --project myproject --post-data
-python -m dbmig compare         --schema APP --project myproject
-python -m dbmig gen-tests       --schema APP --project myproject
-python -m dbmig run-tests       --schema APP --project myproject
+./dbmig migrate-data    --schema APP --workers 8 --project myproject
+./dbmig apply-schema    --schema APP --project myproject --post-data
+./dbmig compare         --schema APP --project myproject
+./dbmig gen-tests       --schema APP --project myproject
+./dbmig run-tests       --schema APP --project myproject
 ```
 
 The conversion hand-off, object-unit grouping, multi-pass apply, **error-retry loop**

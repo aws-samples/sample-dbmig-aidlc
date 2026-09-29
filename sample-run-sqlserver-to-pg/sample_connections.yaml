@@ -1,0 +1,17 @@
+# dbmig-aidlc — connection file (masked). Passwords come from env vars sourced from
+# AWS Secrets Manager at run time — never written to disk.
+source:
+  engine: sqlserver
+  host: <RDS_SQLSERVER_ENDPOINT>
+  port: 1433
+  database: BobsUsedBookStore
+  username: admin
+  password: ${MSSQL_PASSWORD}
+target:
+  engine: postgresql
+  host: <AURORA_PG_CLUSTER_ENDPOINT>
+  port: 5432
+  database: <target-db>
+  username: postgres
+  password: ${PG_PASSWORD}
+  sslmode: require

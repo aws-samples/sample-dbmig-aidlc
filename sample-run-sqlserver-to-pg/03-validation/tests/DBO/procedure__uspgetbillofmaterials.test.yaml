@@ -1,0 +1,35 @@
+object: uspGetBillOfMaterials
+schema: DBO
+type: function
+notes: recursive BOM walk (result-set procedure -> set-returning function); count + weighted checksum per real product.
+cases:
+- id: r1
+  type: function
+  source_sql: SET NOCOUNT ON; DECLARE @t TABLE (ProductAssemblyID int, ComponentID int, ComponentDesc nvarchar(100), TotalQuantity decimal(18,2), StandardCost money, ListPrice money, BOMLevel smallint,
+    RecursionLevel int); INSERT INTO @t EXEC dbo.uspGetBillOfMaterials @StartProductID = 800, @CheckDate = '2010-12-01'; SELECT COUNT(*) FROM @t
+  target_sql: SELECT count(*) FROM dbo.uspgetbillofmaterials(800, '2010-12-01')
+- id: r1q
+  type: function
+  source_sql: SET NOCOUNT ON; DECLARE @t TABLE (ProductAssemblyID int, ComponentID int, ComponentDesc nvarchar(100), TotalQuantity decimal(18,2), StandardCost money, ListPrice money, BOMLevel smallint,
+    RecursionLevel int); INSERT INTO @t EXEC dbo.uspGetBillOfMaterials @StartProductID = 800, @CheckDate = '2010-12-01'; SELECT ISNULL(SUM(TotalQuantity * (RecursionLevel + 1)),0) FROM @t
+  target_sql: SELECT coalesce(sum(totalquantity * (recursionlevel + 1)),0) FROM dbo.uspgetbillofmaterials(800, '2010-12-01')
+- id: r2
+  type: function
+  source_sql: SET NOCOUNT ON; DECLARE @t TABLE (ProductAssemblyID int, ComponentID int, ComponentDesc nvarchar(100), TotalQuantity decimal(18,2), StandardCost money, ListPrice money, BOMLevel smallint,
+    RecursionLevel int); INSERT INTO @t EXEC dbo.uspGetBillOfMaterials @StartProductID = 750, @CheckDate = '2010-12-01'; SELECT COUNT(*) FROM @t
+  target_sql: SELECT count(*) FROM dbo.uspgetbillofmaterials(750, '2010-12-01')
+- id: r2q
+  type: function
+  source_sql: SET NOCOUNT ON; DECLARE @t TABLE (ProductAssemblyID int, ComponentID int, ComponentDesc nvarchar(100), TotalQuantity decimal(18,2), StandardCost money, ListPrice money, BOMLevel smallint,
+    RecursionLevel int); INSERT INTO @t EXEC dbo.uspGetBillOfMaterials @StartProductID = 750, @CheckDate = '2010-12-01'; SELECT ISNULL(SUM(TotalQuantity * (RecursionLevel + 1)),0) FROM @t
+  target_sql: SELECT coalesce(sum(totalquantity * (recursionlevel + 1)),0) FROM dbo.uspgetbillofmaterials(750, '2010-12-01')
+- id: r3
+  type: function
+  source_sql: SET NOCOUNT ON; DECLARE @t TABLE (ProductAssemblyID int, ComponentID int, ComponentDesc nvarchar(100), TotalQuantity decimal(18,2), StandardCost money, ListPrice money, BOMLevel smallint,
+    RecursionLevel int); INSERT INTO @t EXEC dbo.uspGetBillOfMaterials @StartProductID = 977, @CheckDate = '2010-12-01'; SELECT COUNT(*) FROM @t
+  target_sql: SELECT count(*) FROM dbo.uspgetbillofmaterials(977, '2010-12-01')
+- id: r3q
+  type: function
+  source_sql: SET NOCOUNT ON; DECLARE @t TABLE (ProductAssemblyID int, ComponentID int, ComponentDesc nvarchar(100), TotalQuantity decimal(18,2), StandardCost money, ListPrice money, BOMLevel smallint,
+    RecursionLevel int); INSERT INTO @t EXEC dbo.uspGetBillOfMaterials @StartProductID = 977, @CheckDate = '2010-12-01'; SELECT ISNULL(SUM(TotalQuantity * (RecursionLevel + 1)),0) FROM @t
+  target_sql: SELECT coalesce(sum(totalquantity * (recursionlevel + 1)),0) FROM dbo.uspgetbillofmaterials(977, '2010-12-01')

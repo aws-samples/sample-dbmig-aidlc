@@ -90,7 +90,7 @@ def test_delete_range_sql_inlines_ints():
 # ---- Oracle (oracle_fdw) descriptor ---------------------------------------
 
 def _ora(**kw):
-    base = dict(engine="oracle", host="h", port=1521, username="u", password="p")
+    base = dict(engine="oracle", host="h", port=1521, username="u", password="p")  # nosec B106 - test fixture, not a credential
     base.update(kw)
     return OracleEngine(Connection(**base))
 
@@ -118,7 +118,7 @@ def test_oracle_fdw_column_decl_is_identity():
 # ---- SQL Server (tds_fdw) descriptor --------------------------------------
 
 def _mss(**kw):
-    base = dict(engine="sqlserver", host="h", port=1433, username="u", password="p",
+    base = dict(engine="sqlserver", host="h", port=1433, username="u", password="p",  # nosec B106 - test fixture
                 database="AdventureWorks")
     base.update(kw)
     return SQLServerEngine(Connection(**base))

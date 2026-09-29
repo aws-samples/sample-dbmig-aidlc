@@ -21,9 +21,9 @@ The `dbmig` toolkit (`scripts/dbmig/`) connects to databases using **Python driv
 - The Aurora/RDS feature pages (RDS Proxy, Serverless, Backtrack, Parallel Query, RDS on Outposts) are **target-side capabilities** — informational for planning the Aurora MySQL target, with no bearing on how dbmig connects.
 
 ## Practical implication
-You can run all dbmig connectivity and data steps with only `pip install -r scripts/requirements.txt` — no SQL Server or MySQL native client install needed:
+You can run all dbmig connectivity and data steps with only the Python toolkit installed in the repo's virtual environment — no SQL Server or MySQL native client install needed:
 
 ```bash
-pip install -r scripts/requirements.txt
-python -m dbmig test-connection --side both   # exits non-zero on failure
+python3 -m venv .venv && .venv/bin/pip install -e scripts/
+./dbmig test-connection --side both   # exits non-zero on failure
 ```

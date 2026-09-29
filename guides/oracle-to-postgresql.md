@@ -29,29 +29,36 @@ You can run the whole thing **conversationally through Kiro** (recommended) or *
 
 ## 1. Prerequisites
 
-- **Python 3.9+**
+- **Python 3.10+** (`python3 --version`; the PostgreSQL driver floor needs 3.10 — on Amazon Linux 2023 the system `/usr/bin/python3` is 3.9, use `python3.12 -m venv .venv`)
 - Network access from your machine to the **source Oracle** and **target PostgreSQL**
   endpoints.
 - A target PostgreSQL/Aurora database you can create objects in.
 
-Install the toolkit dependencies:
+Install the toolkit into an **isolated virtual environment** inside the repo (never into your
+system/user Python — its security-library floors, e.g. `cryptography>=46`, could upgrade
+packages other tools depend on):
 
 ```bash
-pip install -r scripts/requirements.txt
+python3 -m venv .venv                  # built-in; .venv/ is git-ignored
+.venv/bin/pip install -e scripts/      # Windows: .venv\Scripts\pip install -e scripts/
 ```
 
 This installs `oracledb` (thin mode — no Oracle client install), `psycopg[binary]`
-(PostgreSQL driver with bundled libpq), and `pyyaml`.
+(PostgreSQL driver with bundled libpq), `pyyaml` and the other drivers, plus a `dbmig`
+command — all inside `.venv`. Remove everything with `rm -rf .venv`.
 
 Verify the CLI is available (run from the repo root):
 
 ```bash
-python -m dbmig --version
-python -m dbmig --help
+./dbmig --version
+./dbmig --help
 ```
 
-> Run all commands from the **repository root** so `./connections.yaml` and the skill/engine
-> context are found. To keep configs elsewhere, set `CONN_FILE` and `MIGRATION_CONFIG`.
+> Run all commands from the **repository root** with the **`./dbmig`** launcher — it uses
+> `.venv` automatically (no `activate` needed), so `./connections.yaml`, `migrations/` and the
+> skill/engine context are found. (With the venv activated, plain `dbmig` works too.) To keep
+> configs elsewhere, pass `--conn <path>` / `--config <path>` (before the command) or set
+> `CONN_FILE` / `MIGRATION_CONFIG`.
 
 ---
 
@@ -123,12 +130,12 @@ testing:
 ## 3. Test connectivity (pre-flight)
 
 ```bash
-python -m dbmig test-connection --side both
+./dbmig test-connection --side both
 ```
 
 You should see both source and target connect with a reported version. The command exits
 non-zero on failure — fix connectivity before continuing. (If a driver is missing it tells
-you to `pip install -r scripts/requirements.txt`.)
+you to install into `.venv`: `.venv/bin/pip install -e scripts/`.)
 
 ---
 
@@ -175,22 +182,22 @@ The full pipeline, phase by phase:
 
 ```bash
 # Phase 1 — Inception: assess the source
-python -m dbmig inventory       --schema APP --project myproject
+./dbmig inventory       --schema APP --project myproject
 
 # Phase 2 — Construction: extract object-units + build prompt bundles
-python -m dbmig convert-schema  --schema APP --project myproject
+./dbmig convert-schema  --schema APP --project myproject
 #   ↳ now have Kiro convert each prompt bundle (see 5.1 below)
-python -m dbmig apply-schema    --schema APP --project myproject
+./dbmig apply-schema    --schema APP --project myproject
 
 #   PL/SQL code objects — separate pass
-python -m dbmig convert-code    --schema APP --project myproject
+./dbmig convert-code    --schema APP --project myproject
 #   ↳ Kiro converts the code prompts
-python -m dbmig apply-schema    --schema APP --project myproject --code
+./dbmig apply-schema    --schema APP --project myproject --code
 
 # Phase 3 — Validation: load test data, apply deferred FKs + triggers, then reconcile
-python -m dbmig migrate-data    --schema APP --workers 8 --project myproject
-python -m dbmig apply-schema    --schema APP --project myproject --post-data
-python -m dbmig compare         --schema APP --project myproject
+./dbmig migrate-data    --schema APP --workers 8 --project myproject
+./dbmig apply-schema    --schema APP --project myproject --post-data
+./dbmig compare         --schema APP --project myproject
 
 # Phase 4 — Operations: cutover/rollback/monitoring (plan via the operations skill)
 ```
@@ -270,10 +277,10 @@ get pulled in for the genuinely hard cases. Target a single unit while iterating
 
 ```bash
 # Whole schema, 8 parallel workers
-python -m dbmig migrate-data --schema APP --workers 8 --project myproject
+./dbmig migrate-data --schema APP --workers 8 --project myproject
 
 # A subset, with tuning
-python -m dbmig migrate-data --schema APP --tables ORDERS,CUSTOMERS \
+./dbmig migrate-data --schema APP --tables ORDERS,CUSTOMERS \
        --batch-size 50000 --truncate --project myproject
 ```
 
@@ -283,8 +290,11 @@ python -m dbmig migrate-data --schema APP --tables ORDERS,CUSTOMERS \
 - One worker per table (ThreadPoolExecutor), each with its own connections.
 - Large tables stream in **PK-ordered chunks** via the COPY protocol.
 - **Identity/sequence reset**: after a table loads, its PostgreSQL `IDENTITY` sequence (or
-  MySQL `AUTO_INCREMENT`) is advanced to `MAX(key)`, so application inserts after the load
-  don't collide with migrated keys.
+  MySQL `AUTO_INCREMENT`) is advanced so the next generated key is `MAX(key)+1`, so
+  application inserts after the load don't collide with migrated keys. After an external
+  (AWS DMS) load or at cutover, run `dbmig reset-identity --schema APP --project myproject`
+  (dry-run report) and then with `--apply` — it reads the catalog, touches exactly the tables
+  with an identity column, and verifies each one.
 - **Resumable**: the last copied PK is tracked under `migrations/<project>/data/_state/`; a
   re-run continues where it left off. Tables without a single-column PK are copied whole
   (use `--truncate` to reset them first).
@@ -301,7 +311,7 @@ Prove the target behaves like the source, in two layers.
 
 ### 7.1 Data reconciliation
 ```bash
-python -m dbmig compare --schema APP --project myproject
+./dbmig compare --schema APP --project myproject
 ```
 Checks per-table row counts → `03-validation/reconcile_report.yaml`. Mismatches are recorded
 to the follow-up log (silent mode) rather than aborting the run.
@@ -314,11 +324,11 @@ transaction that is rolled back** (representative but non-destructive).
 
 ```bash
 # 1) Prepare: extract callables + sample REAL rows + build test-gen prompts
-python -m dbmig gen-tests  --schema APP --project myproject
+./dbmig gen-tests  --schema APP --project myproject
 #    ↳ Kiro writes a test spec (.test.yaml) per object to 03-validation/tests/APP/,
 #      using real sampled values; sets status 'generated' in test-manifest.yaml
 # 2) Run: execute each case on source + target in a rolled-back transaction, compare
-python -m dbmig run-tests  --schema APP --project myproject
+./dbmig run-tests  --schema APP --project myproject
 ```
 
 - **Functions**: the call runs on both engines and the return value is compared (with
@@ -408,7 +418,11 @@ migrations/myproject/
 | `gen-tests` | Sample real data + build test-gen prompts (Kiro writes specs) | `--schema`, `--project`, `--mode` |
 | `run-tests` | Run equivalence tests (txn+rollback); function/procedure parity | `--schema`, `--project`, `--mode` |
 | `compare` | Reconcile source vs target row counts | `--schema`, `--project`, `--tables`, `--mode` |
+| `reset-identity` | Sync identity/serial/AUTO_INCREMENT counters to `MAX(key)` from the live catalog and verify; writes the cutover-runbook step (`04-operations/identity-reset-<S>.md`). Dry-run unless `--apply` | `--schema`, `--project`, `--target-schema`, `--tables`, `--apply` |
 | `mark` | Set manifest unit statuses (helper for the Kiro conversion loop) | `--schema`, `--project`, `--status`, `--code`/`--tests`, `--tables`, `--only-existing-output` |
+
+Global flags (before the command): `--conn <path>` (connections file) and `--config <path>`
+(migration config) — they override `CONN_FILE` / `MIGRATION_CONFIG`.
 
 Common environment variables:
 
@@ -425,8 +439,10 @@ Common environment variables:
 
 ## 11. Troubleshooting
 
-- **`missing dependency: oracledb` / `psycopg`** → `pip install -r scripts/requirements.txt`.
-- **`file not found: connections.yaml`** → run from the repo root, or set `CONN_FILE`.
+- **`missing dependency: oracledb` / `psycopg`** or **`No module named dbmig`** → you are not using the
+  repo venv: run `python3 -m venv .venv && .venv/bin/pip install -e scripts/`, then use `./dbmig`
+  (not `python -m dbmig` from the repo root).
+- **`file not found: connections.yaml`** → run from the repo root, or pass `--conn <path>`.
 - **Oracle connect fails** → check `service_name` vs `sid`, host/port reachability, and that
   env vars are exported.
 - **PostgreSQL connect fails on SSL** → adjust `sslmode` (`require` for Aurora; `disable` for

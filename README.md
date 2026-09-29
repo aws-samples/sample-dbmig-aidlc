@@ -60,13 +60,13 @@ target** and **prepares it for the data load** (drop load-hostile secondary obje
 recreate — keeping primary/unique keys):
 
 ```bash
-python -m dbmig import-dms-sc         --dms-sc-dir <PATH> --project <P>   # import + triage (ACCEPT/VERIFY/MANUAL)
-python -m dbmig diff-target           --schema <S> --project <P>         # reconcile vs LIVE target (MATCH/MISSING/UNMATCHED/EXTRA)
-python -m dbmig capture-target-objects --schema <S> --project <P>        # snapshot FKs/indexes/triggers -> drop/restore scripts
-python -m dbmig pre-load-drop         --schema <S> --project <P> --apply # before the data load
+./dbmig import-dms-sc         --dms-sc-dir <PATH> --project <P>   # import + triage (ACCEPT/VERIFY/MANUAL)
+./dbmig diff-target           --schema <S> --project <P>         # reconcile vs LIVE target (MATCH/MISSING/UNMATCHED/EXTRA)
+./dbmig capture-target-objects --schema <S> --project <P>        # snapshot FKs/indexes/triggers -> drop/restore scripts
+./dbmig pre-load-drop         --schema <S> --project <P> --apply # before the data load
 #   … load data (dbmig migrate-data, or an AWS DMS task) …
-python -m dbmig post-load-restore     --schema <S> --project <P> --apply # after the data load; reconciles
-python -m dbmig verify                --schema <S> --project <P>         # list/record VERIFY sign-off
+./dbmig post-load-restore     --schema <S> --project <P> --apply # after the data load; reconciles
+./dbmig verify                --schema <S> --project <P>         # list/record VERIFY sign-off
 ```
 
 Each run refreshes a human-readable, phase-aligned **`migrations/<project>/migration-report.md`**
@@ -89,7 +89,7 @@ aws s3 ls s3://<your-dms-sc-bucket>/
 aws s3 cp s3://<your-dms-sc-bucket>/<migration-project-name>/ ./dms-sc-project/ \
   --recursive --exclude "*.zip" --exclude "*.pdf"
 
-python -m dbmig import-dms-sc --dms-sc-dir ./dms-sc-project --project <P>
+./dbmig import-dms-sc --dms-sc-dir ./dms-sc-project --project <P>
 ```
 
 The framework reads the local folder only — it does not call the DMS API — so you fully
@@ -160,9 +160,22 @@ The `dbmig` toolkit (`scripts/dbmig/`) connects with **Python drivers** — no `
 - **MySQL (target)**: [`PyMySQL`](https://pymysql.readthedocs.io/) — pure Python
 
 ```bash
-pip install -r scripts/requirements.txt
-python -m dbmig test-connection --side both     # exits non-zero on failure
+# one-time: an isolated virtual environment inside the repo (see "Getting started")
+python3 -m venv .venv && .venv/bin/pip install -e scripts/
+./dbmig test-connection --side both     # exits non-zero on failure
 ```
+
+Run every command through the **`./dbmig`** launcher at the repo root. It uses the repo's
+`.venv` automatically (no `activate` needed), so config and `migrations/` resolve from the repo
+root. With the venv activated, the plain `dbmig` command works too. `--conn <path>` /
+`--config <path>` (before the command) point at a connections file / migration config
+elsewhere.
+
+**Credentials in AWS Secrets Manager?** `connections.yaml` needs no special support: give Kiro
+the secret name and AWS profile/region and it reads the secret with the AWS CLI, writes the
+non-secret fields (host, port, user, service/database) into `connections.yaml`, and keeps the
+password as a `${VAR}` reference supplied from the secret per command — it is never written
+to disk or echoed.
 
 ## Schema conversion is LLM-driven — and the LLM is Kiro
 
@@ -179,41 +192,46 @@ material**, not executed as rules.
 
 ```bash
 # 1) Inspect / plan
-python -m dbmig inventory       --schema APP --project myproject
+./dbmig inventory       --schema APP --project myproject
 
 # 2) Extract object-units + build prompt bundles (Kiro then converts each to DDL)
-python -m dbmig convert-schema  --schema APP --project myproject
+./dbmig convert-schema  --schema APP --project myproject
 #    optional subset:  --tables ORDERS,CUSTOMERS
 
 # 3) Apply converted DDL — tables, indexes, PK/UK/CHECK (foreign keys + triggers
 #    are deferred to after the data load)
-python -m dbmig apply-schema    --schema APP --project myproject
+./dbmig apply-schema    --schema APP --project myproject
 
 # 4) Stored code objects (PL/SQL or T-SQL) — separate pass
-python -m dbmig convert-code    --schema APP --project myproject
-python -m dbmig apply-schema    --schema APP --project myproject --code
+./dbmig convert-code    --schema APP --project myproject
+./dbmig apply-schema    --schema APP --project myproject --code
 
 # 5) Migrate data (parallel COPY workers, PK-chunked, resumable)
-python -m dbmig migrate-data    --schema APP --workers 8 --project myproject
+./dbmig migrate-data    --schema APP --workers 8 --project myproject
 #    cloud-to-cloud fast path (PostgreSQL target): let the target read directly from
 #    the source via a foreign data wrapper (oracle_fdw / tds_fdw) instead of pulling
 #    every row through this host — ideal when dbmig runs on-prem across a slow VPN:
-#      python -m dbmig migrate-data --schema APP --method fdw --shards 16 --workers 16 --project myproject
+#      ./dbmig migrate-data --schema APP --method fdw --shards 16 --workers 16 --project myproject
 
 # 6) Apply deferred foreign keys + triggers, now that the data is loaded
-python -m dbmig apply-schema    --schema APP --project myproject --post-data
+./dbmig apply-schema    --schema APP --project myproject --post-data
 
 # 7) Reconcile source vs target
-python -m dbmig compare         --schema APP --project myproject
+./dbmig compare         --schema APP --project myproject
 
 # 8) Equivalence tests — Kiro generates cases from real data; run in a rolled-back txn
-python -m dbmig gen-tests       --schema APP --project myproject
-python -m dbmig run-tests       --schema APP --project myproject
+./dbmig gen-tests       --schema APP --project myproject
+./dbmig run-tests       --schema APP --project myproject
+
+# 9) Cutover: sync identity sequences to the loaded data (dry-run report, then --apply)
+./dbmig reset-identity  --schema APP --project myproject [--apply]
 ```
 
 Conversion or test failures are, by default (silent mode), logged to
 `migrations/<project>/follow-up.yaml` and the run continues; use `--mode interactive` to be
-prompted instead. For production-scale data movement use AWS DMS (the framework hands off to
+prompted instead. When a re-run of `run-tests` / `compare` passes, the matching follow-up
+items are set to `resolved` automatically. `gen-tests` tags objects whose source tables are
+all empty as `LOW_COVERAGE`, and `run-tests` reports them separately. For production-scale data movement use AWS DMS (the framework hands off to
 it); the built-in `migrate-data` is for dev/test loads and reconciliation.
 
 ## Step-by-step guides
@@ -262,31 +280,46 @@ dbmig-aidlc/
 │   ├── sqlserver-to-postgresql/         # engine.yaml, datatype-map.yaml, checks/
 │   └── sqlserver-to-mysql/              # engine.yaml, datatype-map.yaml, checks/
 ├── scripts/
-│   ├── dbmig/                           # the Python package (python -m dbmig)
+│   ├── dbmig/                           # the Python package (./dbmig)
 │   └── requirements.txt                 # pyyaml, oracledb, psycopg[binary], pymysql, python-tds
 ├── guides/                              # step-by-step guides, one per engine pair
 ├── templates/                           # connections + migration-config examples
 ├── sample-run-oracle-to-pg/             # sample run 1: converted purely by dbmig-aidlc (Oracle DEMO)
-├── sample-run-dms-sc-sqlserver-to-pg/   # sample run 2: CONTINUE from AWS DMS SC output (SQL Server AdventureWorks)
+├── sample-run-sqlserver-to-pg/          # sample run 2: converted purely by dbmig-aidlc (SQL Server BobsUsedBookStore + .NET app)
+├── sample-run-dms-sc-sqlserver-to-pg/   # sample run 3: CONTINUE from AWS DMS SC output (SQL Server AdventureWorks)
 └── migrations/                          # per-run workspaces (git-ignored; holds artifacts)
 ```
 
-Two complete, real runs are archived for reference — one per entry path:
-**[sample-run-oracle-to-pg/](sample-run-oracle-to-pg/)** — a migration **converted purely by
-dbmig-aidlc** from the source (an Oracle `DEMO` schema, all four AI-DLC phases); and
+Three complete, real runs are archived for reference:
+**[sample-run-oracle-to-pg/](sample-run-oracle-to-pg/)** — Oracle `DEMO` **converted purely by
+dbmig-aidlc**, all four AI-DLC phases plus modernization of the Spring Boot / JPA app;
+**[sample-run-sqlserver-to-pg/](sample-run-sqlserver-to-pg/)** — SQL Server `BobsUsedBookStore`
+converted from scratch plus the ASP.NET Core / EF Core app; and
 **[sample-run-dms-sc-sqlserver-to-pg/](sample-run-dms-sc-sqlserver-to-pg/)** — a run that
 **starts from AWS DMS Schema Conversion output** and works forward (SQL Server
 `AdventureWorks` `Person` + `HumanResources`: import → ACCEPT/VERIFY/MANUAL triage →
-`diff-target` reconciliation → secondary-object capture → VERIFY sign-off). Both are masked
+`diff-target` reconciliation → secondary-object capture → VERIFY sign-off). All are masked
 (no real hosts/credentials) and hold each phase's artifacts so you can see the workflow's
 output without database access.
 
 ## Getting started
 
-1. Install the toolkit dependencies (Python 3.9+):
+1. Create an **isolated virtual environment** in the repo and install the toolkit into it
+   (**Python 3.10+** — check with `python3 --version`; `venv` is built in, nothing extra to install):
    ```bash
-   pip install -r scripts/requirements.txt
+   cd dbmig-aidlc
+   python3 -m venv .venv                 # .venv/ is git-ignored
+   .venv/bin/pip install -e scripts/     # Windows: .venv\Scripts\pip install -e scripts/
+   ./dbmig --version                     # the launcher uses .venv automatically
    ```
+   **Why a venv:** the toolkit needs recent driver and security-library versions
+   (e.g. `cryptography>=46`, `pyOpenSSL>=26` for CVE fixes). Installing them into your
+   system or user Python could upgrade packages that other tools on your machine depend on.
+   Inside `.venv` they are isolated to this repo; `rm -rf .venv` removes everything.
+   Do **not** run `pip install` against your global Python for this toolkit. (Newer
+   macOS/Homebrew and Debian/Ubuntu Pythons refuse it anyway with
+   `externally-managed-environment`.) If you use [uv](https://docs.astral.sh/uv/),
+   `uv venv && uv pip install -e scripts/` does the same thing faster.
 2. Copy the templates and fill in your connection details:
    ```bash
    cp templates/connections.example.yaml connections.yaml
@@ -299,6 +332,18 @@ output without database access.
    as an AI-DLC migration project and follows the phase/gate discipline. It is workspace-local —
    nothing touches your global `~/.kiro/`. Run `/context show` in the chat to confirm
    `.kiro/steering/dbmig-aidlc.md` is loaded.
+   > ⚠️ **Start Kiro from the `dbmig-aidlc` folder itself** (`cd dbmig-aidlc && kiro-cli chat`),
+   > not from its parent or your home directory. Kiro loads project steering only from the
+   > folder it was started in; started elsewhere, it will not know about this framework's
+   > phases, gates, or safety rules. If `/context show` does not list
+   > `.kiro/steering/dbmig-aidlc.md`, exit and restart from the right folder.
+
+   **Using Claude Code instead?** Also supported, from the same folder (`cd dbmig-aidlc &&
+   claude`). The root [`CLAUDE.md`](CLAUDE.md) imports the same steering file (one source of
+   truth), and `.claude/skills/` exposes the 15 framework skills to Claude Code as thin
+   pointers to `skills/`. Check with `/memory` (or `/context`) that `CLAUDE.md` and the
+   steering file are loaded. Maintainers: after adding/renaming a skill or changing its
+   `description`, run `python3 scripts/sync-claude-skills.py` (a unit test fails if stale).
 4. In Kiro, start a migration — e.g. *"start a database migration from Oracle to
    PostgreSQL"*. The `db-migration-orchestrator` skill will take over, test the
    connections, and walk you through the phases (Kiro performs the schema conversion
@@ -325,8 +370,8 @@ convention (the toolkit does not add one for you):
 export PROJECT="adventureworks-$(date +%Y%m%d-%H%M%S)"   # unique per run
 # optional: export DBMIG_MIGRATIONS_DIR=/tmp/dbmig-runs   # isolate outside the repo
 
-python -m dbmig inventory      --schema Person --project "$PROJECT"
-python -m dbmig convert-schema  --schema Person --project "$PROJECT"
+./dbmig inventory      --schema Person --project "$PROJECT"
+./dbmig convert-schema  --schema Person --project "$PROJECT"
 # … apply-schema / convert-code / migrate-data / apply-schema --post-data / compare / gen-tests / run-tests …
 ```
 

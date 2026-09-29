@@ -1,0 +1,17 @@
+object: ufnGetDocumentStatusText
+schema: DBO
+type: function
+notes: every mapped status plus an out-of-range value; called with a plain integer literal as an application would.
+cases:
+- id: c1
+  type: function
+  source_sql: SELECT dbo.ufnGetDocumentStatusText(1)
+  target_sql: SELECT dbo.ufngetdocumentstatustext(1)
+- id: c2
+  type: function
+  source_sql: SELECT dbo.ufnGetDocumentStatusText(3)
+  target_sql: SELECT dbo.ufngetdocumentstatustext(3)
+- id: c3
+  type: function
+  source_sql: SELECT dbo.ufnGetDocumentStatusText(9)
+  target_sql: SELECT dbo.ufngetdocumentstatustext(9)

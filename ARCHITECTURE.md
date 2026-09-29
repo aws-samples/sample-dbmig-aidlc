@@ -61,7 +61,7 @@ read the active engine pair's definition at run time.
 
 ### 2.2 The toolkit layer (the "hands") — `scripts/dbmig/`
 
-A pure-Python package invoked as `python -m dbmig <command>`. It owns every deterministic
+A pure-Python package invoked as `./dbmig <command>`. It owns every deterministic
 operation and connects with **pure-Python drivers** (no `sqlplus`/`psql`/`sqlcmd` install):
 `oracledb` (thin), `python-tds`, `psycopg` v3, `PyMySQL`.
 

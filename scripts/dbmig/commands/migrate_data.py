@@ -22,6 +22,8 @@ Resume, ``--truncate``, source→target column alignment, and FK-dependency load
 """
 from __future__ import annotations
 
+import contextlib
+
 import hashlib
 import json
 import os
@@ -268,10 +270,8 @@ def _plan_units(source, target, schema: str, table: str, shards: int, batch_size
     if truncate:
         target.truncate(schema.lower(), table.lower())
         for f in _state_dir(project).glob(f"{schema.upper()}.{table.upper()}*.json"):
-            try:
+            with contextlib.suppress(OSError):   # already gone
                 f.unlink()
-            except Exception:
-                pass
 
     base = {"schema": schema, "table": table, "pk": pk, "tgt_cols": tgt_cols,
             "batch_size": batch_size, "project": project}
@@ -384,7 +384,7 @@ def run(args) -> int:
                                  f"({r['copied']:,} row(s) already loaded); "
                                  f"running total {running_rows:,} row(s)")
                 else:
-                    console.ok(f"{progress} done {label}: {r['copied']:,} row(s); "
+                    console.item_ok(f"{progress} done {label}: {r['copied']:,} row(s); "
                                f"running total {running_rows:,} row(s)")
 
     # Aggregate per table (sum shards).
@@ -409,8 +409,10 @@ def run(args) -> int:
             for name in ok_tables:
                 try:
                     rid.reset_identity(args.schema.lower(), name.lower())
-                except Exception:
-                    pass
+
+                except Exception as exc:  # noqa: BLE001 - report, keep loading others
+                    console.warn(f"{name}: identity reset failed ({exc}) — run "
+                                 "`dbmig reset-identity --apply` before app traffic")
         finally:
             rid.close()
 
@@ -420,6 +422,7 @@ def run(args) -> int:
         yaml.safe_dump({"total_rows": total_rows, "tables": per_table,
                         "units": results}, sort_keys=False))
 
+    console.flush_items("data/_state + the load report")
     console.heading("Data migration results")
     console.ok(f"copied {new_rows:,} new row(s) across {len(per_table)} table(s) "
                f"in {total_units} unit(s)"

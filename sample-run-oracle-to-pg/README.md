@@ -1,174 +1,71 @@
-# Sample run — Oracle `DEMO` → Aurora PostgreSQL
+# Sample run — Oracle `DEMO` → Aurora PostgreSQL (+ Java app)
 
-A complete, real end-to-end migration captured for reference. Every file here was produced by
-the `dbmig` toolkit and the Kiro-driven conversion during an actual run against live databases —
-no hand-editing of results after the fact. It captures **all four migration phases plus the
-sign-off**, and the **optional application-modernization module** run afterwards against the same
-workspace.
+A complete, real run of dbmig-aidlc, **converted from scratch** (no DMS SC), captured end to end and
+**masked** (hosts, account ids, local paths and credentials replaced with placeholders). It includes the
+optional application-modernization module for the Spring Boot / JPA app `JavaBobsUsedBooks`.
 
-> **Sanitized for sharing.** Real endpoints and secret names have been replaced with placeholders
-> (`oracle-source.example.com`, `aurora-cluster.example.com`, `oracle-admin-secret`,
-> `aurora-admin-secret`) and the one plaintext credential in a backup config was redacted. The
-> conversion artifacts, reports and test evidence are otherwise verbatim.
-
-## What was migrated
-
-| | |
-|---|---|
-| **Source** | Amazon RDS for Oracle 19c (Enterprise Edition), SID `ORCL`, schema `DEMO` |
-| **Target** | Amazon Aurora PostgreSQL 17.7 — a **new database `demodb`**, schema `demo`, created for this run |
-| **Region / profile** | `us-east-1` (workshop account) |
-| **Project workspace** | `migrations/demo/` (archived verbatim into this folder) |
-| **Credentials** | AWS Secrets Manager, injected as env vars at run time — never written to any artifact here |
-
-Source schema inventory: **18 "tables"** of which 4 are Oracle Text index internal tables
-(`DR$BOOKS_TEXT_IDX$*`, auto-excluded) → **14 user tables**, plus **33 indexes, 12 sequences,
-5 functions, 5 procedures, 5 packages (+bodies), 1 trigger**.
+- **Source:** Oracle 19c EE, schema `DEMO`  ·  **Target:** Aurora PostgreSQL 17.7, schema `demo`
+- **App:** Spring Boot 4.0.6, Java 21, Hibernate 7 / Spring Data JPA, Thymeleaf, raw JDBC demo classes
 
 ## Result at a glance
 
-- **Schema**: 14/14 object-units applied (pre-data), 7/7 deferred units applied (post-data FKs + trigger).
-- **Code**: all stored-code objects applied — packages flattened into standalone routines.
-- **Data**: **199 rows across 14 tables**, loaded in foreign-key dependency order (parents first).
-- **Reconciliation**: **14/14 tables match** on row count.
-- **Equivalence tests**: **103/103 pass** (function return values + procedure net effects compared
-  on both engines, in a rolled-back transaction).
-- **Certified target objects** (at sign-off): 14 tables · 199 rows · 28 indexes (27 btree + 1 GIN)
-  · 16 FKs · 1 trigger · 18 functions · 10 procedures · 12 identity sequences advanced past `MAX(id)`.
-- **Follow-up items open**: **0**.
-- **Operations**: cutover runbook, rollback plan and monitoring produced and gate-approved (the
-  production cutover itself is deliberately **not** executed — see `SIGN-OFF.md`).
-- **Application modernization** (optional module): the companion Java/Spring app converted to speak
-  PostgreSQL, compiled, and verified against the live target.
+| Phase | Result |
+|---|---|
+| Inventory | 14 user tables, 30 indexes, 12 identity sequences, 5 functions, 5 procedures, 5 packages, 1 trigger; 4 `DR$` Oracle Text tables + 3 indexes **excluded automatically**; decision item `fulltext_redesign` raised |
+| Tables | **14/14** applied first pass (FK guard: no invented FKs — `ORDERS` has none in the source) |
+| Stored code | **15/15** first pass (5 packages converted spec+body as one unit, flattened to `<pkg>_<subprogram>`) |
+| Data | 199 rows; **14/14** tables reconcile; post-data FKs + trigger **7/7** |
+| Equivalence tests | **53/53** first run (write paths proven with real deltas; 4 `LOW_COVERAGE` objects reported separately) |
+| Identity | `reset-identity`: **12/12** identity columns safe (runbook step generated from the catalog) |
+| App | 17 files changed; builds; **boots with `ddl-auto=validate` first time** (all 16 entity type fixes were planned from `app-scan`, none found at boot); full-text search verified via index scan |
+| Prompt volume | 3 schema + 3 code + 4 test bundles + 3 shared context files ≈ **39K tokens** (the previous self-contained-bundle layout produced ~543K for the same schema) |
 
-## The phases (folder map)
+## Folder map
 
-```
-00-intake/         intake.md                          — resolved engine pair, connections, scope, decisions
-01-assessment/     preflight.md, inventory.{md,yaml,json}
-                   compatibility-assessment.md, migration-plan.md
-02-construction/   prompts/ + ddl/                    — schema object-unit prompt bundles + converted PostgreSQL DDL
-                   code_prompts/ + code/              — PL/SQL prompt bundles + converted PL/pgSQL
-                   manifest-DEMO.yaml, code-manifest-DEMO.yaml
-                   apply_report{,_code,_postdata}-DEMO.yaml, conversion-log.md
-03-validation/     test_prompts/ + tests/             — equivalence-test prompt bundles + .test.yaml specs
-                   equivalence-report-DEMO.{yaml,md}  — 103/103
-                   reconcile_report-DEMO.yaml         — 14/14
-                   validation-summary.md, supplementary-verification.md
-04-operations/     cutover-runbook.md, rollback-plan.md, monitoring.md, smoke-test.sql
-data/              migrate_report-DEMO.yaml           — per-table row counts
-                   _state/                            — resume watermarks (chunk signature + committed count)
-SIGN-OFF.md        migration sign-off record — phase gates, certified state, what was NOT done
-follow-up.{yaml,md} 0 open items
+| Folder | What's in it |
+|---|---|
+| `00-intake/` | intake summary |
+| `01-assessment/` | `inventory-DEMO.yaml/.json` (incl. `excluded_internal_objects`, `decision_items`), `migration-plan.md` |
+| `02-construction/` | `_context-schema.md`, `_context-code.md` (shared context, read once), `prompts/` + `code_prompts/` (batched bundles with detected-construct hints), `ddl/demo/`, `code/demo/`, manifests (with `source_fk_count`), apply reports, `conversion-log.md` |
+| `03-validation/` | `_context-tests.md`, `test_prompts/` (include the converted target code), `tests/` (specs; package specs mix function/procedure cases via per-case `type`), `equivalence-report-DEMO.md`, `reconcile_report`, `validation-summary.md` |
+| `04-operations/` | cutover runbook, rollback plan, monitoring (AI-generated disclaimer), `identity-reset-DEMO.md` (generated runbook step) |
+| `05-application/` | app intake, `app-scan.md` (deterministic pre-scan), change plan, conversion log + `app.diff` (exact changes), build/boot report, app cutover, `backup/<ts>/MANIFEST.md` (a real run keeps mirrored originals there; omitted in this sample) |
+| `data/` | per-table load state + load report |
 
-05-application/    OPTIONAL application-modernization module (run against migrations/demo/)
-    00-intake/         app-intake.md                  — app directory, stack, scope
-    01-assessment/     inventory.md, app-contract.md, change-plan.md
-    02-construction/   conversion-log.md              — edits applied (per approved change plan)
-    03-validation/     build-report.md                — compile + live-target PREPARE verification
-    backup/<timestamp>/  mirrored backup tree of every edited file (never .bak beside originals)
-```
+## Notable decisions
 
-## Notable conversion decisions (Oracle → PostgreSQL)
+- `NUMBER(1)` flags → `smallint` 0/1 (not boolean); `DATE` → `timestamp(0)`; `BLOB` → `bytea`;
+  `NUMBER(10)` → `bigint`. Each creates a predictable JPA obligation — listed by `app-scan` C1 and fixed
+  with `@JdbcTypeCode(SqlTypes.SMALLINT | TIMESTAMP | VARBINARY)`.
+- Oracle Text `CONTEXT` → `GIN (to_tsvector('english', coalesce(search_text,'')))`; the app's
+  `CONTAINS/SCORE` query uses the same expression (`EXPLAIN` → Bitmap Index Scan on `books_text_idx`).
+- `reporting_pkg_get_top_books` (PIPELINED) → `RETURNS TABLE` with column types taken from the converted
+  columns — the declared-type hazard that failed at execution in an earlier run.
+- `COMMIT` removed from 4 procedures (caller owns the transaction); their tests use non-existent keys.
 
-**Schema / datatypes**
-- `NUMBER(19,0)` identity PKs → `bigint GENERATED BY DEFAULT AS IDENTITY (START WITH …)`.
-  PostgreSQL identity columns require an integer type, so `bigint` (not `numeric`) is used for keys.
-- `NUMBER(1,0)` boolean-style flags → `smallint` + a `CHECK (col IN (0,1))` — preserves the exact
-  0/1 domain so data copies verbatim and app semantics are unchanged.
-- `NUMBER(38,2)` money → `numeric(38,2)`; `NUMBER(10,0)` → `bigint`; `VARCHAR2(n CHAR)` → `varchar(n)`;
-  `BLOB` → `bytea`; `TIMESTAMP(6)` → `timestamp(6)`.
-- Oracle `DATE` → `timestamp(0)` (Oracle `DATE` carries a time component; mapping to `date` would lose it).
-- Redundant `SYS_C…` unique indexes that merely back a primary key are dropped (the PG PK creates its own index),
-  and the internal LOB index on `BOOKS_COVER` is omitted (TOAST handles `bytea` storage) — 33 source
-  indexes land as **28** on the target.
+## Found during this run (and fixed in the framework)
 
-**Oracle Text → PostgreSQL full-text search**
-- `BOOKS.BOOKS_TEXT_IDX` (a `CTXSYS.CONTEXT` domain index) → a GIN index on
-  `to_tsvector('english', coalesce(search_text, ''))`.
-- The `TRG_BOOK_SEARCH_TEXT` row trigger that maintains `search_text` → a PL/pgSQL trigger
-  (`NVL` → `COALESCE`). Foreign keys and this trigger are **deferred to the post-data pass** so
-  they neither dictate load order nor rewrite rows during the load.
-
-**Stored code (PL/SQL → PL/pgSQL)**
-- Packages have no PostgreSQL equivalent → each subprogram is **flattened** to a standalone
-  routine `demo.<package>_<subprogram>` (spec files become explanatory notes; bodies hold the
-  routines). The 5 functions / 5 procedures / 5 packages land as **18 functions + 10 procedures**
-  on the target.
-- `DETERMINISTIC` → `IMMUTABLE`; Oracle `SELECT … INTO` (which raises `NO_DATA_FOUND`) →
-  `SELECT … INTO STRICT` with a `NO_DATA_FOUND` handler; `NVL` → `COALESCE`;
-  `SYSDATE`/`SYSTIMESTAMP` → `now()`; `DBMS_OUTPUT.PUT_LINE` → `RAISE NOTICE`;
-  `RAISE_APPLICATION_ERROR` → `RAISE EXCEPTION`.
-- `REGEXP_LIKE` → the `~` operator; `REGEXP_REPLACE` gains the global `'g'` flag (Oracle replaces
-  all occurrences by default, PostgreSQL only the first); `FETCH FIRST n ROWS ONLY` → `LIMIT`;
-  `TRUNC(date)` → `::date`.
-- The `REPORTING_PKG.GET_TOP_BOOKS` **PIPELINED** table function → a set-returning function
-  (`RETURNS TABLE … RETURN QUERY`).
-- Explicit `COMMIT` inside procedures is **dropped** — transaction control is left to the caller
-  (PostgreSQL best practice, and required for the equivalence harness's rollback safety; see below).
-- `ORA-20001`/`ORA-20002` application errors → SQLSTATE **`U0001`/`U0002`** (a custom `U0` class).
-  The first attempt used `P0002`, which collides with PostgreSQL's built-in `no_data_found` — caught
-  in Validation and remapped to the unassigned `U0` class.
-
-## Lessons worth keeping
-
-1. **Oracle procedures that `COMMIT` internally cannot be net-effect tested against the live
-   source via a rollback harness.** `run-tests` executes each case inside a transaction and rolls
-   it back, but a committed change on the Oracle *source* survives the rollback — corrupting the
-   source row and making the test non-repeatable. During this run the first `process_customer_offer`
-   REJECT case committed a status change to a real listing on Oracle; it was restored, and the test
-   was rewritten to target a **non-existent key** so the `UPDATE` matches zero rows on both engines
-   (non-destructive and repeatable). Design mutation tests for such procedures to touch no real rows.
-2. **PostgreSQL overload resolution does not implicitly narrow `integer` → `smallint`.** A procedure
-   declared with a `smallint` parameter could not be called as `CALL proc(1, 1)`; widening the
-   parameter to `numeric` fixed resolution. Prefer `numeric`/`bigint` for parameters that model
-   Oracle `NUMBER`.
-3. **Deferring FKs + triggers to post-data pays off** — the seeded `search_text` values loaded
-   verbatim because the maintenance trigger was applied only after the data load.
-4. **Negative controls make a green suite meaningful.** Two intentionally-mismatched cases were run
-   once to prove the harness actually compares values and can report FAIL — one of which also
-   surfaced the real `REGEXP_REPLACE` `'g'`-flag trap — then deleted. See `follow-up.yaml`.
-
-## The optional application-modernization module (`05-application/`)
-
-After the database migration signed off, the companion Java/Spring Boot app
-(`JavaBobsUsedBooks`) was converted to speak the migrated database — a **like-for-like** change
-driven by the migration's own artifacts, not generic rules:
-
-- **Inventory + change plan first, then edits.** `01-assessment/` inventories every impacted site
-  (datasource config, embedded SQL, stored-routine call sites, error codes) and previews each edit
-  (current vs proposed, risk class) — **nothing is edited before the plan is approved.**
-- **Mirrored backups.** Every edited file is backed up under `backup/<timestamp>/` as a mirrored
-  tree — never `.bak` files scattered beside the originals.
-- **What changed:** JDBC URL/driver → PostgreSQL, Hibernate dialect removed, `CONTAINS/SCORE`
-  full-text query → `to_tsvector @@ plainto_tsquery` + `ts_rank`, Oracle dialect SQL (`ROWNUM`,
-  `NVL`, `DECODE`, `TO_DATE`, `ADD_MONTHS`, `MONTHS_BETWEEN`) rewritten, and a plaintext DB password
-  replaced with a `${DB_PASSWORD}` env reference.
-- **Honest gaps recorded:** a call site (`get_customer_history`) targets a routine that exists in
-  neither engine — flagged **BLOCKED** for a product decision, not silently changed; and the demo
-  package references a phantom `sales` table (pre-existing dead code). See `03-validation/build-report.md`.
+- App: `BookService` built Oracle Text query syntax (`fuzzy(t, 40) OR …`) that PostgreSQL treats as
+  words — full-text returned nothing. `app-scan` now flags full-text query-language fragments.
+- `app-scan` missed one `LocalDate` field declared with modifiers, and reported `throws SQLException` as
+  error handling — both fixed.
 
 ## Reproducing
 
-From the repo root, with `connections.yaml`/`migration-config.yaml` pointed at your endpoints and
-`ORA_PASSWORD`/`PG_PASSWORD` exported from your secret store:
-
 ```bash
-python -m dbmig test-connection --side both
-python -m dbmig inventory      --schema DEMO --project demo
-python -m dbmig convert-schema --schema DEMO --project demo   # Kiro converts each unit
-python -m dbmig apply-schema   --schema DEMO --project demo
-python -m dbmig convert-code   --schema DEMO --project demo   # Kiro converts each routine
-python -m dbmig apply-schema   --schema DEMO --project demo --code
-python -m dbmig migrate-data   --schema DEMO --project demo --workers 6
-python -m dbmig apply-schema   --schema DEMO --project demo --post-data
-python -m dbmig compare        --schema DEMO --project demo
-python -m dbmig gen-tests      --schema DEMO --project demo   # Kiro writes .test.yaml specs
-python -m dbmig run-tests      --schema DEMO --project demo
+./dbmig test-connection --side both
+./dbmig inventory      --schema DEMO --project demo
+./dbmig convert-schema --schema DEMO --project demo   # the assistant converts each bundle
+./dbmig apply-schema   --schema DEMO --project demo
+./dbmig convert-code   --schema DEMO --project demo
+./dbmig apply-schema   --schema DEMO --project demo --code
+./dbmig migrate-data   --schema DEMO --project demo --workers 4
+./dbmig apply-schema   --schema DEMO --project demo --post-data
+./dbmig compare        --schema DEMO --project demo
+./dbmig gen-tests      --schema DEMO --project demo   # after convert-code: bundles carry target code
+./dbmig run-tests      --schema DEMO --project demo
+./dbmig reset-identity --schema DEMO --project demo   # dry run; --apply at cutover
+./dbmig app-scan       --app-dir <app-dir>/JavaBobsUsedBooks --project demo --target-schema demo
 ```
 
-The `dbmig` toolkit performs every deterministic step; Kiro performs the schema/code/test-spec
-conversion (no hosted LLM API calls). The target database `demodb` was created once up front with a
-plain `CREATE DATABASE demodb` on the Aurora cluster. The Operations artifacts (cutover, rollback,
-monitoring) and the optional application-modernization module were produced from this same
-`migrations/demo/` workspace.
+> AI-generated artifacts — review everything before relying on it. See [DISCLAIMER.txt](../DISCLAIMER.txt).

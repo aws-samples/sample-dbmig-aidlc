@@ -151,3 +151,28 @@ equivalent. Options, in order of preference:
 
 Either way the **caller contract changes**: clients that bind a TVP must be updated. Flag every
 occurrence. `MERGE` driven by a TVP is doubly affected — see the `MERGE` guidance.
+
+## 16. Routine parameter types: don't narrow to `smallint` (found by equivalence tests)
+A `tinyint`/`smallint` **parameter** mapped to `smallint` breaks every caller that passes an integer
+literal or an `int` column: PostgreSQL resolves functions by type and will not implicitly narrow
+`integer` → `smallint` (`function f(integer) does not exist`). SQL Server converts silently. Declare
+such parameters `integer` (keep `smallint` for *columns*). Related: `OUT`/`INOUT` procedure
+parameters must receive a **variable** when called from PL/pgSQL (`CALL p(v, …)`), not a literal.
+Also keep SQL Server's overflow marker where code relies on it: `CONVERT(varchar(n), int)` yields
+`'*'` when the value does not fit.
+
+## 17. Case-insensitive collation (`…_CI_…`) — the silent one
+SQL Server's default collations are case-insensitive, so `LIKE '%gold%'`, `=`, `IN`, `ORDER BY` and
+unique indexes ignore case; PostgreSQL's do not. Nothing errors — searches just return fewer rows
+(found in a real run: the app's book search stopped matching "gold" for "Gold In The Dark").
+`dbmig inventory` raises a `case_insensitive_collation` decision item. Options: (a) `citext` for the
+columns the application searches/compares (no app change for `LIKE`); (b) an ICU nondeterministic
+collation (no `LIKE` support before PostgreSQL 18); (c) keep case-sensitive and change the app
+(`ILIKE` / `EF.Functions.ILike` / `lower()`).
+- **`citext` must live in a schema on the application's `search_path`.** Its case-insensitive
+  `~~` (LIKE) operator is resolved through `search_path`; an app connecting with
+  `SearchPath=dbo` while the extension sits in `public` **silently** gets the built-in
+  case-sensitive `text ~~ text`. Install with `CREATE EXTENSION citext SCHEMA <app schema>` (or
+  include `public` in the path) and test with the app's own connection settings.
+- `citext = text_parameter` stays case-sensitive (the text-typed parameter wins); only `LIKE`,
+  and `=` between two citext values, ignore case. Flag equality lookups on those columns.

@@ -147,6 +147,12 @@ return different results — convert **and** raise it in the change plan.
 - **`ddl-auto` / `EnsureCreated`** — keep off; never let the ORM alter a migrated schema.
 - **Dapper** `@name` parameters are generally translated by Npgsql, but verify; raw
   `NpgsqlCommand` text needs `:name` or `$n`.
+- **Hibernate/JPA on retyped columns** (Java apps): `@Lob byte[]` on a `varbinary(max)`→`bytea`
+  column validates as PostgreSQL `oid` and fails — drop `@Lob`, add
+  `@JdbcTypeCode(SqlTypes.VARBINARY)`; a `Boolean` field on a `bit`→`smallint` column needs
+  `@JdbcTypeCode(SqlTypes.SMALLINT)` (a `bit`→`boolean` mapping needs nothing). Same class of
+  trap and recipe table as `engines/oracle-to-postgresql/app/app-sql-rules.md` §5a; boot with
+  `ddl-auto=validate` to prove every mapping.
 
 ---
 

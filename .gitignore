@@ -29,3 +29,6 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
+
+# Claude Code: per-user settings stay local (CLAUDE.md + .claude/skills/ are shared)
+.claude/settings.local.json

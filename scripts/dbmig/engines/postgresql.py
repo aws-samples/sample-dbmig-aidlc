@@ -41,8 +41,52 @@ def build_copy_sql(schema: str, table: str, columns: Sequence[str]) -> str:
 
 
 def build_setval_max_sql(schema: str, table: str, col: str) -> str:
-    """setval(<seq>, MAX(col)) — seq is passed as a bound %s parameter by the caller."""
-    return f'SELECT setval(%s, COALESCE((SELECT MAX({_quote_ident(col)}) FROM {_qualified(schema, table)}), 1))'  # nosec B608
+    """Sync a sequence so its NEXT value is ``MAX(col)+1`` — or the sequence's
+    START value when the table is empty.
+
+    ``setval(seq, MAX, true)`` marks MAX as already used (next = MAX+1); for an
+    empty table ``setval(seq, start, false)`` makes the next value exactly
+    ``start``. (The older ``COALESCE(MAX, 1)`` form, which defaults
+    ``is_called`` to true, made an empty table's first id 2 instead of 1.) The
+    sequence is passed twice as a bound ``%s`` parameter by the caller."""
+    q = _quote_ident(col)
+    return (f"SELECT setval(%s, COALESCE(MAX({q}), "  # nosec B608
+            f"(SELECT seqstart FROM pg_sequence WHERE seqrelid = %s::regclass)), "
+            f"MAX({q}) IS NOT NULL) FROM {_qualified(schema, table)}")
+
+
+def build_max_sql(schema: str, table: str, col: str) -> str:
+    return f"SELECT MAX({_quote_ident(col)}) FROM {_qualified(schema, table)}"  # nosec B608
+
+
+# Identity / serial columns and the sequence backing each (identity AND
+# serial-owned columns both resolve via pg_get_serial_sequence).
+IDENTITY_COLUMNS_SQL = (
+    "SELECT c.table_name, c.column_name, "
+    "pg_get_serial_sequence(quote_ident(c.table_schema) || '.' || "
+    "quote_ident(c.table_name), c.column_name) "
+    "FROM information_schema.columns c "
+    "JOIN information_schema.tables t ON t.table_schema = c.table_schema "
+    " AND t.table_name = c.table_name AND t.table_type = 'BASE TABLE' "
+    "WHERE c.table_schema = %s "
+    "AND (c.is_identity = 'YES' OR c.column_default LIKE 'nextval(%%') "
+    "ORDER BY c.table_name, c.ordinal_position")
+
+# Next value a sequence would hand out: last_value+increment if it has been
+# called, else its start value (pg_sequence_last_value is NULL until then).
+SEQUENCE_NEXT_SQL = (
+    "SELECT CASE WHEN pg_sequence_last_value(%s::regclass) IS NULL THEN seqstart "
+    "ELSE pg_sequence_last_value(%s::regclass) + seqincrement END "
+    "FROM pg_sequence WHERE seqrelid = %s::regclass")
+
+# Sequences NOT owned by any column (deptype 'a' = serial, 'i' = identity).
+STANDALONE_SEQUENCES_SQL = (
+    "SELECT c.relname, pg_sequence_last_value(c.oid) "
+    "FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
+    "WHERE c.relkind = 'S' AND n.nspname = %s "
+    "AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid = c.oid "
+    "  AND d.classid = 'pg_class'::regclass AND d.deptype IN ('a', 'i')) "
+    "ORDER BY c.relname")
 
 
 # ---- FDW push-down builders ----------------------------------------------
@@ -76,6 +120,18 @@ def _fdw_options_clause(options) -> str:
         _assert_fdw_name(str(k))
         parts.append(f"{k} {_fdw_opt_literal(v)}")
     return ", ".join(parts)
+
+
+def build_drop_server_sql(server: str) -> str:
+    return "DROP SERVER IF EXISTS " + _quote_ident(server) + " CASCADE"
+
+
+def build_drop_foreign_table_sql(stage: str, ftname: str) -> str:
+    return "DROP FOREIGN TABLE IF EXISTS " + _qualified(stage, ftname)
+
+
+def build_drop_schema_sql(schema: str) -> str:
+    return "DROP SCHEMA IF EXISTS " + _quote_ident(schema) + " CASCADE"
 
 
 def build_create_extension_sql(wrapper: str) -> str:
@@ -253,23 +309,40 @@ class PostgreSQLEngine(TargetEngine):
         return primary_key_columns(self.connection, schema, table)
 
     def reset_identity(self, schema, table):
-        # Advance each IDENTITY column's sequence to MAX(col) so app inserts after
-        # a data load (which supplied explicit ids) don't collide.
-        conn = self.connection
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT column_name FROM information_schema.columns "
-                "WHERE table_schema = %s AND table_name = %s AND is_identity = 'YES'",
-                (schema, table))
-            cols = [r[0] for r in cur.fetchall()]
-            for c in cols:
-                cur.execute("SELECT pg_get_serial_sequence(%s, %s)",
-                            (f"{schema}.{table}", c))
-                row = cur.fetchone()
-                seq = row[0] if row else None
-                if seq:
-                    cur.execute(build_setval_max_sql(schema, table, c), (seq,))
-        conn.commit()
+        # Advance each identity/serial sequence so the next generated key is
+        # MAX(col)+1 (or START when empty) — app inserts after a data load (which
+        # supplied explicit ids) must not collide.
+        for ic in self.identity_columns(schema):
+            if ic["table"] == table:
+                self.sync_identity(schema, table, ic["column"], ic["sequence"],
+                                   commit=False)
+        self.connection.commit()
+
+    def identity_columns(self, schema):
+        _, rows = self.fetch(IDENTITY_COLUMNS_SQL, (schema,))
+        return [{"table": r[0], "column": r[1], "sequence": r[2]}
+                for r in rows if r[2]]
+
+    def identity_state(self, schema, table, column, sequence):
+        mx = self.scalar(build_max_sql(schema, table, column))
+        nxt = self.scalar(SEQUENCE_NEXT_SQL, (sequence, sequence, sequence)) \
+            if sequence else None
+        self.connection.rollback()  # read-only; don't leave a txn open
+        return {"max_id": None if mx is None else int(mx),
+                "next_value": None if nxt is None else int(nxt)}
+
+    def sync_identity(self, schema, table, column, sequence, commit=True):
+        if not sequence:
+            return
+        self.execute(build_setval_max_sql(schema, table, column), (sequence, sequence))
+        if commit:
+            self.connection.commit()
+
+    def standalone_sequences(self, schema):
+        _, rows = self.fetch(STANDALONE_SEQUENCES_SQL, (schema,))
+        self.connection.rollback()
+        return [{"name": r[0], "last_value": None if r[1] is None else int(r[1])}
+                for r in rows]
 
     # ---- FDW push-down load (target reads source directly) -----------------
 
@@ -297,7 +370,7 @@ class PostgreSQLEngine(TargetEngine):
         conn = self.connection
         with conn.cursor() as cur:
             cur.execute(build_create_extension_sql(wrapper))
-            cur.execute(f"DROP SERVER IF EXISTS {_quote_ident(server)} CASCADE")  # nosec B608
+            cur.execute(build_drop_server_sql(server))
             cur.execute(build_create_server_sql(server, wrapper, server_options))
             cur.execute(build_create_user_mapping_sql(server, user_mapping_options))
         conn.commit()
@@ -310,7 +383,7 @@ class PostgreSQLEngine(TargetEngine):
     def fdw_create_foreign_table(self, stage, ftname, columns, server, options):
         conn = self.connection
         with conn.cursor() as cur:
-            cur.execute(f"DROP FOREIGN TABLE IF EXISTS {_qualified(stage, ftname)}")  # nosec B608
+            cur.execute(build_drop_foreign_table_sql(stage, ftname))
             cur.execute(build_create_foreign_table_sql(stage, ftname, columns,
                                                        server, options))
         conn.commit()
@@ -340,9 +413,9 @@ class PostgreSQLEngine(TargetEngine):
         also removes the source credentials stored in the user mapping."""
         conn = self.connection
         with conn.cursor() as cur:
-            cur.execute(f"DROP SERVER IF EXISTS {_quote_ident(server)} CASCADE")  # nosec B608
+            cur.execute(build_drop_server_sql(server))
             if stage:
-                cur.execute(f"DROP SCHEMA IF EXISTS {_quote_ident(stage)} CASCADE")  # nosec B608
+                cur.execute(build_drop_schema_sql(stage))
         conn.commit()
 
     # ---- live target introspection (for diff-target / capture) --------------

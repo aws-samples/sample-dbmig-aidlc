@@ -72,9 +72,11 @@ def test_postgresql_sql_builders_quote_identifiers():
     # embedded double-quote in an identifier is escaped, not injectable
     assert pg.build_row_count_sql("s", 'x"; DROP TABLE y --') == \
         'SELECT COUNT(*) FROM "s"."x""; DROP TABLE y --"'
-    # setval keeps the sequence as a bound %s param
+    # setval sets next = MAX+1 (is_called=true) or START on an empty table
+    # (is_called=false); the sequence stays a bound %s param (passed twice)
     assert pg.build_setval_max_sql("s", "t", "id") == \
-        'SELECT setval(%s, COALESCE((SELECT MAX("id") FROM "s"."t"), 1))'
+        ('SELECT setval(%s, COALESCE(MAX("id"), (SELECT seqstart FROM pg_sequence '
+         'WHERE seqrelid = %s::regclass)), MAX("id") IS NOT NULL) FROM "s"."t"')
 
 
 def test_mysql_sql_builders_quote_identifiers():

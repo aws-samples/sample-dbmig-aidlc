@@ -1,0 +1,20 @@
+object: uspGetTopRegion
+schema: DBO
+type: function
+notes: 'LOW_COVERAGE (date-relative): the newest sale is 2024-09-26, so the 6-month window is empty today on both engines; the TOP n PERCENT branches are not exercised on data. The window arithmetic is
+  checked on the base table.'
+cases:
+- id: r1
+  type: function
+  source_sql: SET NOCOUNT ON; DECLARE @t TABLE (RegionID int, RegionName varchar(50), NumberOfSales int, TotalSalesAmount numeric(38,2), NumberOfMembers int); INSERT INTO @t EXEC dbo.uspGetTopRegion @Percent
+    = 50; SELECT COUNT(*) FROM @t
+  target_sql: SELECT count(*) FROM dbo.uspgettopregion(50)
+- id: r2
+  type: function
+  source_sql: SET NOCOUNT ON; DECLARE @t TABLE (RegionID int, RegionName varchar(50), NumberOfSales int, TotalSalesAmount numeric(38,2), NumberOfMembers int); INSERT INTO @t EXEC dbo.uspGetTopRegion @Percent
+    = 15; SELECT COUNT(*) FROM @t
+  target_sql: SELECT count(*) FROM dbo.uspgettopregion(15)
+- id: r3
+  type: function
+  source_sql: SELECT COUNT(*) FROM dbo.ProductSales WHERE SaleDate >= DATEADD(MONTH, -30, GETDATE())
+  target_sql: SELECT count(*) FROM dbo.productsales WHERE saledate >= localtimestamp - interval '30 months'

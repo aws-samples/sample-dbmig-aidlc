@@ -1,0 +1,1694 @@
+app_dir: <app-dir>/JavaBobsUsedBooks
+pair: oracle-to-postgresql
+files_in_scope: 119
+bytes_scanned: 356431
+files_by_type:
+  .java: 106
+  .sql: 6
+  .js: 5
+  .xml: 1
+  .properties: 1
+excluded_dirs:
+  vendored-asset: 145
+leftovers:
+- src/main/java/com/bobsusedbooks/controllers/ReferenceDataController.java.bak
+- src/main/resources/application.properties.bak
+- src/main/resources/db/oracle/01_user.sql.bak
+- src/main/resources/templates/admin/reference-data/index.html.bak
+frameworks:
+  JPA/Hibernate:
+  - src/main/java/com/bobsusedbooks/common/Entity.java
+  - src/main/java/com/bobsusedbooks/entities/Address.java
+  - src/main/java/com/bobsusedbooks/entities/Book.java
+  - src/main/java/com/bobsusedbooks/entities/BookCover.java
+  - src/main/java/com/bobsusedbooks/entities/BookType.java
+  - src/main/java/com/bobsusedbooks/entities/Condition.java
+  - src/main/java/com/bobsusedbooks/entities/Customer.java
+  - src/main/java/com/bobsusedbooks/entities/Genre.java
+  - src/main/java/com/bobsusedbooks/entities/Listing.java
+  - src/main/java/com/bobsusedbooks/entities/Order.java
+  - src/main/java/com/bobsusedbooks/entities/OrderItem.java
+  - src/main/java/com/bobsusedbooks/entities/PasswordResetToken.java
+  - src/main/java/com/bobsusedbooks/entities/Publisher.java
+  - src/main/java/com/bobsusedbooks/entities/ShoppingCartItem.java
+  Raw JDBC:
+  - src/main/java/com/bobsusedbooks/demo/OracleBookRepository.java
+sites:
+  sql:
+  - file: src/main/java/com/bobsusedbooks/config/DataInitializer.java
+    line: 31
+    constructs: []
+    sql: Database pre-initialized with schema and sample data.
+  - file: src/main/java/com/bobsusedbooks/controllers/AdminAccessController.java
+    line: 14
+    constructs: []
+    sql: Please login with admin credentials to access the admin portal
+  - file: src/main/java/com/bobsusedbooks/controllers/AdminController.java
+    line: 97
+    constructs: []
+    sql: 'Failed to update order status:'
+  - file: src/main/java/com/bobsusedbooks/controllers/AdminController.java
+    line: 135
+    constructs: []
+    sql: 'Failed to update order status:'
+  - file: src/main/java/com/bobsusedbooks/controllers/AdminController.java
+    line: 181
+    constructs: []
+    sql: 'Failed to update customer:'
+  - file: src/main/java/com/bobsusedbooks/controllers/AdminController.java
+    line: 356
+    constructs: []
+    sql: 'Failed to delete genre:'
+  - file: src/main/java/com/bobsusedbooks/controllers/AdminController.java
+    line: 400
+    constructs: []
+    sql: 'Failed to delete publisher:'
+  - file: src/main/java/com/bobsusedbooks/controllers/AdminController.java
+    line: 444
+    constructs: []
+    sql: 'Failed to delete book type:'
+  - file: src/main/java/com/bobsusedbooks/controllers/AdminController.java
+    line: 488
+    constructs: []
+    sql: 'Failed to delete condition:'
+  - file: src/main/java/com/bobsusedbooks/controllers/BookAdminController.java
+    line: 31
+    constructs: []
+    sql: 'Failed to delete book:'
+  - file: src/main/java/com/bobsusedbooks/controllers/PasswordResetController.java
+    line: 37
+    constructs: []
+    sql: No account found with that email address
+  - file: src/main/java/com/bobsusedbooks/controllers/PasswordResetController.java
+    line: 104
+    constructs: []
+    sql: Password has been reset successfully. Please log in with your new password.
+  - file: src/main/java/com/bobsusedbooks/controllers/ReportController.java
+    line: 133
+    constructs: []
+    sql: 'Failed to update stock:'
+  - file: src/main/java/com/bobsusedbooks/demo/OracleBookRepository.java
+    line: 36
+    constructs:
+    - ROWNUM
+    sql: SELECT * FROM BOOKS b WHERE b.genre_id = ? AND ROWNUM <= 100 ORDER BY b.name
+  - file: src/main/java/com/bobsusedbooks/demo/OracleBookRepository.java
+    line: 63
+    constructs: []
+    sql: SELECT * FROM BOOKS b WHERE UPPER(b.name) LIKE UPPER('%' || ? || '%') OR
+      UPPER(b.author) LIKE UPPER('%' || ? || '%')
+  - file: src/main/java/com/bobsusedbooks/demo/OracleBookRepository.java
+    line: 90
+    constructs:
+    - NVL
+    sql: SELECT * FROM BOOKS b WHERE NVL(b.is_featured, 0) = 1 ORDER BY b.name
+  - file: src/main/java/com/bobsusedbooks/demo/OracleBookRepository.java
+    line: 115
+    constructs:
+    - DECODE
+    sql: SELECT b.*, DECODE(b.quantity, 0, 'Out of Stock', 1, 'Last Copy', 'In Stock')
+      as stock_status FROM BOOKS b WHERE b.quantity < ? ORDER BY b.quantity ASC
+  - file: src/main/java/com/bobsusedbooks/demo/OracleBookRepository.java
+    line: 157
+    constructs: []
+    sql: SELECT * FROM BOOKS b WHERE 1=1
+  - file: src/main/java/com/bobsusedbooks/demo/OracleBookRepository.java
+    line: 195
+    constructs:
+    - TO_DATE
+    sql: AND b.created_date > TO_DATE('2023-01-01', 'YYYY-MM-DD')
+    fragment: true
+  - file: src/main/java/com/bobsusedbooks/demo/OracleBookRepository.java
+    line: 258
+    constructs:
+    - ADD_MONTHS
+    - SYSDATE
+    sql: SELECT b.* FROM ( SELECT b.*, ROW_NUMBER() OVER (ORDER BY SUM(s.quantity)
+      DESC) as rank FROM BOOKS b JOIN SALES s ON b.id = s.book_id WHERE s.sale_date
+      > ADD_MONTHS(SYSDATE, -12) GROUP BY b.id, b.name, b.author, b.isbn, b.price,
+      b.quantity, b.genre_id, b.publisher_id, b.condition_id, b.book_type_id,
+  - file: src/main/java/com/bobsusedbooks/demo/OracleBookService.java
+    line: 36
+    constructs:
+    - ADD_MONTHS
+    - SYSDATE
+    sql: 'WITH customer_genres AS ( SELECT b.genre_id, COUNT(*) as purchase_count
+      FROM orders o JOIN order_items oi ON o.id = oi.order_id JOIN books b ON oi.book_id
+      = b.id WHERE o.customer_id = ? AND o.order_date > ADD_MONTHS(SYSDATE, -6) GROUP
+      BY b.genre_id ORDER BY purchase_count DESC ), purchased_books AS '
+  - file: src/main/java/com/bobsusedbooks/demo/OracleBookService.java
+    line: 92
+    constructs:
+    - LISTAGG
+    - MONTHS_BETWEEN
+    - SYSDATE
+    sql: SELECT c.id as customer_id, c.name as customer_name, COUNT(DISTINCT o.id)
+      as total_orders, SUM(o.total_amount) as total_spent, AVG(o.total_amount) as
+      avg_order_value, MAX(o.order_date) as last_order_date, ROUND(AVG(LEAD(o.order_date)
+      OVER (PARTITION BY o.customer_id ORDER BY o.order_date) - o.order_
+  - file: src/main/java/com/bobsusedbooks/repositories/BookRepository.java
+    line: 23
+    constructs: []
+    sql: SELECT DISTINCT b FROM Book b JOIN Listing l ON l.book.id = b.id WHERE l.status
+      = 1 AND (LOWER(b.title) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(b.author)
+      LIKE LOWER(CONCAT('%', :keyword, '%')))
+  - file: src/main/java/com/bobsusedbooks/repositories/BookRepository.java
+    line: 26
+    constructs: []
+    sql: SELECT DISTINCT b FROM Book b JOIN Listing l ON l.book.id = b.id WHERE l.status
+      = 1 AND (LOWER(b.title) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(b.author)
+      LIKE LOWER(CONCAT('%', :keyword, '%')))
+  - file: src/main/java/com/bobsusedbooks/repositories/BookRepository.java
+    line: 37
+    constructs: []
+    sql: SELECT COUNT(b) FROM Book b
+  - file: src/main/java/com/bobsusedbooks/repositories/BookRepository.java
+    line: 42
+    constructs: []
+    sql: SELECT b.genre.name, COUNT(b) FROM Book b GROUP BY b.genre.name ORDER BY
+      COUNT(b) DESC
+  - file: src/main/java/com/bobsusedbooks/repositories/BookRepository.java
+    line: 45
+    constructs: []
+    sql: SELECT b FROM Book b JOIN Listing l ON b.id = l.bookId WHERE l.status = 1
+      AND l.quantity <= :threshold AND l.listingType = 'SYSTEM'
+  - file: src/main/java/com/bobsusedbooks/repositories/BookRepository.java
+    line: 48
+    constructs: []
+    sql: SELECT b.genre.name, SUM(l.price * l.quantity) FROM Book b JOIN Listing l
+      ON b.id = l.bookId WHERE l.status = 1 GROUP BY b.genre.name
+  - file: src/main/java/com/bobsusedbooks/repositories/BookRepository.java
+    line: 64
+    constructs: []
+    sql: SELECT DISTINCT b.* FROM books b LEFT JOIN listings l ON b.id = l.book_id
+      AND l.status = 1 WHERE (:keyword IS NULL OR UPPER(b.title) LIKE UPPER('%' ||
+      :keyword || '%') OR UPPER(b.author) LIKE UPPER('%' || :keyword || '%')) AND
+      (:author IS NULL OR UPPER(b.author) LIKE UPPER('%' || :author || '%')) AN
+  - file: src/main/java/com/bobsusedbooks/repositories/BookRepository.java
+    line: 75
+    constructs: []
+    sql: 'SELECT COUNT(DISTINCT b.id) FROM books b LEFT JOIN listings l ON b.id =
+      l.book_id AND l.status = 1 WHERE (:keyword IS NULL OR UPPER(b.title) LIKE UPPER(''%''
+      || :keyword || ''%'') OR UPPER(b.author) LIKE UPPER(''%'' || :keyword || ''%''))
+      AND (:author IS NULL OR UPPER(b.author) LIKE UPPER(''%'' || :author || '
+  - file: src/main/java/com/bobsusedbooks/repositories/BookRepository.java
+    line: 97
+    constructs:
+    - CONTAINS(
+    - SCORE(
+    sql: SELECT b.* FROM BOOKS b WHERE CONTAINS(search_text, ?1, 1) > 0 ORDER BY SCORE(1)
+      DESC
+  - file: src/main/java/com/bobsusedbooks/repositories/BookRepository.java
+    line: 100
+    constructs:
+    - CONTAINS(
+    sql: SELECT COUNT(*) FROM BOOKS b WHERE CONTAINS(search_text, ?1) > 0
+  - file: src/main/java/com/bobsusedbooks/repositories/CustomerRepository.java
+    line: 34
+    constructs: []
+    sql: '{ call get_customer_history(:customerId) }'
+  - file: src/main/java/com/bobsusedbooks/repositories/OrderRepository.java
+    line: 29
+    constructs: []
+    sql: SELECT SUM(o.totalAmount) FROM Order o
+  - file: src/main/java/com/bobsusedbooks/repositories/OrderRepository.java
+    line: 32
+    constructs: []
+    sql: SELECT SUM(o.totalAmount) FROM Order o WHERE CAST(o.createdOn AS DATE) BETWEEN
+      :startDate AND :endDate
+  - file: src/main/java/com/bobsusedbooks/repositories/OrderRepository.java
+    line: 35
+    constructs: []
+    sql: SELECT COUNT(o) FROM Order o WHERE CAST(o.createdOn AS DATE) BETWEEN :startDate
+      AND :endDate
+  - file: src/main/java/com/bobsusedbooks/repositories/OrderRepository.java
+    line: 38
+    constructs: []
+    sql: SELECT CAST(o.createdOn AS DATE), SUM(o.totalAmount) FROM Order o WHERE CAST(o.createdOn
+      AS DATE) BETWEEN :startDate AND :endDate GROUP BY CAST(o.createdOn AS DATE)
+      ORDER BY CAST(o.createdOn AS DATE)
+  - file: src/main/java/com/bobsusedbooks/repositories/OrderRepository.java
+    line: 41
+    constructs: []
+    sql: SELECT b.genre.name, SUM(oi.bookPrice * oi.quantity) FROM Order o JOIN o.orderItems
+      oi JOIN oi.book b WHERE CAST(o.createdOn AS DATE) BETWEEN :startDate AND :endDate
+      GROUP BY b.genre.name ORDER BY SUM(oi.bookPrice * oi.quantity) DESC
+  - file: src/main/java/com/bobsusedbooks/repositories/OrderRepository.java
+    line: 44
+    constructs: []
+    sql: SELECT AVG(o.totalAmount) FROM Order o WHERE CAST(o.createdOn AS DATE) BETWEEN
+      :startDate AND :endDate
+  - file: src/main/java/com/bobsusedbooks/repositories/OrderRepository.java
+    line: 50
+    constructs: []
+    sql: SELECT COUNT(o) FROM Order o WHERE o.status = :status
+  - file: src/main/java/com/bobsusedbooks/repositories/OrderRepository.java
+    line: 54
+    constructs: []
+    sql: SELECT o FROM Order o ORDER BY CAST(o.createdOn AS DATE) DESC
+  - file: src/main/java/com/bobsusedbooks/repositories/ShoppingCartRepository.java
+    line: 23
+    constructs: []
+    sql: DELETE FROM ShoppingCartItem sci WHERE sci.customerId = :customerId AND sci.bookId
+      = :bookId
+  - file: src/main/java/com/bobsusedbooks/repositories/ShoppingCartRepository.java
+    line: 27
+    constructs: []
+    sql: DELETE FROM ShoppingCartItem sci WHERE sci.customerId = :customerId
+  - file: src/main/java/com/bobsusedbooks/repositories/ShoppingCartRepository.java
+    line: 31
+    constructs: []
+    sql: DELETE FROM ShoppingCartItem sci WHERE sci.customerId = :customerId AND sci.isWishlistItem
+      = :isWishlistItem
+  - file: src/main/java/com/bobsusedbooks/security/CustomUserDetailsService.java
+    line: 36
+    constructs: []
+    sql: 'User not found with username or email:'
+  - file: src/main/java/com/bobsusedbooks/services/BookService.java
+    line: 231
+    constructs: []
+    sql: 'Book not found with id:'
+  - file: src/main/java/com/bobsusedbooks/services/CustomerService.java
+    line: 70
+    constructs: []
+    sql: 'Customer not found with id:'
+  - file: src/main/java/com/bobsusedbooks/services/EmailService.java
+    line: 25
+    constructs: []
+    sql: 'Sending offer status update email to:'
+  - file: src/main/java/com/bobsusedbooks/services/OrderService.java
+    line: 127
+    constructs: []
+    sql: 'Order not found with id:'
+  - file: src/main/java/com/bobsusedbooks/services/OrderService.java
+    line: 140
+    constructs: []
+    sql: 'Customer not found with id:'
+  - file: src/main/java/com/bobsusedbooks/services/OrderService.java
+    line: 248
+    constructs: []
+    sql: 'Order not found with id:'
+  - file: src/main/java/com/bobsusedbooks/services/OrderService.java
+    line: 286
+    constructs: []
+    sql: 'Order not found with id:'
+  - file: src/main/java/com/bobsusedbooks/services/PasswordResetService.java
+    line: 32
+    constructs: []
+    sql: 'No user found with email:'
+  - file: src/main/java/com/bobsusedbooks/services/ReferenceDataService.java
+    line: 82
+    constructs: []
+    sql: 'Genre not found with id:'
+  - file: src/main/java/com/bobsusedbooks/services/ReferenceDataService.java
+    line: 119
+    constructs: []
+    sql: 'Publisher not found with id:'
+  - file: src/main/java/com/bobsusedbooks/services/ReferenceDataService.java
+    line: 156
+    constructs: []
+    sql: 'BookType not found with id:'
+  - file: src/main/java/com/bobsusedbooks/services/ReferenceDataService.java
+    line: 193
+    constructs: []
+    sql: 'Condition not found with id:'
+  - file: src/main/java/com/bobsusedbooks/utils/LoadCoverImages.java
+    line: 59
+    constructs: []
+    sql: SELECT COUNT(*) FROM books_cover WHERE book_id = ?
+  - file: src/main/java/com/bobsusedbooks/utils/LoadCoverImages.java
+    line: 67
+    constructs: []
+    sql: UPDATE books_cover SET cover_image = ?, content_type = ?, file_name = ?,
+      updated_on = ? WHERE book_id = ?
+  - file: src/main/java/com/bobsusedbooks/utils/LoadCoverImages.java
+    line: 77
+    constructs: []
+    sql: INSERT INTO books_cover (book_id, cover_image, content_type, file_name, created_on,
+      updated_on) VALUES (?, ?, ?, ?, ?, ?)
+  routine:
+  - file: src/main/java/com/bobsusedbooks/repositories/CustomerRepository.java
+    line: 34
+    text: '@Query(value = "{ call get_customer_history(:customerId) }", nativeQuery
+      = true)'
+  error:
+  - file: src/main/java/com/bobsusedbooks/utils/LoadCoverImages.java
+    line: 48
+    text: '} catch (SQLException e) {'
+  resultset:
+  - file: src/main/java/com/bobsusedbooks/demo/OracleBookRepository.java
+    line: 294
+    text: book.setId(rs.getLong("id"));
+  - file: src/main/java/com/bobsusedbooks/demo/OracleBookRepository.java
+    line: 295
+    text: book.setTitle(rs.getString("name"));
+  - file: src/main/java/com/bobsusedbooks/demo/OracleBookRepository.java
+    line: 296
+    text: book.setAuthor(rs.getString("author"));
+  - file: src/main/java/com/bobsusedbooks/demo/OracleBookRepository.java
+    line: 297
+    text: book.setIsbn(rs.getString("isbn"));
+  - file: src/main/java/com/bobsusedbooks/demo/OracleBookService.java
+    line: 139
+    text: book.setId(rs.getLong("id"));
+  - file: src/main/java/com/bobsusedbooks/demo/OracleBookService.java
+    line: 140
+    text: book.setTitle(rs.getString("name"));
+  - file: src/main/java/com/bobsusedbooks/demo/OracleBookService.java
+    line: 141
+    text: book.setAuthor(rs.getString("author"));
+  - file: src/main/java/com/bobsusedbooks/demo/OracleBookService.java
+    line: 142
+    text: book.setIsbn(rs.getString("isbn"));
+  conn_code:
+  - file: src/main/java/com/bobsusedbooks/config/DatabaseInfoConfig.java
+    line: 49
+    text: String connectionDetails = jdbcUrl.split("@//")[1];
+  - file: src/main/java/com/bobsusedbooks/config/DatabaseInfoController.java
+    line: 20
+    text: String connectionDetails = datasourceUrl.split("@//")[1];
+  config:
+  - file: pom.xml
+    line: 48
+    text: <groupId>org.postgresql</groupId>
+  - file: pom.xml
+    line: 49
+    text: <artifactId>postgresql</artifactId>
+  - file: pom.xml
+    line: 55
+    text: <artifactId>ojdbc17</artifactId>
+  - file: src/main/resources/application.properties
+    line: 2
+    text: spring.datasource.url=jdbc:oracle:thin:@//<ORACLE_HOST>:1521/ORCL
+  - file: src/main/resources/application.properties
+    line: 4
+    kind: plaintext-secret
+    text: spring.datasource.password=<masked>
+  - file: src/main/resources/application.properties
+    line: 5
+    text: spring.datasource.driver-class-name=oracle.jdbc.OracleDriver
+  - file: src/main/resources/application.properties
+    line: 9
+    text: spring.jpa.hibernate.ddl-auto=validate
+  - file: src/main/resources/application.properties
+    line: 12
+    text: spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.OracleDialect
+  db_scripts:
+  - file: src/main/resources/db/oracle/01_user.sql
+    constructs: []
+    bytes: 560
+  - file: src/main/resources/db/oracle/02_schema_oracle_v2.sql
+    constructs:
+    - NVL
+    bytes: 8223
+  - file: src/main/resources/db/oracle/04_complex_schema_v2.sql
+    constructs:
+    - FETCH FIRST
+    - NVL
+    - REGEXP_
+    - SYSDATE
+    - SYSTIMESTAMP
+    - TRUNC
+    bytes: 16781
+  - file: src/main/resources/db/oracle/demo_cleanup.sql
+    constructs: []
+    bytes: 2253
+  - file: src/main/resources/db/oracle/reload_data.sql
+    constructs: []
+    bytes: 1541
+entities:
+- orm: JPA/Hibernate
+  class: Address
+  table: addresses
+  schema: null
+  file: src/main/java/com/bobsusedbooks/entities/Address.java
+  fields: 10
+- orm: JPA/Hibernate
+  class: Book
+  table: books
+  schema: null
+  file: src/main/java/com/bobsusedbooks/entities/Book.java
+  fields: 17
+- orm: JPA/Hibernate
+  class: BookCover
+  table: books_cover
+  schema: null
+  file: src/main/java/com/bobsusedbooks/entities/BookCover.java
+  fields: 7
+- orm: JPA/Hibernate
+  class: BookType
+  table: book_types
+  schema: null
+  file: src/main/java/com/bobsusedbooks/entities/BookType.java
+  fields: 5
+- orm: JPA/Hibernate
+  class: Condition
+  table: conditions
+  schema: null
+  file: src/main/java/com/bobsusedbooks/entities/Condition.java
+  fields: 5
+- orm: JPA/Hibernate
+  class: Customer
+  table: customers
+  schema: null
+  file: src/main/java/com/bobsusedbooks/entities/Customer.java
+  fields: 16
+- orm: JPA/Hibernate
+  class: Genre
+  table: genres
+  schema: null
+  file: src/main/java/com/bobsusedbooks/entities/Genre.java
+  fields: 5
+- orm: JPA/Hibernate
+  class: Listing
+  table: listings
+  schema: null
+  file: src/main/java/com/bobsusedbooks/entities/Listing.java
+  fields: 19
+- orm: JPA/Hibernate
+  class: Order
+  table: orders
+  schema: null
+  file: src/main/java/com/bobsusedbooks/entities/Order.java
+  fields: 18
+- orm: JPA/Hibernate
+  class: OrderItem
+  table: order_items
+  schema: null
+  file: src/main/java/com/bobsusedbooks/entities/OrderItem.java
+  fields: 9
+- orm: JPA/Hibernate
+  class: PasswordResetToken
+  table: password_reset_tokens
+  schema: null
+  file: src/main/java/com/bobsusedbooks/entities/PasswordResetToken.java
+  fields: 5
+- orm: JPA/Hibernate
+  class: Publisher
+  table: publishers
+  schema: null
+  file: src/main/java/com/bobsusedbooks/entities/Publisher.java
+  fields: 6
+- orm: JPA/Hibernate
+  class: ShoppingCartItem
+  table: shopping_cart_items
+  schema: null
+  file: src/main/java/com/bobsusedbooks/entities/ShoppingCartItem.java
+  fields: 6
+type_crosscheck:
+  source: live target catalog (schema demo)
+  fields_checked: 128
+  rows:
+  - orm: JPA/Hibernate
+    entity: Address
+    field: id
+    type: Long
+    table: addresses
+    column: id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/Address.java
+    line: 15
+  - orm: JPA/Hibernate
+    entity: Address
+    field: addressLine1
+    type: String
+    table: addresses
+    column: address_line1
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Address.java
+    line: 19
+  - orm: JPA/Hibernate
+    entity: Address
+    field: addressLine2
+    type: String
+    table: addresses
+    column: address_line2
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Address.java
+    line: 20
+  - orm: JPA/Hibernate
+    entity: Address
+    field: city
+    type: String
+    table: addresses
+    column: city
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Address.java
+    line: 21
+  - orm: JPA/Hibernate
+    entity: Address
+    field: state
+    type: String
+    table: addresses
+    column: state
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Address.java
+    line: 22
+  - orm: JPA/Hibernate
+    entity: Address
+    field: postalCode
+    type: String
+    table: addresses
+    column: postal_code
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Address.java
+    line: 23
+  - orm: JPA/Hibernate
+    entity: Address
+    field: country
+    type: String
+    table: addresses
+    column: country
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Address.java
+    line: 24
+  - orm: JPA/Hibernate
+    entity: Address
+    field: isDefault
+    type: Boolean
+    table: addresses
+    column: is_default
+    target_type: smallint
+    file: src/main/java/com/bobsusedbooks/entities/Address.java
+    line: 26
+    obligation: 'Boolean on smallint column: @JdbcTypeCode(SqlTypes.SMALLINT) (remove
+      columnDefinition)'
+  - orm: JPA/Hibernate
+    entity: Address
+    field: addressType
+    type: String
+    table: addresses
+    column: address_type
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Address.java
+    line: 29
+  - orm: JPA/Hibernate
+    entity: Address
+    field: customer
+    type: Customer
+    table: addresses
+    column: customer_id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/Address.java
+    line: 31
+  - orm: JPA/Hibernate
+    entity: Book
+    field: id
+    type: Long
+    table: books
+    column: id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/Book.java
+    line: 18
+  - orm: JPA/Hibernate
+    entity: Book
+    field: title
+    type: String
+    table: books
+    column: title
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Book.java
+    line: 22
+  - orm: JPA/Hibernate
+    entity: Book
+    field: author
+    type: String
+    table: books
+    column: author
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Book.java
+    line: 25
+  - orm: JPA/Hibernate
+    entity: Book
+    field: isbn
+    type: String
+    table: books
+    column: isbn
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Book.java
+    line: 26
+  - orm: JPA/Hibernate
+    entity: Book
+    field: description
+    type: String
+    table: books
+    column: description
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Book.java
+    line: 28
+  - orm: JPA/Hibernate
+    entity: Book
+    field: publishDate
+    type: LocalDate
+    table: books
+    column: publish_date
+    target_type: timestamp without time zone
+    file: src/main/java/com/bobsusedbooks/entities/Book.java
+    line: 31
+    obligation: 'date-only type on timestamp without time zone column: keep LocalDate
+      + @JdbcTypeCode(SqlTypes.TIMESTAMP)'
+  - orm: JPA/Hibernate
+    entity: Book
+    field: year
+    type: Integer
+    table: books
+    column: year
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/Book.java
+    line: 34
+    obligation: 'ADVISORY: 32-bit field on bigint column — not a boot blocker; overflow
+      risk pre-dates the migration. Widen only if values can exceed 2^31-1'
+  - orm: JPA/Hibernate
+    entity: Book
+    field: createdOn
+    type: LocalDateTime
+    table: books
+    column: created_on
+    target_type: timestamp without time zone
+    file: src/main/java/com/bobsusedbooks/entities/Book.java
+    line: 36
+  - orm: JPA/Hibernate
+    entity: Book
+    field: updatedOn
+    type: LocalDateTime
+    table: books
+    column: updated_on
+    target_type: timestamp without time zone
+    file: src/main/java/com/bobsusedbooks/entities/Book.java
+    line: 39
+  - orm: JPA/Hibernate
+    entity: Book
+    field: createdBy
+    type: String
+    table: books
+    column: created_by
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Book.java
+    line: 42
+  - orm: JPA/Hibernate
+    entity: Book
+    field: genre
+    type: Genre
+    table: books
+    column: genre_id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/Book.java
+    line: 45
+  - orm: JPA/Hibernate
+    entity: Book
+    field: genreId
+    type: Long
+    table: books
+    column: genre_id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/Book.java
+    line: 49
+  - orm: JPA/Hibernate
+    entity: Book
+    field: publisher
+    type: Publisher
+    table: books
+    column: publisher_id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/Book.java
+    line: 52
+  - orm: JPA/Hibernate
+    entity: Book
+    field: publisherId
+    type: Long
+    table: books
+    column: publisher_id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/Book.java
+    line: 56
+  - orm: JPA/Hibernate
+    entity: Book
+    field: bookType
+    type: BookType
+    table: books
+    column: book_type_id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/Book.java
+    line: 59
+  - orm: JPA/Hibernate
+    entity: Book
+    field: bookTypeId
+    type: Long
+    table: books
+    column: book_type_id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/Book.java
+    line: 63
+  - orm: JPA/Hibernate
+    entity: Book
+    field: searchText
+    type: String
+    table: books
+    column: search_text
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Book.java
+    line: 66
+  - orm: JPA/Hibernate
+    entity: BookCover
+    field: bookId
+    type: Long
+    table: books_cover
+    column: book_id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/BookCover.java
+    line: 17
+  - orm: JPA/Hibernate
+    entity: BookCover
+    field: book
+    type: Book
+    table: books_cover
+    column: book_id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/BookCover.java
+    line: 21
+  - orm: JPA/Hibernate
+    entity: BookCover
+    field: coverImage
+    type: byte[]
+    table: books_cover
+    column: cover_image
+    target_type: bytea
+    file: src/main/java/com/bobsusedbooks/entities/BookCover.java
+    line: 26
+    obligation: '@Lob on bytea (validates as oid): drop @Lob, add @JdbcTypeCode(SqlTypes.VARBINARY)'
+  - orm: JPA/Hibernate
+    entity: BookCover
+    field: contentType
+    type: String
+    table: books_cover
+    column: content_type
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/BookCover.java
+    line: 30
+  - orm: JPA/Hibernate
+    entity: BookCover
+    field: fileName
+    type: String
+    table: books_cover
+    column: file_name
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/BookCover.java
+    line: 33
+  - orm: JPA/Hibernate
+    entity: BookCover
+    field: createdOn
+    type: LocalDateTime
+    table: books_cover
+    column: created_on
+    target_type: timestamp without time zone
+    file: src/main/java/com/bobsusedbooks/entities/BookCover.java
+    line: 36
+  - orm: JPA/Hibernate
+    entity: BookCover
+    field: updatedOn
+    type: LocalDateTime
+    table: books_cover
+    column: updated_on
+    target_type: timestamp without time zone
+    file: src/main/java/com/bobsusedbooks/entities/BookCover.java
+    line: 39
+  - orm: JPA/Hibernate
+    entity: BookType
+    field: id
+    type: Long
+    table: book_types
+    column: id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/BookType.java
+    line: 10
+  - orm: JPA/Hibernate
+    entity: BookType
+    field: name
+    type: String
+    table: book_types
+    column: name
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/BookType.java
+    line: 14
+  - orm: JPA/Hibernate
+    entity: BookType
+    field: description
+    type: String
+    table: book_types
+    column: description
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/BookType.java
+    line: 17
+  - orm: JPA/Hibernate
+    entity: BookType
+    field: createdOn
+    type: LocalDateTime
+    table: book_types
+    column: created_on
+    target_type: timestamp without time zone
+    file: src/main/java/com/bobsusedbooks/entities/BookType.java
+    line: 20
+  - orm: JPA/Hibernate
+    entity: BookType
+    field: updatedOn
+    type: LocalDateTime
+    table: book_types
+    column: updated_on
+    target_type: timestamp without time zone
+    file: src/main/java/com/bobsusedbooks/entities/BookType.java
+    line: 23
+  - orm: JPA/Hibernate
+    entity: Condition
+    field: id
+    type: Long
+    table: conditions
+    column: id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/Condition.java
+    line: 10
+  - orm: JPA/Hibernate
+    entity: Condition
+    field: name
+    type: String
+    table: conditions
+    column: name
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Condition.java
+    line: 14
+  - orm: JPA/Hibernate
+    entity: Condition
+    field: description
+    type: String
+    table: conditions
+    column: description
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Condition.java
+    line: 17
+  - orm: JPA/Hibernate
+    entity: Condition
+    field: createdOn
+    type: LocalDateTime
+    table: conditions
+    column: created_on
+    target_type: timestamp without time zone
+    file: src/main/java/com/bobsusedbooks/entities/Condition.java
+    line: 20
+  - orm: JPA/Hibernate
+    entity: Condition
+    field: updatedOn
+    type: LocalDateTime
+    table: conditions
+    column: updated_on
+    target_type: timestamp without time zone
+    file: src/main/java/com/bobsusedbooks/entities/Condition.java
+    line: 23
+  - orm: JPA/Hibernate
+    entity: Customer
+    field: id
+    type: Long
+    table: customers
+    column: id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/Customer.java
+    line: 20
+  - orm: JPA/Hibernate
+    entity: Customer
+    field: username
+    type: String
+    table: customers
+    column: username
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Customer.java
+    line: 23
+  - orm: JPA/Hibernate
+    entity: Customer
+    field: email
+    type: String
+    table: customers
+    column: email
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Customer.java
+    line: 24
+  - orm: JPA/Hibernate
+    entity: Customer
+    field: firstName
+    type: String
+    table: customers
+    column: first_name
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Customer.java
+    line: 25
+  - orm: JPA/Hibernate
+    entity: Customer
+    field: lastName
+    type: String
+    table: customers
+    column: last_name
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Customer.java
+    line: 26
+  - orm: JPA/Hibernate
+    entity: Customer
+    field: phoneNumber
+    type: String
+    table: customers
+    column: phone_number
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Customer.java
+    line: 27
+  - orm: JPA/Hibernate
+    entity: Customer
+    field: passwordHash
+    type: String
+    table: customers
+    column: password_hash
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Customer.java
+    line: 28
+  - orm: JPA/Hibernate
+    entity: Customer
+    field: sub
+    type: String
+    table: customers
+    column: sub
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Customer.java
+    line: 29
+  - orm: JPA/Hibernate
+    entity: Customer
+    field: dateOfBirth
+    type: LocalDate
+    table: customers
+    column: date_of_birth
+    target_type: timestamp without time zone
+    file: src/main/java/com/bobsusedbooks/entities/Customer.java
+    line: 30
+    obligation: 'date-only type on timestamp without time zone column: keep LocalDate
+      + @JdbcTypeCode(SqlTypes.TIMESTAMP)'
+  - orm: JPA/Hibernate
+    entity: Customer
+    field: createdOn
+    type: LocalDateTime
+    table: customers
+    column: created_on
+    target_type: timestamp without time zone
+    file: src/main/java/com/bobsusedbooks/entities/Customer.java
+    line: 31
+  - orm: JPA/Hibernate
+    entity: Customer
+    field: emailVerified
+    type: Boolean
+    table: customers
+    column: email_verified
+    target_type: smallint
+    file: src/main/java/com/bobsusedbooks/entities/Customer.java
+    line: 33
+    obligation: 'Boolean on smallint column: @JdbcTypeCode(SqlTypes.SMALLINT) (remove
+      columnDefinition)'
+  - orm: JPA/Hibernate
+    entity: Customer
+    field: role
+    type: String
+    table: customers
+    column: role
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Customer.java
+    line: 36
+  - orm: JPA/Hibernate
+    entity: Customer
+    field: accountExpired
+    type: Boolean
+    table: customers
+    column: account_expired
+    target_type: smallint
+    file: src/main/java/com/bobsusedbooks/entities/Customer.java
+    line: 38
+    obligation: 'Boolean on smallint column: @JdbcTypeCode(SqlTypes.SMALLINT) (remove
+      columnDefinition)'
+  - orm: JPA/Hibernate
+    entity: Customer
+    field: credentialsExpired
+    type: Boolean
+    table: customers
+    column: credentials_expired
+    target_type: smallint
+    file: src/main/java/com/bobsusedbooks/entities/Customer.java
+    line: 41
+    obligation: 'Boolean on smallint column: @JdbcTypeCode(SqlTypes.SMALLINT) (remove
+      columnDefinition)'
+  - orm: JPA/Hibernate
+    entity: Customer
+    field: accountLocked
+    type: Boolean
+    table: customers
+    column: account_locked
+    target_type: smallint
+    file: src/main/java/com/bobsusedbooks/entities/Customer.java
+    line: 44
+    obligation: 'Boolean on smallint column: @JdbcTypeCode(SqlTypes.SMALLINT) (remove
+      columnDefinition)'
+  - orm: JPA/Hibernate
+    entity: Customer
+    field: lastLogin
+    type: LocalDateTime
+    table: customers
+    column: last_login
+    target_type: timestamp without time zone
+    file: src/main/java/com/bobsusedbooks/entities/Customer.java
+    line: 47
+  - orm: JPA/Hibernate
+    entity: Genre
+    field: id
+    type: Long
+    table: genres
+    column: id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/Genre.java
+    line: 10
+  - orm: JPA/Hibernate
+    entity: Genre
+    field: name
+    type: String
+    table: genres
+    column: name
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Genre.java
+    line: 14
+  - orm: JPA/Hibernate
+    entity: Genre
+    field: description
+    type: String
+    table: genres
+    column: description
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Genre.java
+    line: 17
+  - orm: JPA/Hibernate
+    entity: Genre
+    field: createdOn
+    type: LocalDateTime
+    table: genres
+    column: created_on
+    target_type: timestamp without time zone
+    file: src/main/java/com/bobsusedbooks/entities/Genre.java
+    line: 20
+  - orm: JPA/Hibernate
+    entity: Genre
+    field: updatedOn
+    type: LocalDateTime
+    table: genres
+    column: updated_on
+    target_type: timestamp without time zone
+    file: src/main/java/com/bobsusedbooks/entities/Genre.java
+    line: 23
+  - orm: JPA/Hibernate
+    entity: Listing
+    field: id
+    type: Long
+    table: listings
+    column: id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/Listing.java
+    line: 18
+  - orm: JPA/Hibernate
+    entity: Listing
+    field: bookId
+    type: Long
+    table: listings
+    column: book_id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/Listing.java
+    line: 22
+  - orm: JPA/Hibernate
+    entity: Listing
+    field: book
+    type: Book
+    table: listings
+    column: book_id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/Listing.java
+    line: 25
+  - orm: JPA/Hibernate
+    entity: Listing
+    field: sellerId
+    type: Long
+    table: listings
+    column: seller_id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/Listing.java
+    line: 29
+  - orm: JPA/Hibernate
+    entity: Listing
+    field: seller
+    type: Customer
+    table: listings
+    column: seller_id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/Listing.java
+    line: 32
+  - orm: JPA/Hibernate
+    entity: Listing
+    field: price
+    type: BigDecimal
+    table: listings
+    column: price
+    target_type: numeric
+    file: src/main/java/com/bobsusedbooks/entities/Listing.java
+    line: 36
+  - orm: JPA/Hibernate
+    entity: Listing
+    field: quantity
+    type: Integer
+    table: listings
+    column: quantity
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/Listing.java
+    line: 39
+    obligation: 'ADVISORY: 32-bit field on bigint column — not a boot blocker; overflow
+      risk pre-dates the migration. Widen only if values can exceed 2^31-1'
+  - orm: JPA/Hibernate
+    entity: Listing
+    field: conditionId
+    type: Long
+    table: listings
+    column: condition_id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/Listing.java
+    line: 42
+  - orm: JPA/Hibernate
+    entity: Listing
+    field: condition
+    type: Condition
+    table: listings
+    column: condition_id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/Listing.java
+    line: 45
+  - orm: JPA/Hibernate
+    entity: Listing
+    field: status
+    type: Integer
+    table: listings
+    column: status
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/Listing.java
+    line: 49
+    obligation: 'ADVISORY: 32-bit field on bigint column — not a boot blocker; overflow
+      risk pre-dates the migration. Widen only if values can exceed 2^31-1'
+  - orm: JPA/Hibernate
+    entity: Listing
+    field: listingType
+    type: String
+    table: listings
+    column: listing_type
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Listing.java
+    line: 52
+  - orm: JPA/Hibernate
+    entity: Listing
+    field: adminNotes
+    type: String
+    table: listings
+    column: admin_notes
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Listing.java
+    line: 55
+  - orm: JPA/Hibernate
+    entity: Listing
+    field: processedAt
+    type: LocalDateTime
+    table: listings
+    column: processed_at
+    target_type: timestamp without time zone
+    file: src/main/java/com/bobsusedbooks/entities/Listing.java
+    line: 58
+  - orm: JPA/Hibernate
+    entity: Listing
+    field: processedBy
+    type: Long
+    table: listings
+    column: processed_by
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/Listing.java
+    line: 61
+  - orm: JPA/Hibernate
+    entity: Listing
+    field: isFeatured
+    type: Boolean
+    table: listings
+    column: is_featured
+    target_type: smallint
+    file: src/main/java/com/bobsusedbooks/entities/Listing.java
+    line: 64
+    obligation: 'Boolean on smallint column: @JdbcTypeCode(SqlTypes.SMALLINT) (remove
+      columnDefinition)'
+  - orm: JPA/Hibernate
+    entity: Listing
+    field: isBestseller
+    type: Boolean
+    table: listings
+    column: is_bestseller
+    target_type: smallint
+    file: src/main/java/com/bobsusedbooks/entities/Listing.java
+    line: 67
+    obligation: 'Boolean on smallint column: @JdbcTypeCode(SqlTypes.SMALLINT) (remove
+      columnDefinition)'
+  - orm: JPA/Hibernate
+    entity: Listing
+    field: isNewArrival
+    type: Boolean
+    table: listings
+    column: is_new_arrival
+    target_type: smallint
+    file: src/main/java/com/bobsusedbooks/entities/Listing.java
+    line: 70
+    obligation: 'Boolean on smallint column: @JdbcTypeCode(SqlTypes.SMALLINT) (remove
+      columnDefinition)'
+  - orm: JPA/Hibernate
+    entity: Listing
+    field: createdOn
+    type: LocalDateTime
+    table: listings
+    column: created_on
+    target_type: timestamp without time zone
+    file: src/main/java/com/bobsusedbooks/entities/Listing.java
+    line: 73
+  - orm: JPA/Hibernate
+    entity: Listing
+    field: updatedOn
+    type: LocalDateTime
+    table: listings
+    column: updated_on
+    target_type: timestamp without time zone
+    file: src/main/java/com/bobsusedbooks/entities/Listing.java
+    line: 76
+  - orm: JPA/Hibernate
+    entity: Order
+    field: id
+    type: Long
+    table: orders
+    column: id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/Order.java
+    line: 21
+  - orm: JPA/Hibernate
+    entity: Order
+    field: customerId
+    type: Long
+    table: orders
+    column: customer_id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/Order.java
+    line: 25
+  - orm: JPA/Hibernate
+    entity: Order
+    field: addressId
+    type: Long
+    table: orders
+    column: address_id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/Order.java
+    line: 28
+  - orm: JPA/Hibernate
+    entity: Order
+    field: createdOn
+    type: LocalDateTime
+    table: orders
+    column: created_on
+    target_type: timestamp without time zone
+    file: src/main/java/com/bobsusedbooks/entities/Order.java
+    line: 31
+  - orm: JPA/Hibernate
+    entity: Order
+    field: updatedOn
+    type: LocalDateTime
+    table: orders
+    column: updated_on
+    target_type: timestamp without time zone
+    file: src/main/java/com/bobsusedbooks/entities/Order.java
+    line: 34
+  - orm: JPA/Hibernate
+    entity: Order
+    field: status
+    type: String
+    table: orders
+    column: status
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Order.java
+    line: 37
+  - orm: JPA/Hibernate
+    entity: Order
+    field: totalAmount
+    type: BigDecimal
+    table: orders
+    column: total_amount
+    target_type: numeric
+    file: src/main/java/com/bobsusedbooks/entities/Order.java
+    line: 39
+  - orm: JPA/Hibernate
+    entity: Order
+    field: discount
+    type: BigDecimal
+    table: orders
+    column: discount
+    target_type: numeric
+    file: src/main/java/com/bobsusedbooks/entities/Order.java
+    line: 42
+  - orm: JPA/Hibernate
+    entity: Order
+    field: tax
+    type: BigDecimal
+    table: orders
+    column: tax
+    target_type: numeric
+    file: src/main/java/com/bobsusedbooks/entities/Order.java
+    line: 43
+  - orm: JPA/Hibernate
+    entity: Order
+    field: shippingCost
+    type: BigDecimal
+    table: orders
+    column: shipping_cost
+    target_type: numeric
+    file: src/main/java/com/bobsusedbooks/entities/Order.java
+    line: 45
+  - orm: JPA/Hibernate
+    entity: Order
+    field: paymentMethod
+    type: String
+    table: orders
+    column: payment_method
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Order.java
+    line: 48
+  - orm: JPA/Hibernate
+    entity: Order
+    field: paymentStatus
+    type: String
+    table: orders
+    column: payment_status
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Order.java
+    line: 51
+  - orm: JPA/Hibernate
+    entity: Order
+    field: shippedDate
+    type: LocalDate
+    table: orders
+    column: shipped_date
+    target_type: timestamp without time zone
+    file: src/main/java/com/bobsusedbooks/entities/Order.java
+    line: 54
+    obligation: 'date-only type on timestamp without time zone column: keep LocalDate
+      + @JdbcTypeCode(SqlTypes.TIMESTAMP)'
+  - orm: JPA/Hibernate
+    entity: Order
+    field: deliveredDate
+    type: LocalDate
+    table: orders
+    column: delivered_date
+    target_type: timestamp without time zone
+    file: src/main/java/com/bobsusedbooks/entities/Order.java
+    line: 57
+    obligation: 'date-only type on timestamp without time zone column: keep LocalDate
+      + @JdbcTypeCode(SqlTypes.TIMESTAMP)'
+  - orm: JPA/Hibernate
+    entity: Order
+    field: cancelledDate
+    type: LocalDate
+    table: orders
+    column: cancelled_date
+    target_type: timestamp without time zone
+    file: src/main/java/com/bobsusedbooks/entities/Order.java
+    line: 60
+    obligation: 'date-only type on timestamp without time zone column: keep LocalDate
+      + @JdbcTypeCode(SqlTypes.TIMESTAMP)'
+  - orm: JPA/Hibernate
+    entity: Order
+    field: cancellationReason
+    type: String
+    table: orders
+    column: cancellation_reason
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Order.java
+    line: 63
+  - orm: JPA/Hibernate
+    entity: Order
+    field: trackingNumber
+    type: String
+    table: orders
+    column: tracking_number
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Order.java
+    line: 66
+  - orm: JPA/Hibernate
+    entity: Order
+    field: notes
+    type: String
+    table: orders
+    column: notes
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Order.java
+    line: 69
+  - orm: JPA/Hibernate
+    entity: OrderItem
+    field: id
+    type: Long
+    table: order_items
+    column: id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/OrderItem.java
+    line: 17
+  - orm: JPA/Hibernate
+    entity: OrderItem
+    field: orderId
+    type: Long
+    table: order_items
+    column: order_id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/OrderItem.java
+    line: 21
+  - orm: JPA/Hibernate
+    entity: OrderItem
+    field: bookId
+    type: Long
+    table: order_items
+    column: book_id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/OrderItem.java
+    line: 24
+  - orm: JPA/Hibernate
+    entity: OrderItem
+    field: listingId
+    type: Long
+    table: order_items
+    column: listing_id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/OrderItem.java
+    line: 27
+  - orm: JPA/Hibernate
+    entity: OrderItem
+    field: quantity
+    type: Integer
+    table: order_items
+    column: quantity
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/OrderItem.java
+    line: 30
+    obligation: 'ADVISORY: 32-bit field on bigint column — not a boot blocker; overflow
+      risk pre-dates the migration. Widen only if values can exceed 2^31-1'
+  - orm: JPA/Hibernate
+    entity: OrderItem
+    field: bookPrice
+    type: BigDecimal
+    table: order_items
+    column: book_price
+    target_type: numeric
+    file: src/main/java/com/bobsusedbooks/entities/OrderItem.java
+    line: 32
+  - orm: JPA/Hibernate
+    entity: OrderItem
+    field: discount
+    type: BigDecimal
+    table: order_items
+    column: discount
+    target_type: numeric
+    file: src/main/java/com/bobsusedbooks/entities/OrderItem.java
+    line: 35
+  - orm: JPA/Hibernate
+    entity: OrderItem
+    field: book
+    type: Book
+    table: order_items
+    column: book_id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/OrderItem.java
+    line: 37
+  - orm: JPA/Hibernate
+    entity: OrderItem
+    field: order
+    type: Order
+    table: order_items
+    column: order_id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/OrderItem.java
+    line: 41
+  - orm: JPA/Hibernate
+    entity: PasswordResetToken
+    field: id
+    type: Long
+    table: password_reset_tokens
+    column: id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/PasswordResetToken.java
+    line: 17
+  - orm: JPA/Hibernate
+    entity: PasswordResetToken
+    field: token
+    type: String
+    table: password_reset_tokens
+    column: token
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/PasswordResetToken.java
+    line: 20
+  - orm: JPA/Hibernate
+    entity: PasswordResetToken
+    field: customer
+    type: Customer
+    table: password_reset_tokens
+    column: customer_id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/PasswordResetToken.java
+    line: 21
+  - orm: JPA/Hibernate
+    entity: PasswordResetToken
+    field: expiryDate
+    type: LocalDateTime
+    table: password_reset_tokens
+    column: expiry_date
+    target_type: timestamp without time zone
+    file: src/main/java/com/bobsusedbooks/entities/PasswordResetToken.java
+    line: 24
+  - orm: JPA/Hibernate
+    entity: PasswordResetToken
+    field: used
+    type: Boolean
+    table: password_reset_tokens
+    column: used
+    target_type: smallint
+    file: src/main/java/com/bobsusedbooks/entities/PasswordResetToken.java
+    line: 26
+    obligation: 'Boolean on smallint column: @JdbcTypeCode(SqlTypes.SMALLINT) (remove
+      columnDefinition)'
+  - orm: JPA/Hibernate
+    entity: Publisher
+    field: id
+    type: Long
+    table: publishers
+    column: id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/Publisher.java
+    line: 10
+  - orm: JPA/Hibernate
+    entity: Publisher
+    field: name
+    type: String
+    table: publishers
+    column: name
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Publisher.java
+    line: 14
+  - orm: JPA/Hibernate
+    entity: Publisher
+    field: description
+    type: String
+    table: publishers
+    column: description
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Publisher.java
+    line: 17
+  - orm: JPA/Hibernate
+    entity: Publisher
+    field: website
+    type: String
+    table: publishers
+    column: website
+    target_type: character varying
+    file: src/main/java/com/bobsusedbooks/entities/Publisher.java
+    line: 20
+  - orm: JPA/Hibernate
+    entity: Publisher
+    field: createdOn
+    type: LocalDateTime
+    table: publishers
+    column: created_on
+    target_type: timestamp without time zone
+    file: src/main/java/com/bobsusedbooks/entities/Publisher.java
+    line: 23
+  - orm: JPA/Hibernate
+    entity: Publisher
+    field: updatedOn
+    type: LocalDateTime
+    table: publishers
+    column: updated_on
+    target_type: timestamp without time zone
+    file: src/main/java/com/bobsusedbooks/entities/Publisher.java
+    line: 26
+  - orm: JPA/Hibernate
+    entity: ShoppingCartItem
+    field: id
+    type: Long
+    table: shopping_cart_items
+    column: id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/ShoppingCartItem.java
+    line: 15
+  - orm: JPA/Hibernate
+    entity: ShoppingCartItem
+    field: customerId
+    type: Long
+    table: shopping_cart_items
+    column: customer_id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/ShoppingCartItem.java
+    line: 19
+  - orm: JPA/Hibernate
+    entity: ShoppingCartItem
+    field: bookId
+    type: Long
+    table: shopping_cart_items
+    column: book_id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/ShoppingCartItem.java
+    line: 22
+  - orm: JPA/Hibernate
+    entity: ShoppingCartItem
+    field: quantity
+    type: Integer
+    table: shopping_cart_items
+    column: quantity
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/ShoppingCartItem.java
+    line: 24
+    obligation: 'ADVISORY: 32-bit field on bigint column — not a boot blocker; overflow
+      risk pre-dates the migration. Widen only if values can exceed 2^31-1'
+  - orm: JPA/Hibernate
+    entity: ShoppingCartItem
+    field: isWishlistItem
+    type: Boolean
+    table: shopping_cart_items
+    column: is_wishlist_item
+    target_type: smallint
+    file: src/main/java/com/bobsusedbooks/entities/ShoppingCartItem.java
+    line: 26
+    obligation: 'Boolean on smallint column: @JdbcTypeCode(SqlTypes.SMALLINT) (remove
+      columnDefinition)'
+  - orm: JPA/Hibernate
+    entity: ShoppingCartItem
+    field: book
+    type: Book
+    table: shopping_cart_items
+    column: book_id
+    target_type: bigint
+    file: src/main/java/com/bobsusedbooks/entities/ShoppingCartItem.java
+    line: 29

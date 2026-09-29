@@ -1,0 +1,9 @@
+object: ufnGetAccountingStartDate
+schema: DBO
+type: function
+notes: constant.
+cases:
+- id: c1
+  type: function
+  source_sql: SELECT dbo.ufnGetAccountingStartDate()
+  target_sql: SELECT dbo.ufngetaccountingstartdate()

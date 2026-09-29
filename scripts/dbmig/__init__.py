@@ -9,7 +9,7 @@ builds prompt bundles with injected skill/playbook context; the Kiro
 ``db-migration-construction`` skill performs the actual conversion; the package
 then applies the converted DDL to the target.
 
-Entry point: ``python -m dbmig <command>``.
+Entry point: ``./dbmig <command>`` (repo root) or ``dbmig <command>`` after ``pip install -e scripts/`` in a venv; ``python -m dbmig`` also works when ``scripts/`` is on the path.
 """
 
 __version__ = "0.2.0"

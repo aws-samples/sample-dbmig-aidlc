@@ -1,0 +1,13 @@
+object: uspPrintError
+schema: DBO
+type: procedure
+notes: REDESIGNED signature (fields passed in). Output is NOTICE/PRINT only — no net effect; proves it executes.
+cases:
+- id: p1
+  type: procedure
+  call_source: EXEC dbo.uspPrintError
+  call_target: CALL dbo.uspprinterror(0, NULL, NULL, NULL, NULL, 'x')
+  verify:
+  - name: errorlog
+    source_sql: SELECT COUNT(*) FROM dbo.ErrorLog
+    target_sql: SELECT count(*) FROM dbo.errorlog

@@ -1,0 +1,17 @@
+results:
+- label: ufnGetDocumentStatusText
+  status: applied
+  error: null
+  pass: 1
+- label: ufnGetPurchaseOrderStatusText
+  status: applied
+  error: null
+  pass: 1
+- label: ufnGetSalesOrderStatusText
+  status: applied
+  error: null
+  pass: 1
+- label: ufnLeadingZeros
+  status: applied
+  error: null
+  pass: 1

@@ -1,0 +1,13 @@
+object: uspUpdateAuthorPersonalInfo
+schema: DBO
+type: procedure
+notes: real update of author 3.
+cases:
+- id: u1
+  type: procedure
+  call_source: EXEC dbo.uspUpdateAuthorPersonalInfo 3, N'509647174', '1974-11-12', N'S', N'M'
+  call_target: CALL dbo.uspupdateauthorpersonalinfo(3, '509647174', '1974-11-12', 'S', 'M')
+  verify:
+  - name: marital3
+    source_sql: SELECT MaritalStatus FROM dbo.Author WHERE BusinessEntityID = 3
+    target_sql: SELECT maritalstatus FROM dbo.author WHERE businessentityid = 3

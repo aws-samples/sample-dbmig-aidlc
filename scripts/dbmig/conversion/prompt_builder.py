@@ -207,16 +207,49 @@ def _load_customer_specific(repo_root: Path, customer_dir: str) -> str:
     return "\n\n".join(parts)
 
 
-def build_context(repo_root: Optional[Path] = None, *, for_code: bool = False,
-                  pair: Optional[str] = None) -> str:
-    """Build the context block injected ahead of the conversion instruction.
+# ---- phase-aware context -------------------------------------------------
+#
+# Token budget: the context block used to be ~13K tokens and was repeated in EVERY
+# prompt (one per table batch, code object and test object — ~95% of all prompt
+# bytes in a real run). Two changes keep the guidance while cutting the volume:
+#   1. each phase gets only what it needs (tests don't need the datatype map or the
+#      playbook; nothing needs the construction SKILL — the assistant already has it
+#      loaded; HA/DR, tools, tuning, monitoring chapters never help a conversion);
+#   2. the block is written ONCE per run to a shared file (``_context-<phase>.md``)
+#      that each prompt references, instead of being inlined N times.
 
-    Engine-pair aware: selects the datatype map, playbook references, and
-    customer-specific knowledge for the active pair (e.g. oracle-to-postgresql or
-    oracle-to-mysql).
+SCHEMA, CODE, TESTS = "schema", "code", "tests"
+
+# Playbook chapters whose topic index is useful for each phase. Chapters not
+# listed (ha-dr, tools, performance-tuning, configuration, monitoring, security,
+# management, customer-specific/_index guide) are never needed to convert or test
+# an object; the files stay on disk for on-demand reading.
+_PHASE_CHAPTERS = {
+    SCHEMA: {"tables-indexes", "indexes", "physical-storage", "special-features",
+             "ansi-sql", "quick-tips", "deprecated-features"},
+    CODE: {"sql-plsql", "tsql", "ansi-sql", "special-features", "quick-tips",
+           "deprecated-features"},
+    TESTS: set(),
+}
+# engines/<pair>/checks/* files routed per phase (by stem).
+_TEST_CHECKS = {"equivalence-spec", "package-naming"}
+
+
+def _phase_of(phase: Optional[str], for_code: bool) -> str:
+    return phase or (CODE if for_code else SCHEMA)
+
+
+def build_context(repo_root: Optional[Path] = None, *, for_code: bool = False,
+                  pair: Optional[str] = None, phase: Optional[str] = None) -> str:
+    """Build the context block for one phase (``schema`` | ``code`` | ``tests``).
+
+    Engine-pair aware: selects the datatype map, checks, playbook indexes and
+    customer-specific knowledge for the active pair. Customer-specific rules are
+    always included (highest precedence).
     """
     root = repo_root or config.find_repo_root()
     pair = pair or config.active_pair()
+    phase = _phase_of(phase, for_code)
     paths = _pair_paths(pair)
     target = _target_engine(pair)
     blocks: List[str] = []
@@ -230,9 +263,18 @@ def build_context(repo_root: Optional[Path] = None, *, for_code: bool = False,
             "They OVERRIDE the general playbook guidance below wherever they "
             "conflict. Apply them first.\n\n" + customer)
 
-    skill = _read(root, _CONSTRUCTION_SKILL)
-    if skill:
-        blocks.append("# Construction skill guidance\n\n" + skill)
+    if phase == TESTS:
+        blocks.append("# Equivalence test spec format (applies to every test prompt)\n\n"
+                      + _TEST_SPEC_FORMAT)
+        tests_checks = []
+        for stem in sorted(_TEST_CHECKS):
+            body = _read(root, f"engines/{pair}/checks/{stem}.md").strip()
+            if body:
+                tests_checks.append(f"## {stem}\n\n{body}")
+        if tests_checks:
+            blocks.append("# Semantic differences to test for (engine checks)\n\n"
+                          + "\n\n".join(tests_checks))
+        return "\n\n---\n\n".join(blocks)
 
     dtmap = _read(root, paths["datatype_map"])
     if dtmap:
@@ -240,20 +282,20 @@ def build_context(repo_root: Optional[Path] = None, *, for_code: bool = False,
                       "(general default)\n\n```yaml\n" + dtmap + "\n```")
 
     # Extra engine.yaml context_material (e.g. checks/non-portable-constructs.md):
-    # the hard-won "learned from a real run" checklists. Injected as authoritative
-    # per-pair guidance so they actually reach the conversion prompt.
+    # the hard-won "learned from a real run" checklists.
     checks = _load_context_material(root, pair)
     if checks:
         blocks.append(
             "# Engine-specific conversion checks — non-portable constructs "
             "(learned from real migrations; review before converting)\n\n" + checks)
 
-    # Inject every chapter index for the active pair's playbook as a "what to
-    # consult" map (the full topic files remain on disk for Kiro to open).
+    # Topic indexes for the chapters relevant to this phase only.
     idx_text = []
     idx_dir = root / paths["playbook"]
     if idx_dir.is_dir():
         for idx in sorted(idx_dir.glob("*/_index.md")):
+            if idx.parent.name not in _PHASE_CHAPTERS[phase]:
+                continue
             body = idx.read_text() if idx.exists() else ""
             if body:
                 idx_text.append(body)
@@ -266,17 +308,123 @@ def build_context(repo_root: Optional[Path] = None, *, for_code: bool = False,
     return "\n\n---\n\n".join(blocks)
 
 
+def shared_context_name(phase: str) -> str:
+    return f"_context-{phase}.md"
+
+
+def write_shared_context(ws: Path, phase: str, repo_root: Optional[Path] = None,
+                         pair: Optional[str] = None) -> str:
+    """Write the phase context ONCE into ``ws`` and return its file name.
+
+    Each prompt then carries a one-line reference instead of the full block.
+    Returns the path relative to the run workspace (e.g. ``02-construction/_context-code.md``)."""
+    body = build_context(repo_root, pair=pair, phase=phase)
+    ws.mkdir(parents=True, exist_ok=True)
+    name = shared_context_name(phase)
+    (ws / name).write_text(
+        f"<!-- dbmig shared {phase} context — read ONCE per session; every "
+        f"{phase} prompt in this run relies on it. Regenerated by each "
+        f"{'gen-tests' if phase == TESTS else 'convert-' + phase} run. -->\n\n{body}\n")
+    return f"{ws.name}/{name}"   # relative to the run workspace migrations/<project>/
+
+
+def _context_or_ref(shared: Optional[str], root, pair, phase) -> str:
+    if shared:
+        return (f"=== CONTEXT ===\nShared {phase} context for this run: "
+                f"`migrations/<project>/{shared}`. Read it once "
+                "per session if you have not already — it holds the customer-specific "
+                "rules (highest precedence), datatype map, engine checks and playbook "
+                "index this task relies on. Do not skip it.")
+    return build_context(root, pair=pair, phase=phase)
+
+
+# ---- construct detection (points attention at the relevant guidance) --------
+
+# (regex, hint) per source engine. The hint names the guidance to apply; the full
+# rules are in the shared context / playbook. Keeps prompts small but targeted.
+_CONSTRUCT_HINTS = {
+    "oracle": [
+        (r"\bPIPELINED\b|\bPIPE\s+ROW\b", "PIPELINED table function → RETURNS TABLE/SETOF; declared column types must match the query's actual types (checked only at execution)"),
+        (r"\bCONNECT\s+BY\b", "hierarchical query → recursive CTE"),
+        (r"\bROWNUM\b", "ROWNUM applies BEFORE ORDER BY — reconstruct intent (LIMIT applies after)"),
+        (r"CTXSYS|\bCONTAINS\s*\(|\bSCORE\s*\(", "Oracle Text → tsvector/GIN redesign (decision item); do not create DR$ tables"),
+        (r"\bPARTITION\s+BY\b", "partitioning → see partitioning checks (DEFAULT partition, key in PK)"),
+        (r"SYS_REFCURSOR|\bREF\s+CURSOR\b", "ref cursor → refcursor or set-returning function"),
+        (r"%ROWTYPE|%TYPE\b", "anchored types → explicit target types or table rowtype"),
+        (r"\bBULK\s+COLLECT\b|\bFORALL\b", "bulk binds → set-based SQL / arrays"),
+        (r"\bEXECUTE\s+IMMEDIATE\b", "dynamic SQL → EXECUTE format(...) with %I/%L quoting"),
+        (r"\bPRAGMA\s+AUTONOMOUS_TRANSACTION\b", "autonomous transaction has no direct equivalent (dblink/redesign) — flag"),
+        (r"\b(?:DBMS|UTL)_\w+", "Oracle-supplied package call → playbook special-features / orafce"),
+        (r"\bRAISE_APPLICATION_ERROR\b", "RAISE_APPLICATION_ERROR → RAISE EXCEPTION ... USING ERRCODE (keep the code mapping consistent)"),
+        (r"\bTABLE\s+OF\b|\bVARRAY\b", "collections → arrays / SETOF composite (one RETURN NEXT per element)"),
+        (r"\bCOMMIT\b|\bROLLBACK\b", "transaction control inside code → procedure (not function); caller owns the txn"),
+        (r"\bGLOBAL\s+TEMPORARY\b", "global temporary table → temp table created per session / unlogged"),
+        (r"\bDECODE\s*\(|\bNVL2?\s*\(", "DECODE/NVL → CASE/COALESCE (NULL-safe comparison)"),
+        (r"\.NEXTVAL\b|\.CURRVAL\b", "sequence access → nextval()/currval()/identity"),
+        (r"\bMERGE\s+INTO\b", "MERGE → INSERT ... ON CONFLICT (or PG15+ MERGE)"),
+    ],
+    "sqlserver": [
+        (r"\bIDENTITY\b", "IDENTITY → GENERATED ... AS IDENTITY; reset after load"),
+        (r"\bTOP\s*\(?\d", "TOP → LIMIT (mind ORDER BY / WITH TIES)"),
+        (r"\b(?:CROSS|OUTER)\s+APPLY\b", "APPLY → LATERAL join"),
+        (r"\bMERGE\b", "MERGE → INSERT ... ON CONFLICT (or PG15+ MERGE)"),
+        (r"@@ROWCOUNT|@@IDENTITY|SCOPE_IDENTITY", "@@ROWCOUNT/SCOPE_IDENTITY → GET DIAGNOSTICS / RETURNING"),
+        (r"\bBEGIN\s+TRY\b|\bTHROW\b|\bRAISERROR\b", "TRY/CATCH/THROW → EXCEPTION blocks / RAISE"),
+        (r"#\w+", "#temp tables → CREATE TEMP TABLE"),
+        (r"\bhierarchyid\b|\bgeography\b|\bgeometry\b", "hierarchyid/spatial types → ltree/PostGIS or text (see datatype map)"),
+        (r"\bNOLOCK\b", "NOLOCK hint → remove (MVCC)"),
+        (r"\bOUTPUT\s+(?:INSERTED|DELETED)\b", "OUTPUT clause → RETURNING"),
+        (r"\bsp_executesql\b|\bEXEC\s*\(", "dynamic SQL → EXECUTE format(...)"),
+        (r"\bCURSOR\b", "cursor → FOR loop over query / set-based rewrite"),
+        (r"\bCOMMIT\b|\bROLLBACK\b|\bBEGIN\s+TRAN", "transaction control inside code → procedure; caller owns the txn"),
+        (r"\bDATEADD\s*\(|\bDATEDIFF\s*\(|\bDATEPART\s*\(|\bGETDATE\s*\(|\bSYSDATETIME\s*\(",
+         "date functions → interval arithmetic / date_part; DATEDIFF counts boundaries (current_date - d::date for DAY)"),
+        (r"\bCONVERT\s*\(|\bFORMAT(?:MESSAGE)?\s*\(", "CONVERT/FORMAT(MESSAGE) → CAST / to_char / format() (style codes and NULL rendering differ)"),
+        (r"\bISNULL\s*\(|\bIIF\s*\(|\bCHOOSE\s*\(", "ISNULL/IIF/CHOOSE → COALESCE / CASE / array index"),
+        (r"\bREPLICATE\s*\(|\bDATALENGTH\s*\(|\bLEN\s*\(|\bCHARINDEX\s*\(|\bSTUFF\s*\(",
+         "string functions → repeat/lpad, octet_length, length (LEN ignores trailing spaces), strpos, overlay"),
+        (r"\bTOP\s*\(?\s*\d+\s*\)?\s*PERCENT\b", "TOP n PERCENT → row_number() <= ceil(count * n / 100)"),
+        (r"\bERROR_(?:NUMBER|MESSAGE|SEVERITY|STATE|LINE|PROCEDURE)\s*\(|\bRAISERROR\b",
+         "ERROR_*() / RAISERROR → GET STACKED DIAGNOSTICS in the handler; pass fields to logging procs"),
+        (r"\bCURRENT_USER\b|\bSUSER_S?NAME\s*\(|\bUSER_NAME\s*\(", "CURRENT_USER/SUSER_SNAME → current_user/session_user (DB user vs login differ — BEHAVIOURAL)"),
+        (r"'\s*\+|\+\s*'", "'+' string concatenation → '||' (NULL handling: CONCAT_NULL_YIELDS_NULL)"),
+        (r"\bWITH\s+SCHEMABINDING\b|\bSET\s+NOCOUNT\b|\bWITH\s+EXECUTE\s+AS\b", "SCHEMABINDING / SET NOCOUNT / EXECUTE AS → drop (no equivalent needed)"),
+        (r"\bOPTION\s*\(\s*MAXRECURSION", "MAXRECURSION → recursion-level guard in WITH RECURSIVE"),
+        (r"\bCURSOR\s+VARYING\s+OUTPUT\b", "cursor OUTPUT param → set-returning function (or refcursor)"),
+    ],
+}
+
+
+def detect_constructs(source_text: str, pair: str) -> List[str]:
+    """Hints for constructs present in this object's source (comments stripped)."""
+    body = re.sub(r"--[^\n]*", " ", source_text or "")
+    body = re.sub(r"/\*.*?\*/", " ", body, flags=re.DOTALL)
+    return [hint for pat, hint in _CONSTRUCT_HINTS.get(_source_engine(pair), [])
+            if re.search(pat, body, re.IGNORECASE)]
+
+
+def _hints_block(source_text: str, pair: str) -> str:
+    hints = detect_constructs(source_text, pair)
+    if not hints:
+        return ""
+    return ("=== CONSTRUCTS DETECTED IN THIS PROMPT'S SOURCE (apply the matching guidance in "
+            "the context) ===\n" + "\n".join(f"- {h}" for h in hints) + "\n\n")
+
+
 def build_unit_prompt(units, repo_root: Optional[Path] = None,
-                      pair: Optional[str] = None) -> str:
+                      pair: Optional[str] = None,
+                      shared_context: Optional[str] = None) -> str:
     """Build a conversion prompt for one or more object-units (a batch).
 
-    ``units`` is an ObjectUnit or a list of them.
+    ``units`` is an ObjectUnit or a list of them. With ``shared_context`` (the
+    file written by :func:`write_shared_context`) the context is referenced, not
+    inlined.
     """
     if not isinstance(units, (list, tuple)):
         units = [units]
     root = repo_root or config.find_repo_root()
     pair = pair or config.active_pair()
-    context = build_context(root, for_code=False, pair=pair)
+    context = _context_or_ref(shared_context, root, pair, SCHEMA)
     src_disp = _source_display(pair)
 
     sources = []
@@ -291,21 +439,31 @@ def build_unit_prompt(units, repo_root: Optional[Path] = None,
         f"{context}\n\n"
         f"=== TASK ===\n"
         f"{_instruction(src_disp, _target_engine(pair), code=False, target_schema=(units[0].schema or '').lower() or None)}\n\n"
+        f"{_hints_block(source_block, pair)}"
         f"{source_block}\n"
     )
 
 
-def build_code_prompt(code_obj, repo_root: Optional[Path] = None,
-                      pair: Optional[str] = None) -> str:
+def build_code_prompt(code_objs, repo_root: Optional[Path] = None,
+                      pair: Optional[str] = None,
+                      shared_context: Optional[str] = None) -> str:
+    """Conversion prompt for one code object or a batch of small ones."""
+    if not isinstance(code_objs, (list, tuple)):
+        code_objs = [code_objs]
     root = repo_root or config.find_repo_root()
     pair = pair or config.active_pair()
-    context = build_context(root, for_code=True, pair=pair)
+    context = _context_or_ref(shared_context, root, pair, CODE)
+    sources = "\n\n".join(
+        f"--- SOURCE ({o.object_type}) — {o.schema}.{o.name} ---\n{o.source_ddl}"
+        for o in code_objs)
+    plural = (" Each object below is independent: convert each one and save it to "
+              "its own output file (listed in the header)." if len(code_objs) > 1 else "")
     return (
         f"{context}\n\n"
         f"=== TASK ===\n"
-        f"{_instruction(_source_display(pair), _target_engine(pair), code=True, target_schema=(code_obj.schema or '').lower() or None)}\n\n"
-        f"--- SOURCE ({code_obj.object_type}) — {code_obj.schema}.{code_obj.name} ---\n"
-        f"{code_obj.source_ddl}\n"
+        f"{_instruction(_source_display(pair), _target_engine(pair), code=True, target_schema=(code_objs[0].schema or '').lower() or None)}{plural}\n\n"
+        f"{_hints_block(sources, pair)}"
+        f"{sources}\n"
     )
 
 
@@ -378,7 +536,21 @@ Rules:
 - Every test runs inside a transaction that is ROLLED BACK afterward — safe to run.
 - Pick a few representative cases (typical, boundary, NULL/edge) using real data.
 - Probe queries must be deterministic and return a single scalar each.
-- For packages, generate cases for the public subprograms a caller would use.
+- **Schema-qualify every table in source_sql** (`<SCHEMA>.<table>`) — the source
+  login is often not the schema owner. (run-tests also sets the source session
+  schema where the engine supports it, but qualification is the portable guard.)
+- **Set-returning functions** (Oracle PIPELINED / table functions, SQL Server TVFs,
+  converted to `RETURNS TABLE` / `SETOF`): ALWAYS include at least one *execution*
+  case that actually selects from the function — e.g.
+  `SELECT COUNT(*) FROM TABLE(<schema>.<fn>(<args>))` vs
+  `SELECT COUNT(*) FROM <schema>.<fn>(<args>)`, plus a checksum/aggregate over a
+  returned column. A declared RETURNS TABLE column type that differs from the query's
+  actual type (e.g. `numeric` vs `bigint`) compiles fine and fails only at execution.
+- If the tables an object reads are EMPTY in the sampled data, say so in `notes:` —
+  the case only exercises the empty/default path (reported as LOW_COVERAGE).
+- For packages, generate cases for the public subprograms a caller would use. A package
+  spec may mix both shapes: set `type: function` or `type: procedure` on each CASE to
+  override the spec-level `type`.
 - Write source_sql / call_source in the SOURCE dialect and target_sql / call_target
   in the TARGET dialect (e.g. Oracle `... FROM dual` / `BEGIN p(); END;`, SQL Server
   `EXEC p ...`, PostgreSQL `SELECT ...` / `CALL p(...)`).
@@ -393,7 +565,8 @@ def _format_sample(sample: dict, max_cell: int = 80) -> str:
     full row contents.
     """
     if not sample:
-        return "(no sample data available)"
+        return ("(no sample rows: this object reads no schema table, or every table it "
+                "reads is empty in the source — see notes/LOW_COVERAGE)")
 
     def cell(v) -> str:
         if v is None:
@@ -425,25 +598,65 @@ def _format_sample(sample: dict, max_cell: int = 80) -> str:
 
 def build_test_prompt(obj_type: str, schema: str, name: str, source_ddl: str,
                       sample: dict, repo_root: Optional[Path] = None,
-                      pair: Optional[str] = None) -> str:
-    """Build a prompt for Kiro to generate an equivalence-test spec (.test.yaml).
+                      pair: Optional[str] = None,
+                      shared_context: Optional[str] = None,
+                      target_code: Optional[str] = None) -> str:
+    """Single-object test prompt (see :func:`build_test_batch_prompt`)."""
+    return build_test_batch_prompt(
+        [{"obj_type": obj_type, "name": name, "source_ddl": source_ddl,
+          "target_code": target_code}],
+        schema, sample, repo_root=repo_root, pair=pair, shared_context=shared_context)
 
-    Injects the SQL/PL-SQL playbook + customer-specific context, the object's
-    source, and REAL sampled data, then asks for a test spec in the fixed format.
+
+def _shape(obj_type: str) -> str:
+    t = (obj_type or "").upper()
+    return ("function" if t.startswith("FUNC") else
+            "procedure" if t.startswith("PROC") else "function and/or procedure")
+
+
+def build_test_batch_prompt(objs, schema: str, sample: dict,
+                            repo_root: Optional[Path] = None,
+                            pair: Optional[str] = None,
+                            shared_context: Optional[str] = None) -> str:
+    """Prompt for the assistant to write equivalence-test specs for one or more
+    objects (``objs`` = dicts with obj_type, name, source_ddl, target_code).
+
+    Per object: its source and the CONVERTED target code when available (so target
+    calls use the real flattened names/signatures instead of guesses). Sampled real
+    data is included once for the union of tables the batch reads. The phase
+    context (spec format + test-relevant engine checks + customer rules) is
+    referenced via ``shared_context`` or inlined when absent.
     """
     root = repo_root or config.find_repo_root()
     pair = pair or config.active_pair()
     target = _target_engine(pair)
-    context = build_context(root, for_code=True, pair=pair)
+    context = _context_or_ref(shared_context, root, pair, TESTS)
+    tname = _DISPLAY.get(target, target)
+    sections = []
+    for o in objs:
+        tc = o.get("target_code")
+        tgt = (f"--- CONVERTED TARGET CODE ({tname}) — use these exact routine names "
+               f"and signatures in target_sql / call_target ---\n{tc}\n"
+               if tc else
+               "--- CONVERTED TARGET CODE --- (not available yet — derive target names "
+               "from the conversion log / code manifest; packages are flattened to "
+               "<package>_<subprogram>)\n")
+        sections.append(
+            f"### {o['obj_type']} {schema}.{o['name']} — write a **{_shape(o['obj_type'])}**"
+            f"-shape spec\n"
+            f"--- SOURCE ({o['obj_type']}) — {schema}.{o['name']} ---\n{o['source_ddl']}\n\n"
+            f"{tgt}")
+    what = (f"the converted {_target_display(target)} {objs[0]['obj_type'].lower()} "
+            f"`{schema}.{objs[0]['name']}`" if len(objs) == 1 else
+            f"each of the {len(objs)} converted {_target_display(target)} objects below "
+            "(one spec file per object, as listed in the header)")
     return (
         f"{context}\n\n"
         f"=== TASK — GENERATE EQUIVALENCE TESTS ===\n"
-        f"Generate equivalence tests that prove the converted "
-        f"{_target_display(target)} {obj_type.lower()} `{schema}.{name}` behaves the "
-        f"same as the {_source_display(pair)} source: same input → same return value "
-        f"(functions) or same net effect (procedures). Tests will run on BOTH engines "
-        f"and the results compared.\n\n"
-        f"{_TEST_SPEC_FORMAT}\n\n"
-        f"--- SOURCE ({obj_type}) — {schema}.{name} ---\n{source_ddl}\n\n"
-        f"--- SAMPLED REAL DATA (use these actual values) ---\n{_format_sample(sample)}\n"
+        f"Generate equivalence tests that prove {what} behaves the same as the "
+        f"{_source_display(pair)} source: same input → same return value (functions) or "
+        f"same net effect (procedures). Tests run on BOTH engines and the results are "
+        f"compared. Use the spec format and Rules in the context above.\n\n"
+        + "\n".join(sections) +
+        f"\n--- SAMPLED REAL DATA (use these actual values) ---\n{_format_sample(sample)}\n"
     )

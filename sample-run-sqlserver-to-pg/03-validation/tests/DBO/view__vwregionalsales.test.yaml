@@ -1,0 +1,17 @@
+object: VwRegionalSales
+schema: DBO
+type: function
+notes: row count, total and one region.
+cases:
+- id: v1
+  type: function
+  source_sql: SELECT COUNT(*) FROM dbo.VwRegionalSales
+  target_sql: SELECT count(*) FROM dbo.vwregionalsales
+- id: v2
+  type: function
+  source_sql: SELECT SUM(RegionSalesSum) FROM dbo.VwRegionalSales
+  target_sql: SELECT sum(regionsalessum) FROM dbo.vwregionalsales
+- id: v3
+  type: function
+  source_sql: SELECT RegionSalesSum FROM dbo.VwRegionalSales WHERE RegionName = 'Europe'
+  target_sql: SELECT regionsalessum FROM dbo.vwregionalsales WHERE regionname = 'Europe'

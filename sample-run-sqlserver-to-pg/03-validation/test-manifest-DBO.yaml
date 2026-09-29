@@ -1,0 +1,284 @@
+project: s2pg
+schema: DBO
+phase: validation-tests
+generated_at: '2026-09-28T16:28:35Z'
+provider: kiro
+unit_count: 25
+units:
+- name: ufnCalculateCustomerLifetimeValue
+  object_type: FUNCTION
+  schema: DBO
+  batch_id: 1
+  prompt_file: test_prompts/DBO/batch_0001.prompt.md
+  spec_file: tests/DBO/function__ufncalculatecustomerlifetimevalue.test.yaml
+  status: generated
+  data_coverage:
+    level: OK
+    tables:
+      Shopping: 95
+- name: ufnGetAccountingEndDate
+  object_type: FUNCTION
+  schema: DBO
+  batch_id: 1
+  prompt_file: test_prompts/DBO/batch_0001.prompt.md
+  spec_file: tests/DBO/function__ufngetaccountingenddate.test.yaml
+  status: generated
+  data_coverage:
+    level: n/a
+    tables: {}
+- name: ufnGetAccountingStartDate
+  object_type: FUNCTION
+  schema: DBO
+  batch_id: 1
+  prompt_file: test_prompts/DBO/batch_0001.prompt.md
+  spec_file: tests/DBO/function__ufngetaccountingstartdate.test.yaml
+  status: generated
+  data_coverage:
+    level: n/a
+    tables: {}
+- name: ufnGetDocumentStatusText
+  object_type: FUNCTION
+  schema: DBO
+  batch_id: 1
+  prompt_file: test_prompts/DBO/batch_0001.prompt.md
+  spec_file: tests/DBO/function__ufngetdocumentstatustext.test.yaml
+  status: generated
+  data_coverage:
+    level: n/a
+    tables: {}
+- name: ufnGetPurchaseOrderStatusText
+  object_type: FUNCTION
+  schema: DBO
+  batch_id: 1
+  prompt_file: test_prompts/DBO/batch_0001.prompt.md
+  spec_file: tests/DBO/function__ufngetpurchaseorderstatustext.test.yaml
+  status: generated
+  data_coverage:
+    level: n/a
+    tables: {}
+- name: ufnGetSalesOrderStatusText
+  object_type: FUNCTION
+  schema: DBO
+  batch_id: 1
+  prompt_file: test_prompts/DBO/batch_0001.prompt.md
+  spec_file: tests/DBO/function__ufngetsalesorderstatustext.test.yaml
+  status: generated
+  data_coverage:
+    level: n/a
+    tables: {}
+- name: ufnLeadingZeros
+  object_type: FUNCTION
+  schema: DBO
+  batch_id: 2
+  prompt_file: test_prompts/DBO/batch_0002.prompt.md
+  spec_file: tests/DBO/function__ufnleadingzeros.test.yaml
+  status: generated
+  data_coverage:
+    level: n/a
+    tables: {}
+- name: VwCustomerShopping
+  object_type: VIEW
+  schema: DBO
+  batch_id: 2
+  prompt_file: test_prompts/DBO/batch_0002.prompt.md
+  spec_file: tests/DBO/view__vwcustomershopping.test.yaml
+  status: generated
+  data_coverage:
+    level: OK
+    tables:
+      Members: 20
+      Shopping: 95
+- name: VwOpenCoupons
+  object_type: VIEW
+  schema: DBO
+  batch_id: 2
+  prompt_file: test_prompts/DBO/batch_0002.prompt.md
+  spec_file: tests/DBO/view__vwopencoupons.test.yaml
+  status: generated
+  data_coverage:
+    level: OK
+    tables:
+      Coupons: 54
+      Members: 20
+- name: VwRegionalSales
+  object_type: VIEW
+  schema: DBO
+  batch_id: 2
+  prompt_file: test_prompts/DBO/batch_0002.prompt.md
+  spec_file: tests/DBO/view__vwregionalsales.test.yaml
+  status: generated
+  data_coverage:
+    level: OK
+    tables:
+      ProductSales: 15
+- name: VwTopMembers
+  object_type: VIEW
+  schema: DBO
+  batch_id: 2
+  prompt_file: test_prompts/DBO/batch_0002.prompt.md
+  spec_file: tests/DBO/view__vwtopmembers.test.yaml
+  status: generated
+  data_coverage:
+    level: OK
+    tables:
+      Members: 20
+      Shopping: 95
+- name: uspDeleteAuthor
+  object_type: PROCEDURE
+  schema: DBO
+  batch_id: 2
+  prompt_file: test_prompts/DBO/batch_0002.prompt.md
+  spec_file: tests/DBO/procedure__uspdeleteauthor.test.yaml
+  status: generated
+  data_coverage:
+    level: OK
+    tables:
+      Author: 290
+- name: uspDeleteOldCoupons
+  object_type: PROCEDURE
+  schema: DBO
+  batch_id: 3
+  prompt_file: test_prompts/DBO/batch_0003.prompt.md
+  spec_file: tests/DBO/procedure__uspdeleteoldcoupons.test.yaml
+  status: generated
+  data_coverage:
+    level: OK
+    tables:
+      Coupons: 54
+- name: uspGetAuthorManagers
+  object_type: PROCEDURE
+  schema: DBO
+  batch_id: 3
+  prompt_file: test_prompts/DBO/batch_0003.prompt.md
+  spec_file: tests/DBO/procedure__uspgetauthormanagers.test.yaml
+  status: generated
+  data_coverage:
+    level: OK
+    tables:
+      Author: 290
+      Person: 930
+- name: uspGetBillOfMaterials
+  object_type: PROCEDURE
+  schema: DBO
+  batch_id: 3
+  prompt_file: test_prompts/DBO/batch_0003.prompt.md
+  spec_file: tests/DBO/procedure__uspgetbillofmaterials.test.yaml
+  status: generated
+  data_coverage:
+    level: OK
+    tables:
+      BillOfMaterials: 982
+      Product: 504
+- name: uspGetManagerAuthors
+  object_type: PROCEDURE
+  schema: DBO
+  batch_id: 3
+  prompt_file: test_prompts/DBO/batch_0003.prompt.md
+  spec_file: tests/DBO/procedure__uspgetmanagerauthors.test.yaml
+  status: generated
+  data_coverage:
+    level: OK
+    tables:
+      Author: 290
+      Person: 930
+- name: uspGetProductData
+  object_type: PROCEDURE
+  schema: DBO
+  batch_id: 4
+  prompt_file: test_prompts/DBO/batch_0004.prompt.md
+  spec_file: tests/DBO/procedure__uspgetproductdata.test.yaml
+  status: generated
+  data_coverage:
+    level: OK
+    tables:
+      Product: 504
+- name: uspGetTopRegion
+  object_type: PROCEDURE
+  schema: DBO
+  batch_id: 4
+  prompt_file: test_prompts/DBO/batch_0004.prompt.md
+  spec_file: tests/DBO/procedure__uspgettopregion.test.yaml
+  status: generated
+  data_coverage:
+    level: OK
+    tables:
+      ProductSaleRegions: 10
+      ProductSales: 15
+- name: uspGetWhereUsedProductID
+  object_type: PROCEDURE
+  schema: DBO
+  batch_id: 4
+  prompt_file: test_prompts/DBO/batch_0004.prompt.md
+  spec_file: tests/DBO/procedure__uspgetwhereusedproductid.test.yaml
+  status: generated
+  data_coverage:
+    level: OK
+    tables:
+      BillOfMaterials: 982
+      Product: 504
+- name: uspLogError
+  object_type: PROCEDURE
+  schema: DBO
+  batch_id: 4
+  prompt_file: test_prompts/DBO/batch_0004.prompt.md
+  spec_file: tests/DBO/procedure__usplogerror.test.yaml
+  status: generated
+  data_coverage:
+    level: LOW_COVERAGE
+    tables:
+      ErrorLog: 0
+- name: uspPrintError
+  object_type: PROCEDURE
+  schema: DBO
+  batch_id: 4
+  prompt_file: test_prompts/DBO/batch_0004.prompt.md
+  spec_file: tests/DBO/procedure__uspprinterror.test.yaml
+  status: generated
+  data_coverage:
+    level: n/a
+    tables: {}
+- name: uspProcessRefunds
+  object_type: PROCEDURE
+  schema: DBO
+  batch_id: 5
+  prompt_file: test_prompts/DBO/batch_0005.prompt.md
+  spec_file: tests/DBO/procedure__uspprocessrefunds.test.yaml
+  status: generated
+  data_coverage:
+    level: OK
+    tables:
+      Coupons: 54
+      Shopping: 95
+- name: uspShoppingLevelAmount
+  object_type: PROCEDURE
+  schema: DBO
+  batch_id: 5
+  prompt_file: test_prompts/DBO/batch_0005.prompt.md
+  spec_file: tests/DBO/procedure__uspshoppinglevelamount.test.yaml
+  status: generated
+  data_coverage:
+    level: OK
+    tables:
+      Shopping: 95
+- name: uspUpdateAuthorLogin
+  object_type: PROCEDURE
+  schema: DBO
+  batch_id: 5
+  prompt_file: test_prompts/DBO/batch_0005.prompt.md
+  spec_file: tests/DBO/procedure__uspupdateauthorlogin.test.yaml
+  status: generated
+  data_coverage:
+    level: OK
+    tables:
+      Author: 290
+- name: uspUpdateAuthorPersonalInfo
+  object_type: PROCEDURE
+  schema: DBO
+  batch_id: 5
+  prompt_file: test_prompts/DBO/batch_0005.prompt.md
+  spec_file: tests/DBO/procedure__uspupdateauthorpersonalinfo.test.yaml
+  status: generated
+  data_coverage:
+    level: OK
+    tables:
+      Author: 290

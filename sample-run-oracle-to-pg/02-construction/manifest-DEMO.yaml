@@ -1,7 +1,7 @@
-project: demo
+project: o2pg
 schema: DEMO
 phase: construction
-generated_at: '2026-08-17T04:19:33Z'
+generated_at: '2026-09-28T15:34:13Z'
 provider: kiro
 model: kiro
 unit_count: 14
@@ -13,6 +13,7 @@ units:
   batch_id: 1
   prompt_file: prompts/DEMO/batch_001.prompt.md
   output_file: ddl/demo/addresses.sql
+  source_fk_count: 1
   status: applied
   last_error: null
   post_status: applied
@@ -23,6 +24,7 @@ units:
   batch_id: 1
   prompt_file: prompts/DEMO/batch_001.prompt.md
   output_file: ddl/demo/books.sql
+  source_fk_count: 3
   status: applied
   last_error: null
   post_status: applied
@@ -33,6 +35,7 @@ units:
   batch_id: 1
   prompt_file: prompts/DEMO/batch_001.prompt.md
   output_file: ddl/demo/books_cover.sql
+  source_fk_count: 1
   status: applied
   last_error: null
   post_status: applied
@@ -43,6 +46,7 @@ units:
   batch_id: 1
   prompt_file: prompts/DEMO/batch_001.prompt.md
   output_file: ddl/demo/book_types.sql
+  source_fk_count: 0
   status: applied
   last_error: null
   post_status: applied
@@ -52,6 +56,7 @@ units:
   batch_id: 1
   prompt_file: prompts/DEMO/batch_001.prompt.md
   output_file: ddl/demo/conditions.sql
+  source_fk_count: 0
   status: applied
   last_error: null
   post_status: applied
@@ -61,6 +66,7 @@ units:
   batch_id: 2
   prompt_file: prompts/DEMO/batch_002.prompt.md
   output_file: ddl/demo/customers.sql
+  source_fk_count: 0
   status: applied
   last_error: null
   post_status: applied
@@ -70,6 +76,7 @@ units:
   batch_id: 2
   prompt_file: prompts/DEMO/batch_002.prompt.md
   output_file: ddl/demo/genres.sql
+  source_fk_count: 0
   status: applied
   last_error: null
   post_status: applied
@@ -79,6 +86,7 @@ units:
   batch_id: 2
   prompt_file: prompts/DEMO/batch_002.prompt.md
   output_file: ddl/demo/listings.sql
+  source_fk_count: 4
   status: applied
   last_error: null
   post_status: applied
@@ -89,6 +97,7 @@ units:
   batch_id: 2
   prompt_file: prompts/DEMO/batch_002.prompt.md
   output_file: ddl/demo/orders.sql
+  source_fk_count: 0
   status: applied
   last_error: null
   post_status: applied
@@ -98,6 +107,7 @@ units:
   batch_id: 2
   prompt_file: prompts/DEMO/batch_002.prompt.md
   output_file: ddl/demo/order_items.sql
+  source_fk_count: 3
   status: applied
   last_error: null
   post_status: applied
@@ -108,6 +118,7 @@ units:
   batch_id: 3
   prompt_file: prompts/DEMO/batch_003.prompt.md
   output_file: ddl/demo/password_reset_tokens.sql
+  source_fk_count: 1
   status: applied
   last_error: null
   post_status: applied
@@ -118,6 +129,7 @@ units:
   batch_id: 3
   prompt_file: prompts/DEMO/batch_003.prompt.md
   output_file: ddl/demo/persistent_logins.sql
+  source_fk_count: 0
   status: applied
   last_error: null
   post_status: applied
@@ -127,6 +139,7 @@ units:
   batch_id: 3
   prompt_file: prompts/DEMO/batch_003.prompt.md
   output_file: ddl/demo/publishers.sql
+  source_fk_count: 0
   status: applied
   last_error: null
   post_status: applied
@@ -136,6 +149,7 @@ units:
   batch_id: 3
   prompt_file: prompts/DEMO/batch_003.prompt.md
   output_file: ddl/demo/shopping_cart_items.sql
+  source_fk_count: 3
   status: applied
   last_error: null
   post_status: applied

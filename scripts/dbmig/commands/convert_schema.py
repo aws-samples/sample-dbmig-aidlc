@@ -24,7 +24,7 @@ import yaml
 from .. import config, console
 from ..connections import load_pair
 from .. import engines
-from ..conversion import prompt_builder
+from ..conversion import ddl_split, prompt_builder
 from ..conversion.llm_client import make_client, HandoffRequired
 # Manifest I/O lives in the shared module; re-exported here for backwards
 # compatibility with callers that historically imported it from this command.
@@ -91,6 +91,8 @@ def run(args) -> int:
     prompts_dir.mkdir(parents=True, exist_ok=True)
     ddl_dir.mkdir(parents=True, exist_ok=True)
 
+    # Phase context written ONCE; each prompt references it (token budget).
+    shared = prompt_builder.write_shared_context(ws, prompt_builder.SCHEMA, root)
     manifest_units: List[dict] = []
     tdisp = _target_label()
     for i, batch in enumerate(batches, start=1):
@@ -101,7 +103,8 @@ def run(args) -> int:
         prompt_path = prompts_dir / prompt_name
 
         outputs = [f"ddl/{args.schema.lower()}/{u.name.lower()}.sql" for u in batch]
-        prompt_body = prompt_builder.build_unit_prompt(batch, repo_root=root)
+        prompt_body = prompt_builder.build_unit_prompt(
+            batch, repo_root=root, shared_context=shared)
         header = (
             f"<!-- dbmig conversion prompt bundle\n"
             f"     batch: {i}/{len(batches)}  units: "
@@ -121,6 +124,10 @@ def run(args) -> int:
                 "batch_id": i,
                 "prompt_file": str(prompt_path.relative_to(ws)),
                 "output_file": out,
+                # FK guard: apply-schema refuses to trust a conversion that emits
+                # more FKs than the source declared (no invented dependencies).
+                "source_fk_count": ddl_split.count_foreign_keys(
+                    u.components.get("ref_constraints") or ""),
                 "status": "pending",
             })
 

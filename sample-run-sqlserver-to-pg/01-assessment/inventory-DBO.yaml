@@ -1,0 +1,149 @@
+schema: dbo
+object_counts:
+  SQL_SCALAR_FUNCTION: 7
+  SQL_STORED_PROCEDURE: 14
+  USER_TABLE: 20
+  VIEW: 4
+tables:
+- name: Address
+  row_count: 0
+  columns: 12
+- name: Author
+  row_count: 290
+  columns: 12
+- name: BillOfMaterials
+  row_count: 982
+  columns: 9
+- name: Book
+  row_count: 8
+  columns: 16
+- name: Coupons
+  row_count: 54
+  columns: 8
+- name: Customer
+  row_count: 1
+  columns: 11
+- name: DatabaseLog
+  row_count: 30
+  columns: 8
+- name: ErrorLog
+  row_count: 0
+  columns: 9
+- name: Members
+  row_count: 20
+  columns: 7
+- name: Offer
+  row_count: 0
+  columns: 17
+- name: Order
+  row_count: 0
+  columns: 8
+- name: OrderItem
+  row_count: 0
+  columns: 7
+- name: Person
+  row_count: 930
+  columns: 13
+- name: Product
+  row_count: 504
+  columns: 25
+- name: ProductSaleRegions
+  row_count: 10
+  columns: 2
+- name: ProductSales
+  row_count: 15
+  columns: 9
+- name: ReferenceData
+  row_count: 24
+  columns: 6
+- name: Shopping
+  row_count: 95
+  columns: 5
+- name: ShoppingCart
+  row_count: 0
+  columns: 5
+- name: ShoppingCartItem
+  row_count: 0
+  columns: 8
+datatypes:
+  nvarchar: 70
+  int: 61
+  datetime2: 20
+  datetime: 16
+  nchar: 9
+  decimal: 8
+  numeric: 7
+  bit: 6
+  date: 4
+  smallint: 4
+  varchar: 3
+  xml: 3
+  uniqueidentifier: 2
+  money: 2
+code_units:
+- type: FUNCTION
+  name: ufnCalculateCustomerLifetimeValue
+- type: FUNCTION
+  name: ufnGetAccountingEndDate
+- type: FUNCTION
+  name: ufnGetAccountingStartDate
+- type: FUNCTION
+  name: ufnGetDocumentStatusText
+- type: FUNCTION
+  name: ufnGetPurchaseOrderStatusText
+- type: FUNCTION
+  name: ufnGetSalesOrderStatusText
+- type: FUNCTION
+  name: ufnLeadingZeros
+- type: VIEW
+  name: VwCustomerShopping
+- type: VIEW
+  name: VwOpenCoupons
+- type: VIEW
+  name: VwRegionalSales
+- type: VIEW
+  name: VwTopMembers
+- type: PROCEDURE
+  name: uspDeleteAuthor
+- type: PROCEDURE
+  name: uspDeleteOldCoupons
+- type: PROCEDURE
+  name: uspGetAuthorManagers
+- type: PROCEDURE
+  name: uspGetBillOfMaterials
+- type: PROCEDURE
+  name: uspGetManagerAuthors
+- type: PROCEDURE
+  name: uspGetProductData
+- type: PROCEDURE
+  name: uspGetTopRegion
+- type: PROCEDURE
+  name: uspGetWhereUsedProductID
+- type: PROCEDURE
+  name: uspLogError
+- type: PROCEDURE
+  name: uspPrintError
+- type: PROCEDURE
+  name: uspProcessRefunds
+- type: PROCEDURE
+  name: uspShoppingLevelAmount
+- type: PROCEDURE
+  name: uspUpdateAuthorLogin
+- type: PROCEDURE
+  name: uspUpdateAuthorPersonalInfo
+cross_schema_dependencies: []
+collation: SQL_Latin1_General_CP1_CI_AS
+decision_items:
+- id: case_insensitive_collation:dbo
+  kind: case_insensitive_collation
+  object: dbo
+  collation: SQL_Latin1_General_CP1_CI_AS
+  columns: 82
+  summary: '82 string column(s) use a case-insensitive collation (SQL_Latin1_General_CP1_CI_AS);
+    PostgreSQL compares case-sensitively, so LIKE/=/IN/ORDER BY/unique indexes change
+    behaviour. Choose: (a) citext for the columns that are searched/compared, (b)
+    ICU nondeterministic collation (no LIKE before PostgreSQL 18), or (c) keep case-sensitive
+    and make the application use ILIKE / lower() at the call sites.'
+  app_impact: every string comparison in app code/ORM queries (EF `.Contains`/`.StartsWith`/`==`,
+    JPA LIKE, raw SQL) becomes case-sensitive unless (a)/(b)
+  status: open

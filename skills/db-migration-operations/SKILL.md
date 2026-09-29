@@ -48,11 +48,26 @@ should use AWS DMS.
 ## Step 2 — Cutover runbook
 Write `04-operations/cutover-runbook.md` as an ordered, time-estimated checklist:
 1. Pre-cutover: final schema diff, target capacity check, backups/snapshots, freeze changes.
-2. Data: final sync / DMS cutover, sequence/identity reset to current source max values.
+2. Data: final sync / DMS cutover, then **identity/sequence reset** — generated, not
+   hand-written (see below).
 3. Application: connection-string / driver switch (note JDBC/ODBC differences), feature flags.
 4. Smoke tests: run the validation suite's critical queries against production target.
 5. Open to traffic; monitor.
 Include owner and rollback trigger for each step.
+
+**Identity/sequence step — generate it from the catalog.** Do not write a templated
+`setval(<seq>, COALESCE(MAX(id),1))` step with `<t>` placeholders: it touches the wrong set of
+tables and makes an empty table's first id 2. Instead run (dry-run, read-only):
+```bash
+./dbmig reset-identity --schema <S> --project <P>
+```
+It reads the target catalog, lists **exactly** the tables with an identity/serial/
+AUTO_INCREMENT column (tables without one are skipped), shows `MAX(id)` vs the next value
+per column, and lists **standalone sequences** on both sides (not covered — set them to the
+source value at cutover). It writes `04-operations/identity-reset-<S>.md`: paste/link that
+file as the runbook step. At cutover the step is the same command with `--apply` (a gated
+write to the target) — it sets each counter so `next = MAX(id)+1` (or START on an empty
+table) and re-verifies, exiting non-zero if any column is not safe.
 
 ## Step 3 — Rollback plan
 Write `04-operations/rollback-plan.md` (required if `migration-config.yaml

@@ -1,6 +1,8 @@
 """Connection modeling and engine connectors (oracledb thin + psycopg3)."""
 from __future__ import annotations
 
+import contextlib
+
 import os
 import ssl
 from dataclasses import dataclass, field
@@ -113,10 +115,8 @@ def _connect_oracle(c: Connection):
     import oracledb  # imported lazily so the package imports without the driver
 
     # Return CLOB/metadata as str rather than LOB locators (simpler DDL handling).
-    try:
+    with contextlib.suppress(AttributeError):   # older oracledb without the default
         oracledb.defaults.fetch_lobs = False
-    except Exception:
-        pass
 
     if not (c.service_name or c.sid):
         raise config.ConfigError("Oracle connection needs service_name or sid")

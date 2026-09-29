@@ -1,0 +1,457 @@
+diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/config/DatabaseInfoConfig.java src/main/java/com/bobsusedbooks/config/DatabaseInfoConfig.java
+--- migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/config/DatabaseInfoConfig.java	2026-03-14 16:31:58
++++ src/main/java/com/bobsusedbooks/config/DatabaseInfoConfig.java	2026-09-28 23:56:12
+@@ -45,11 +45,11 @@
+ 
+         private String extractConnectionInfo(String jdbcUrl, String username) {
+             try {
+-                // Format: jdbc:oracle:thin:@//localhost:1521/freepdb1
+-                String connectionDetails = jdbcUrl.split("@//")[1];
++                // Format: jdbc:postgresql://host:5432/db?currentSchema=...  (query string dropped: may carry secrets)
++                String connectionDetails = jdbcUrl.substring(jdbcUrl.indexOf("//") + 2).split("\\?")[0];
+                 return username + "@" + connectionDetails;
+             } catch (Exception e) {
+-                return username + "@" + jdbcUrl;
++                return username + "@<unavailable>";
+             }
+         }
+     }
+diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/config/DatabaseInfoController.java src/main/java/com/bobsusedbooks/config/DatabaseInfoController.java
+--- migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/config/DatabaseInfoController.java	2026-03-14 16:31:58
++++ src/main/java/com/bobsusedbooks/config/DatabaseInfoController.java	2026-09-28 23:56:12
+@@ -16,11 +16,11 @@
+     @ModelAttribute("databaseInfo")
+     public String getDatabaseInfo() {
+         try {
+-            // Format: jdbc:oracle:thin:@//localhost:1521/freepdb1
+-            String connectionDetails = datasourceUrl.split("@//")[1];
++            // Format: jdbc:postgresql://host:5432/db?currentSchema=...  (query string dropped: may carry secrets)
++            String connectionDetails = datasourceUrl.substring(datasourceUrl.indexOf("//") + 2).split("\\?")[0];
+             return datasourceUsername + "@" + connectionDetails;
+         } catch (Exception e) {
+-            return datasourceUsername + "@" + datasourceUrl;
++            return datasourceUsername + "@<unavailable>";
+         }
+     }
+ }
+diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/demo/OracleBookRepository.java src/main/java/com/bobsusedbooks/demo/OracleBookRepository.java
+--- migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/demo/OracleBookRepository.java	2026-03-14 16:31:58
++++ src/main/java/com/bobsusedbooks/demo/OracleBookRepository.java	2026-09-28 23:56:51
+@@ -20,6 +20,14 @@
+  * IMPORTANT: This class contains Oracle-specific SQL syntax that can be transformed
+  * to PostgreSQL using Amazon Q's /transform command.
+  */
++/*
++ * dbmig-aidlc app modernization (Oracle -> PostgreSQL), like-for-like:
++ * PRE-EXISTING BROKEN — this demo class queries columns/tables that do not exist in the
++ * SOURCE schema either (verified against Oracle ALL_TAB_COLUMNS / ALL_TABLES: BOOKS has no
++ * NAME/QUANTITY/PRICE/IS_AVAILABLE/AVERAGE_RATING/CREATED_DATE, CUSTOMERS no NAME, ORDERS no
++ * ORDER_DATE, no SALES table). Only the Oracle dialect was converted mechanically; the class
++ * was not repaired (no schema was invented). Decide: delete, or rewrite against the real model.
++ */
+ @Repository
+ public class OracleBookRepository {
+     
+@@ -35,8 +43,11 @@
+         // Oracle-specific SQL with ROWNUM for pagination
+         String sql = "SELECT * FROM BOOKS b " +
+                      "WHERE b.genre_id = ? " +
+-                     "AND ROWNUM <= 100 " +
+-                     "ORDER BY b.name";
++                     // BEHAVIOURAL: Oracle ROWNUM <= 100 filtered BEFORE the sort (100
++                     // arbitrary rows, then sorted); LIMIT applies AFTER it (first 100 by
++                     // name). Converted to the evident intent — confirm with the owner.
++                     "ORDER BY b.name " +
++                     "LIMIT 100";
+         
+         try (Connection conn = dataSource.getConnection();
+              PreparedStatement stmt = conn.prepareStatement(sql)) {
+@@ -88,7 +99,7 @@
+         
+         // Oracle-specific SQL with NVL function
+         String sql = "SELECT * FROM BOOKS b " +
+-                     "WHERE NVL(b.is_featured, 0) = 1 " +
++                     "WHERE COALESCE(b.is_featured, 0) = 1 " +
+                      "ORDER BY b.name";
+         
+         try (Connection conn = dataSource.getConnection();
+@@ -113,9 +124,9 @@
+         
+         // Oracle-specific SQL with DECODE function
+         String sql = "SELECT b.*, " +
+-                     "DECODE(b.quantity, 0, 'Out of Stock', " +
+-                     "                  1, 'Last Copy', " +
+-                     "                  'In Stock') as stock_status " +
++                     "CASE b.quantity WHEN 0 THEN 'Out of Stock' " +
++                     "                WHEN 1 THEN 'Last Copy' " +
++                     "                ELSE 'In Stock' END as stock_status " +
+                      "FROM BOOKS b " +
+                      "WHERE b.quantity < ? " +
+                      "ORDER BY b.quantity ASC";
+@@ -192,7 +203,7 @@
+             sql.append("AND b.price <= ? ");
+         }
+         
+-        sql.append("AND b.created_date > TO_DATE('2023-01-01', 'YYYY-MM-DD') ");
++        sql.append("AND b.created_date > to_timestamp('2023-01-01', 'YYYY-MM-DD')::timestamp ");
+         sql.append("ORDER BY b.name");
+         
+         try (Connection conn = dataSource.getConnection();
+@@ -260,7 +271,7 @@
+                      "         ROW_NUMBER() OVER (ORDER BY SUM(s.quantity) DESC) as rank " +
+                      "  FROM BOOKS b " +
+                      "  JOIN SALES s ON b.id = s.book_id " +
+-                     "  WHERE s.sale_date > ADD_MONTHS(SYSDATE, -12) " +
++                     "  WHERE s.sale_date > LOCALTIMESTAMP(0) - INTERVAL '12 months' " +
+                      "  GROUP BY b.id, b.name, b.author, b.isbn, b.price, b.quantity, " +
+                      "           b.genre_id, b.publisher_id, b.condition_id, b.book_type_id, " +
+                      "           b.is_featured, b.is_bestseller, b.is_new_arrival, " +
+diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/demo/OracleBookService.java src/main/java/com/bobsusedbooks/demo/OracleBookService.java
+--- migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/demo/OracleBookService.java	2026-03-14 16:31:58
++++ src/main/java/com/bobsusedbooks/demo/OracleBookService.java	2026-09-28 23:56:51
+@@ -19,6 +19,14 @@
+  * IMPORTANT: This class contains Oracle-specific SQL syntax that can be transformed
+  * to PostgreSQL using Amazon Q's /transform command.
+  */
++/*
++ * dbmig-aidlc app modernization (Oracle -> PostgreSQL), like-for-like:
++ * PRE-EXISTING BROKEN — this demo class queries columns/tables that do not exist in the
++ * SOURCE schema either (verified against Oracle ALL_TAB_COLUMNS / ALL_TABLES: BOOKS has no
++ * NAME/QUANTITY/PRICE/IS_AVAILABLE/AVERAGE_RATING/CREATED_DATE, CUSTOMERS no NAME, ORDERS no
++ * ORDER_DATE, no SALES table). Only the Oracle dialect was converted mechanically; the class
++ * was not repaired (no schema was invented). Decide: delete, or rewrite against the real model.
++ */
+ @Service
+ public class OracleBookService {
+ 
+@@ -39,7 +47,7 @@
+             "  JOIN order_items oi ON o.id = oi.order_id " +
+             "  JOIN books b ON oi.book_id = b.id " +
+             "  WHERE o.customer_id = ? " +
+-            "  AND o.order_date > ADD_MONTHS(SYSDATE, -6) " +
++            "  AND o.order_date > LOCALTIMESTAMP(0) - INTERVAL '6 months' " +
+             "  GROUP BY b.genre_id " +
+             "  ORDER BY purchase_count DESC " +
+             "), " +
+@@ -97,8 +105,8 @@
+             "  AVG(o.total_amount) as avg_order_value, " +
+             "  MAX(o.order_date) as last_order_date, " +
+             "  ROUND(AVG(LEAD(o.order_date) OVER (PARTITION BY o.customer_id ORDER BY o.order_date) - o.order_date)) as avg_days_between_orders, " +
+-            "  LISTAGG(DISTINCT g.name, ', ') WITHIN GROUP (ORDER BY COUNT(*) DESC) as top_genres, " +
+-            "  ROUND(MONTHS_BETWEEN(SYSDATE, MIN(o.order_date))) as customer_age_months " +
++            "  STRING_AGG(DISTINCT g.name, ', ') as top_genres, " +  // Oracle ORDER BY COUNT(*) inside LISTAGG has no DISTINCT-compatible PG form; order lost — flag
++            "  ROUND((EXTRACT(YEAR FROM age(LOCALTIMESTAMP(0), MIN(o.order_date))) * 12 + EXTRACT(MONTH FROM age(LOCALTIMESTAMP(0), MIN(o.order_date))))::numeric) as customer_age_months " +
+             "FROM customers c " +
+             "JOIN orders o ON c.id = o.customer_id " +
+             "JOIN order_items oi ON o.id = oi.order_id " +
+diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/entities/Address.java src/main/java/com/bobsusedbooks/entities/Address.java
+--- migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/entities/Address.java	2026-03-14 16:31:58
++++ src/main/java/com/bobsusedbooks/entities/Address.java	2026-09-28 23:57:19
+@@ -1,5 +1,8 @@
+ package com.bobsusedbooks.entities;
+ 
++import org.hibernate.annotations.JdbcTypeCode;
++import org.hibernate.type.SqlTypes;
++
+ import jakarta.persistence.*;
+ import lombok.Getter;
+ import lombok.NoArgsConstructor;
+@@ -23,7 +26,8 @@
+     private String postalCode;
+     private String country;
+     
+-    @Column(name = "is_default", columnDefinition = "NUMBER(1)")
++    @Column(name = "is_default")
++    @JdbcTypeCode(SqlTypes.SMALLINT)
+     private Boolean isDefault;
+     
+     private String addressType;
+diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/entities/Book.java src/main/java/com/bobsusedbooks/entities/Book.java
+--- migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/entities/Book.java	2026-03-14 16:31:58
++++ src/main/java/com/bobsusedbooks/entities/Book.java	2026-09-28 23:57:19
+@@ -1,5 +1,8 @@
+ package com.bobsusedbooks.entities;
+ 
++import org.hibernate.annotations.JdbcTypeCode;
++import org.hibernate.type.SqlTypes;
++
+ import jakarta.persistence.*;
+ import lombok.Getter;
+ import lombok.NoArgsConstructor;
+@@ -29,6 +32,8 @@
+     private String description;
+     
+     @Column(name = "publish_date")
++    @JdbcTypeCode(SqlTypes.TIMESTAMP)
++    
+     private LocalDate publishDate;
+     
+     private Integer year;
+diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/entities/BookCover.java src/main/java/com/bobsusedbooks/entities/BookCover.java
+--- migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/entities/BookCover.java	2026-03-14 16:31:58
++++ src/main/java/com/bobsusedbooks/entities/BookCover.java	2026-09-28 23:57:19
+@@ -1,5 +1,8 @@
+ package com.bobsusedbooks.entities;
+ 
++import org.hibernate.annotations.JdbcTypeCode;
++import org.hibernate.type.SqlTypes;
++
+ import jakarta.persistence.*;
+ import lombok.Getter;
+ import lombok.NoArgsConstructor;
+@@ -23,8 +26,8 @@
+     @JoinColumn(name = "book_id")
+     private Book book;
+     
+-    @Lob
+     @Column(name = "cover_image")
++    @JdbcTypeCode(SqlTypes.VARBINARY)
+     private byte[] coverImage;
+     
+     @Column(name = "content_type", length = 100)
+diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/entities/Customer.java src/main/java/com/bobsusedbooks/entities/Customer.java
+--- migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/entities/Customer.java	2026-03-14 16:31:58
++++ src/main/java/com/bobsusedbooks/entities/Customer.java	2026-09-28 23:57:19
+@@ -1,5 +1,8 @@
+ package com.bobsusedbooks.entities;
+ 
++import org.hibernate.annotations.JdbcTypeCode;
++import org.hibernate.type.SqlTypes;
++
+ import jakarta.persistence.*;
+ import lombok.Getter;
+ import lombok.NoArgsConstructor;
+@@ -27,21 +30,26 @@
+     private String phoneNumber;
+     private String passwordHash;
+     private String sub;
++    @JdbcTypeCode(SqlTypes.TIMESTAMP)
+     private LocalDate dateOfBirth;
+     private LocalDateTime createdOn;
+     
+-    @Column(name = "email_verified", columnDefinition = "NUMBER(1)")
++    @Column(name = "email_verified")
++    @JdbcTypeCode(SqlTypes.SMALLINT)
+     private Boolean emailVerified;
+     
+     private String role;
+     
+-    @Column(name = "account_expired", columnDefinition = "NUMBER(1)")
++    @Column(name = "account_expired")
++    @JdbcTypeCode(SqlTypes.SMALLINT)
+     private Boolean accountExpired = false;
+     
+-    @Column(name = "credentials_expired", columnDefinition = "NUMBER(1)")
++    @Column(name = "credentials_expired")
++    @JdbcTypeCode(SqlTypes.SMALLINT)
+     private Boolean credentialsExpired = false;
+     
+-    @Column(name = "account_locked", columnDefinition = "NUMBER(1)")
++    @Column(name = "account_locked")
++    @JdbcTypeCode(SqlTypes.SMALLINT)
+     private Boolean accountLocked = false;
+     
+     private LocalDateTime lastLogin;
+diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/entities/Listing.java src/main/java/com/bobsusedbooks/entities/Listing.java
+--- migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/entities/Listing.java	2026-03-14 16:31:58
++++ src/main/java/com/bobsusedbooks/entities/Listing.java	2026-09-28 23:57:19
+@@ -1,5 +1,8 @@
+ package com.bobsusedbooks.entities;
+ 
++import org.hibernate.annotations.JdbcTypeCode;
++import org.hibernate.type.SqlTypes;
++
+ import jakarta.persistence.*;
+ import lombok.Getter;
+ import lombok.NoArgsConstructor;
+@@ -61,13 +64,16 @@
+     @Column(name = "processed_by")
+     private Long processedBy;
+     
+-    @Column(name = "is_featured", columnDefinition = "NUMBER(1)")
++    @Column(name = "is_featured")
++    @JdbcTypeCode(SqlTypes.SMALLINT)
+     private Boolean isFeatured = false;
+     
+-    @Column(name = "is_bestseller", columnDefinition = "NUMBER(1)")
++    @Column(name = "is_bestseller")
++    @JdbcTypeCode(SqlTypes.SMALLINT)
+     private Boolean isBestseller = false;
+     
+-    @Column(name = "is_new_arrival", columnDefinition = "NUMBER(1)")
++    @Column(name = "is_new_arrival")
++    @JdbcTypeCode(SqlTypes.SMALLINT)
+     private Boolean isNewArrival = false;
+     
+     @Column(name = "created_on", nullable = false)
+diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/entities/Order.java src/main/java/com/bobsusedbooks/entities/Order.java
+--- migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/entities/Order.java	2026-03-14 16:31:58
++++ src/main/java/com/bobsusedbooks/entities/Order.java	2026-09-28 23:57:19
+@@ -1,5 +1,8 @@
+ package com.bobsusedbooks.entities;
+ 
++import org.hibernate.annotations.JdbcTypeCode;
++import org.hibernate.type.SqlTypes;
++
+ import jakarta.persistence.*;
+ import lombok.Getter;
+ import lombok.NoArgsConstructor;
+@@ -52,12 +55,18 @@
+     private String paymentStatus;
+     
+     @Column(name = "shipped_date")
++    @JdbcTypeCode(SqlTypes.TIMESTAMP)
++    
+     private LocalDate shippedDate;
+     
+     @Column(name = "delivered_date")
++    @JdbcTypeCode(SqlTypes.TIMESTAMP)
++    
+     private LocalDate deliveredDate;
+     
+     @Column(name = "cancelled_date")
++    @JdbcTypeCode(SqlTypes.TIMESTAMP)
++    
+     private LocalDate cancelledDate;
+     
+     @Column(name = "cancellation_reason")
+diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/entities/PasswordResetToken.java src/main/java/com/bobsusedbooks/entities/PasswordResetToken.java
+--- migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/entities/PasswordResetToken.java	2026-03-14 16:31:58
++++ src/main/java/com/bobsusedbooks/entities/PasswordResetToken.java	2026-09-28 23:57:19
+@@ -1,5 +1,8 @@
+ package com.bobsusedbooks.entities;
+ 
++import org.hibernate.annotations.JdbcTypeCode;
++import org.hibernate.type.SqlTypes;
++
+ import jakarta.persistence.*;
+ import lombok.Getter;
+ import lombok.NoArgsConstructor;
+@@ -23,7 +26,7 @@
+     private Customer customer;
+     private LocalDateTime expiryDate;
+     
+-    @Column(columnDefinition = "NUMBER(1)")
++    @JdbcTypeCode(SqlTypes.SMALLINT)
+     private Boolean used = false;
+     
+     public PasswordResetToken(String token, Customer customer, LocalDateTime expiryDate) {
+diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/entities/ShoppingCartItem.java src/main/java/com/bobsusedbooks/entities/ShoppingCartItem.java
+--- migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/entities/ShoppingCartItem.java	2026-03-14 16:31:58
++++ src/main/java/com/bobsusedbooks/entities/ShoppingCartItem.java	2026-09-28 23:57:19
+@@ -1,5 +1,8 @@
+ package com.bobsusedbooks.entities;
+ 
++import org.hibernate.annotations.JdbcTypeCode;
++import org.hibernate.type.SqlTypes;
++
+ import jakarta.persistence.*;
+ import lombok.Getter;
+ import lombok.NoArgsConstructor;
+@@ -23,7 +26,8 @@
+     private Long bookId;
+     private Integer quantity;
+     
+-    @Column(name = "is_wishlist_item", columnDefinition = "NUMBER(1)")
++    @Column(name = "is_wishlist_item")
++    @JdbcTypeCode(SqlTypes.SMALLINT)
+     private Boolean isWishlistItem;
+     
+     @ManyToOne(fetch = FetchType.LAZY)
+diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/repositories/BookRepository.java src/main/java/com/bobsusedbooks/repositories/BookRepository.java
+--- migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/repositories/BookRepository.java	2026-03-14 16:31:58
++++ src/main/java/com/bobsusedbooks/repositories/BookRepository.java	2026-09-29 00:05:28
+@@ -94,10 +94,14 @@
+             Pageable pageable);
+ 
+     @Query(value = 
+-            "SELECT b.* FROM BOOKS b " +
+-            "WHERE CONTAINS(search_text, ?1, 1) > 0 " +
+-            "ORDER BY SCORE(1) DESC",
+-            countQuery = "SELECT COUNT(*) FROM BOOKS b WHERE CONTAINS(search_text, ?1) > 0",
++            // Oracle Text CONTAINS/SCORE -> PostgreSQL full-text search. The expression must
++            // match the GIN index demo.books_text_idx verbatim (to_tsvector('english',
++            // coalesce(search_text,''))) or the planner falls back to a sequential scan.
++            // websearch_to_tsquery: free-text input can never raise a tsquery syntax error.
++            "SELECT b.* FROM books b " +
++            "WHERE to_tsvector('english', coalesce(b.search_text, '')) @@ websearch_to_tsquery('english', ?1) " +
++            "ORDER BY ts_rank(to_tsvector('english', coalesce(b.search_text, '')), websearch_to_tsquery('english', ?1)) DESC",
++            countQuery = "SELECT COUNT(*) FROM books b WHERE to_tsvector('english', coalesce(b.search_text, '')) @@ websearch_to_tsquery('english', ?1)",
+             nativeQuery = true)
+     List<Book> fullTextSearchBooks(String searchTerms);        
+ }
+diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/repositories/CustomerRepository.java src/main/java/com/bobsusedbooks/repositories/CustomerRepository.java
+--- migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/repositories/CustomerRepository.java	2026-03-14 16:31:58
++++ src/main/java/com/bobsusedbooks/repositories/CustomerRepository.java	2026-09-28 23:57:02
+@@ -31,6 +31,9 @@
+      * @param customerId The ID of the customer
+      * @return List of CustomerHistoryDTO objects containing the customer's purchase history
+      */
++    // dbmig-aidlc: PRE-EXISTING BROKEN — routine get_customer_history does not exist in the
++    // SOURCE (Oracle ALL_OBJECTS: no rows), so it was never migrated. Left unchanged (like-for-like);
++    // calling this method fails on both engines. Decide: implement the routine, or remove the method.
+     @Query(value = "{ call get_customer_history(:customerId) }", nativeQuery = true)
+     List<CustomerHistoryDTO> getCustomerPurchaseHistory(@Param("customerId") Long customerId);
+ }
+\ No newline at end of file
+diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/services/BookService.java src/main/java/com/bobsusedbooks/services/BookService.java
+--- migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/services/BookService.java	2026-03-14 16:31:58
++++ src/main/java/com/bobsusedbooks/services/BookService.java	2026-09-29 00:05:28
+@@ -176,10 +176,13 @@
+             return "%";
+         }
+         
+-        String[] terms = query.toLowerCase().split("\\s+");
+-        return String.join(" OR ", Arrays.stream(terms)
+-            .map(term -> "fuzzy(" + term + ", 40)")
+-            .toArray(String[]::new));
++        // dbmig-aidlc: this built Oracle Text query syntax ("fuzzy(t, 40) OR ..."), which
++        // PostgreSQL full-text search treats as literal words (never matches). Now: plain
++        // terms OR-ed for websearch_to_tsquery (same any-term semantics). BEHAVIOURAL: Oracle
++        // fuzzy() edit-distance matching has no tsquery equivalent — stems/exact lexemes only
++        // (misspellings no longer match; pg_trgm similarity is the redesign option).
++        String[] terms = query.toLowerCase().trim().split("\\s+");
++        return String.join(" or ", terms);
+     }
+ 
+     public Page<BookDto> searchBooksPaginated(String keyword, Pageable pageable) {
+diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/resources/application.properties src/main/resources/application.properties
+--- migrations/<project>/05-application/backup/20260928-235158/src/main/resources/application.properties	2026-09-28 10:05:17
++++ src/main/resources/application.properties	2026-09-28 23:56:12
+@@ -1,15 +1,14 @@
+-# Oracle Database Configuration
+-spring.datasource.url=jdbc:oracle:thin:@//<ORACLE_HOST>:1521/ORCL
+-spring.datasource.username=demo
+-spring.datasource.password=<masked>
+-spring.datasource.driver-class-name=oracle.jdbc.OracleDriver
++# PostgreSQL (Aurora) Database Configuration — migrated from Oracle (dbmig-aidlc)
++spring.datasource.url=jdbc:postgresql://${DB_HOST}:${DB_PORT:5432}/${DB_NAME}?currentSchema=demo&sslmode=require
++spring.datasource.username=${DB_USERNAME}
++spring.datasource.password=${DB_PASSWORD}
++spring.datasource.driver-class-name=org.postgresql.Driver
+ 
+-# JPA/Hibernate Configuration for Oracle
++# JPA/Hibernate Configuration (Hibernate 6+ auto-detects the PostgreSQL dialect)
+ # spring.jpa.hibernate.ddl-auto=update
+ spring.jpa.hibernate.ddl-auto=validate
+ spring.jpa.show-sql=false
+ spring.jpa.properties.hibernate.format_sql=true
+-spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.OracleDialect
+ 
+ # SQL Initialization
+ #spring.sql.init.mode=always@
+--- migrations/<project>/05-application/backup/20260928-235158/pom.xml	2026-05-30 18:37:03
++++ pom.xml	2026-09-28 23:56:51
+@@ -50,11 +50,7 @@
+             <version>42.7.7</version>
+             <scope>runtime</scope>
+         </dependency>
+-        <dependency>
+-            <groupId>com.oracle.database.jdbc</groupId>
+-            <artifactId>ojdbc17</artifactId>
+-            <version>23.8.0.25.04</version>
+-        </dependency>
++        <!-- ojdbc17 removed: migrated to PostgreSQL (org.postgresql:postgresql above) -->
+         <!-- Lombok -->
+         <dependency>
+             <groupId>org.projectlombok</groupId>

@@ -1,0 +1,25 @@
+results:
+- label: Address
+  status: applied
+  error: null
+  pass: 1
+- label: Author
+  status: applied
+  error: null
+  pass: 1
+- label: Offer
+  status: applied
+  error: null
+  pass: 1
+- label: Order
+  status: applied
+  error: null
+  pass: 1
+- label: OrderItem
+  status: applied
+  error: null
+  pass: 1
+- label: ShoppingCartItem
+  status: applied
+  error: null
+  pass: 1

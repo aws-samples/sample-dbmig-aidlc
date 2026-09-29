@@ -22,13 +22,13 @@ target, and prepares it for the data load**.
 
 ```bash
 # 0) copy the DMS SC project locally (see the repo README "copy from S3"), then:
-python -m dbmig import-dms-sc  --dms-sc-dir /path/to/dms-sc-project --project adventureworks-hr-person
-python -m dbmig diff-target    --schema PERSON         --project adventureworks-hr-person
-python -m dbmig diff-target    --schema HUMANRESOURCES --project adventureworks-hr-person
-python -m dbmig capture-target-objects --schema PERSON         --project adventureworks-hr-person
-python -m dbmig capture-target-objects --schema HUMANRESOURCES --project adventureworks-hr-person
+./dbmig import-dms-sc  --dms-sc-dir /path/to/dms-sc-project --project adventureworks-hr-person
+./dbmig diff-target    --schema PERSON         --project adventureworks-hr-person
+./dbmig diff-target    --schema HUMANRESOURCES --project adventureworks-hr-person
+./dbmig capture-target-objects --schema PERSON         --project adventureworks-hr-person
+./dbmig capture-target-objects --schema HUMANRESOURCES --project adventureworks-hr-person
 # prove the VERIFY (5444 ML/GenAI) objects, then record sign-off so they are not re-verified:
-python -m dbmig verify --schema PERSON --project adventureworks-hr-person \
+./dbmig verify --schema PERSON --project adventureworks-hr-person \
     --set verified --objects <names> --by migration-engineer --method equivalence-test
 ```
 

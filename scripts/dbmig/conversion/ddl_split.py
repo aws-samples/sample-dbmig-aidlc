@@ -161,6 +161,38 @@ _CREATE_TABLE_RE = re.compile(
 _FK_ITEM_RE = re.compile(
     rf"^\s*(?:CONSTRAINT\s+{_CONSTRAINT_NAME}\s+)?FOREIGN\s+KEY\b", re.IGNORECASE)
 
+_FOREIGN_KEY_WORD_RE = re.compile(r"\bFOREIGN\s+KEY\b", re.IGNORECASE)
+# Column-level shorthand ``col type REFERENCES parent(col)`` (no FOREIGN KEY
+# keyword). A REFERENCES that follows ``FOREIGN KEY (...)`` is the same FK and is
+# not counted twice.
+_REFERENCES_RE = re.compile(r"\bREFERENCES\b", re.IGNORECASE)
+_FK_THEN_REFS_RE = re.compile(r"\bFOREIGN\s+KEY\s*\([^)]*\)\s*REFERENCES\b",
+                              re.IGNORECASE)
+
+
+def _strip_comments_and_strings(sql: str) -> str:
+    sql = re.sub(r"--[^\n]*", " ", sql)
+    sql = re.sub(r"/\*.*?\*/", " ", sql, flags=re.DOTALL)
+    return re.sub(r"'(?:[^']|'')*'", "''", sql)
+
+
+def count_foreign_keys(sql: str) -> int:
+    """Count FK constraints declared in a DDL block (source or converted).
+
+    Counts ``FOREIGN KEY`` clauses plus column-level ``REFERENCES`` shorthand
+    (each REFERENCES not already preceded by its ``FOREIGN KEY (...)``). Comments
+    and string literals are ignored so advisory text cannot inflate the count.
+    Used as a guard: a conversion must not emit more FKs than the source has
+    (the model must never invent a missing dependency)."""
+    if not sql:
+        return 0
+    body = _strip_comments_and_strings(sql)
+    fk = len(_FOREIGN_KEY_WORD_RE.findall(body))
+    refs = len(_REFERENCES_RE.findall(body)) - len(_FK_THEN_REFS_RE.findall(body))
+    # REFERENCES privileges in GRANT statements are not constraints.
+    refs -= len(re.findall(r"\bGRANT\b[^;]*\bREFERENCES\b", body, re.IGNORECASE))
+    return fk + max(refs, 0)
+
 
 def _find_column_list(stmt: str):
     """Split a ``CREATE TABLE`` on its top-level column-list parentheses.

@@ -40,6 +40,38 @@ def err(msg: str) -> None:
     print(f"{_c('31', '[FAIL]', sys.stderr)} {msg}", file=sys.stderr)
 
 
+# ---- per-item success lines (bounded) ----------------------------------------
+# On large schemas a command would print thousands of "<object> pass" / "<table>
+# rows match" lines, and every line lands in the AI assistant's context. Success
+# lines per item are therefore capped (DBMIG_ITEM_LIMIT, default 25; 0 = no cap);
+# failures/warnings are ALWAYS printed, and the full detail is in the reports.
+_item_state = {"shown": 0, "hidden": 0}
+
+
+def _item_limit() -> int:
+    try:
+        return int(os.environ.get("DBMIG_ITEM_LIMIT", "25"))
+    except ValueError:
+        return 25
+
+
+def item_ok(msg: str) -> None:
+    lim = _item_limit()
+    if lim and _item_state["shown"] >= lim:
+        _item_state["hidden"] += 1
+        return
+    _item_state["shown"] += 1
+    ok(msg)
+
+
+def flush_items(where: str = "the report") -> None:
+    """Print a one-line count of suppressed success lines, then reset."""
+    if _item_state["hidden"]:
+        info(f"... {_item_state['hidden']} more successful item(s) not shown "
+             f"(DBMIG_ITEM_LIMIT={_item_limit()}); see {where}")
+    _item_state["shown"] = _item_state["hidden"] = 0
+
+
 def heading(msg: str) -> None:
     print(_c("1;37", f"\n=== {msg} ==="))
 

@@ -1,0 +1,21 @@
+object: ufnCalculateCustomerLifetimeValue
+schema: DBO
+type: function
+notes: real customers 1..3 (1 Delivered order each); 999 has no orders -> NULL on both. Result depends on today's date on both engines.
+cases:
+- id: c1
+  type: function
+  source_sql: SELECT dbo.ufnCalculateCustomerLifetimeValue(1)
+  target_sql: SELECT dbo.ufncalculatecustomerlifetimevalue(1)
+- id: c2
+  type: function
+  source_sql: SELECT dbo.ufnCalculateCustomerLifetimeValue(2)
+  target_sql: SELECT dbo.ufncalculatecustomerlifetimevalue(2)
+- id: c3
+  type: function
+  source_sql: SELECT SUM(dbo.ufnCalculateCustomerLifetimeValue(CustomerID)) FROM dbo.Members
+  target_sql: SELECT sum(dbo.ufncalculatecustomerlifetimevalue(customerid)) FROM dbo.members
+- id: c4
+  type: function
+  source_sql: SELECT dbo.ufnCalculateCustomerLifetimeValue(999)
+  target_sql: SELECT dbo.ufncalculatecustomerlifetimevalue(999)

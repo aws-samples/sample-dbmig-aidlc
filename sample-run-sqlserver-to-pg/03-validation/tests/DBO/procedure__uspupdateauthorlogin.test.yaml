@@ -1,0 +1,30 @@
+object: uspUpdateAuthorLogin
+schema: DBO
+type: procedure
+notes: u1 real update of author 2; u2 duplicate LoginID (unique index) -> error caught, logged to ErrorLog, not re-raised, row unchanged.
+cases:
+- id: u1
+  type: procedure
+  call_source: EXEC dbo.uspUpdateAuthorLogin 2, N'58', N'adventure-works\terri9', N'VP Engineering', '2008-01-31', 0
+  call_target: CALL dbo.uspupdateauthorlogin(2, '58', 'adventure-works\terri9', 'VP Engineering', '2008-01-31', false)
+  verify:
+  - name: login2
+    source_sql: SELECT LoginID FROM dbo.Author WHERE BusinessEntityID = 2
+    target_sql: SELECT loginid FROM dbo.author WHERE businessentityid = 2
+  - name: flag2
+    source_sql: SELECT CAST(CurrentFlag AS int) FROM dbo.Author WHERE BusinessEntityID = 2
+    target_sql: SELECT currentflag::int FROM dbo.author WHERE businessentityid = 2
+  - name: errorlog
+    source_sql: SELECT COUNT(*) FROM dbo.ErrorLog
+    target_sql: SELECT count(*) FROM dbo.errorlog
+- id: u2
+  type: procedure
+  call_source: EXEC dbo.uspUpdateAuthorLogin 2, N'58', N'adventure-works\roberto0', N'VP Engineering', '2008-01-31', 1
+  call_target: CALL dbo.uspupdateauthorlogin(2, '58', 'adventure-works\roberto0', 'VP Engineering', '2008-01-31', true)
+  verify:
+  - name: login2
+    source_sql: SELECT LoginID FROM dbo.Author WHERE BusinessEntityID = 2
+    target_sql: SELECT loginid FROM dbo.author WHERE businessentityid = 2
+  - name: errorlog
+    source_sql: SELECT COUNT(*) FROM dbo.ErrorLog
+    target_sql: SELECT count(*) FROM dbo.errorlog

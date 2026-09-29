@@ -1,0 +1,154 @@
+project: s2pg
+items:
+- ts: '2026-09-28T16:32:07Z'
+  phase: validation
+  kind: test_failure
+  object: DBO.ufnGetDocumentStatusText [c1]
+  detail: '{''error'': ''function dbo.ufngetdocumentstatustext(integer) does not exist\nLINE
+    1: SELECT dbo.ufngetdocumentstatustext(1)\n               ^\nHINT:  No function
+    matches the given name and argument types. You might need to add explicit type
+    casts.''}'
+  status: resolved
+  last_seen: '2026-09-28T23:51:52Z'
+  occurrences: 2
+  resolved_ts: '2026-09-28T23:56:56Z'
+  resolution: passed on run-tests re-run
+- ts: '2026-09-28T16:32:08Z'
+  phase: validation
+  kind: test_failure
+  object: DBO.ufnGetDocumentStatusText [c2]
+  detail: '{''error'': ''function dbo.ufngetdocumentstatustext(integer) does not exist\nLINE
+    1: SELECT dbo.ufngetdocumentstatustext(3)\n               ^\nHINT:  No function
+    matches the given name and argument types. You might need to add explicit type
+    casts.''}'
+  status: resolved
+  last_seen: '2026-09-28T23:51:54Z'
+  occurrences: 2
+  resolved_ts: '2026-09-28T23:56:56Z'
+  resolution: passed on run-tests re-run
+- ts: '2026-09-28T16:32:10Z'
+  phase: validation
+  kind: test_failure
+  object: DBO.ufnGetDocumentStatusText [c3]
+  detail: '{''error'': ''function dbo.ufngetdocumentstatustext(integer) does not exist\nLINE
+    1: SELECT dbo.ufngetdocumentstatustext(9)\n               ^\nHINT:  No function
+    matches the given name and argument types. You might need to add explicit type
+    casts.''}'
+  status: resolved
+  last_seen: '2026-09-28T23:51:55Z'
+  occurrences: 2
+  resolved_ts: '2026-09-28T23:56:56Z'
+  resolution: passed on run-tests re-run
+- ts: '2026-09-28T16:32:11Z'
+  phase: validation
+  kind: test_failure
+  object: DBO.ufnGetPurchaseOrderStatusText [c1]
+  detail: '{''error'': ''function dbo.ufngetpurchaseorderstatustext(integer) does
+    not exist\nLINE 1: SELECT dbo.ufngetpurchaseorderstatustext(2)\n               ^\nHINT:  No
+    function matches the given name and argument types. You might need to add explicit
+    type casts.''}'
+  status: resolved
+  last_seen: '2026-09-28T23:51:57Z'
+  occurrences: 2
+  resolved_ts: '2026-09-28T23:56:56Z'
+  resolution: passed on run-tests re-run
+- ts: '2026-09-28T16:32:13Z'
+  phase: validation
+  kind: test_failure
+  object: DBO.ufnGetPurchaseOrderStatusText [c2]
+  detail: '{''error'': ''function dbo.ufngetpurchaseorderstatustext(integer) does
+    not exist\nLINE 1: SELECT dbo.ufngetpurchaseorderstatustext(4)\n               ^\nHINT:  No
+    function matches the given name and argument types. You might need to add explicit
+    type casts.''}'
+  status: resolved
+  last_seen: '2026-09-28T23:51:58Z'
+  occurrences: 2
+  resolved_ts: '2026-09-28T23:56:56Z'
+  resolution: passed on run-tests re-run
+- ts: '2026-09-28T16:32:15Z'
+  phase: validation
+  kind: test_failure
+  object: DBO.ufnGetPurchaseOrderStatusText [c3]
+  detail: '{''error'': ''function dbo.ufngetpurchaseorderstatustext(integer) does
+    not exist\nLINE 1: SELECT dbo.ufngetpurchaseorderstatustext(0)\n               ^\nHINT:  No
+    function matches the given name and argument types. You might need to add explicit
+    type casts.''}'
+  status: resolved
+  last_seen: '2026-09-28T23:52:00Z'
+  occurrences: 2
+  resolved_ts: '2026-09-28T23:56:56Z'
+  resolution: passed on run-tests re-run
+- ts: '2026-09-28T16:32:16Z'
+  phase: validation
+  kind: test_failure
+  object: DBO.ufnGetSalesOrderStatusText [c1]
+  detail: '{''error'': ''function dbo.ufngetsalesorderstatustext(integer) does not
+    exist\nLINE 1: SELECT dbo.ufngetsalesorderstatustext(1)\n               ^\nHINT:  No
+    function matches the given name and argument types. You might need to add explicit
+    type casts.''}'
+  status: resolved
+  last_seen: '2026-09-28T23:52:01Z'
+  occurrences: 2
+  resolved_ts: '2026-09-28T23:56:56Z'
+  resolution: passed on run-tests re-run
+- ts: '2026-09-28T16:32:18Z'
+  phase: validation
+  kind: test_failure
+  object: DBO.ufnGetSalesOrderStatusText [c2]
+  detail: '{''error'': ''function dbo.ufngetsalesorderstatustext(integer) does not
+    exist\nLINE 1: SELECT dbo.ufngetsalesorderstatustext(5)\n               ^\nHINT:  No
+    function matches the given name and argument types. You might need to add explicit
+    type casts.''}'
+  status: resolved
+  last_seen: '2026-09-28T23:52:03Z'
+  occurrences: 2
+  resolved_ts: '2026-09-28T23:56:56Z'
+  resolution: passed on run-tests re-run
+- ts: '2026-09-28T16:32:19Z'
+  phase: validation
+  kind: test_failure
+  object: DBO.ufnGetSalesOrderStatusText [c3]
+  detail: '{''error'': ''function dbo.ufngetsalesorderstatustext(integer) does not
+    exist\nLINE 1: SELECT dbo.ufngetsalesorderstatustext(6)\n               ^\nHINT:  No
+    function matches the given name and argument types. You might need to add explicit
+    type casts.''}'
+  status: resolved
+  last_seen: '2026-09-28T23:52:05Z'
+  occurrences: 2
+  resolved_ts: '2026-09-28T23:56:56Z'
+  resolution: passed on run-tests re-run
+- ts: '2026-09-28T16:32:21Z'
+  phase: validation
+  kind: test_failure
+  object: DBO.ufnGetSalesOrderStatusText [c4]
+  detail: '{''error'': ''function dbo.ufngetsalesorderstatustext(integer) does not
+    exist\nLINE 1: SELECT dbo.ufngetsalesorderstatustext(7)\n               ^\nHINT:  No
+    function matches the given name and argument types. You might need to add explicit
+    type casts.''}'
+  status: resolved
+  last_seen: '2026-09-28T23:52:06Z'
+  occurrences: 2
+  resolved_ts: '2026-09-28T23:56:56Z'
+  resolution: passed on run-tests re-run
+- ts: '2026-09-28T16:32:27Z'
+  phase: validation
+  kind: test_failure
+  object: DBO.ufnLeadingZeros [c4]
+  detail: '{''source'': ''0000000*'', ''target'': ''*''}'
+  status: resolved
+  last_seen: '2026-09-28T23:52:12Z'
+  occurrences: 2
+  resolved_ts: '2026-09-28T23:56:56Z'
+  resolution: passed on run-tests re-run
+- ts: '2026-09-28T16:33:43Z'
+  phase: validation
+  kind: test_failure
+  object: DBO.uspLogError [l2]
+  detail: '{''error'': ''procedure parameter "p_errorlogid" is an output parameter
+    but corresponding argument is not writable\nCONTEXT:  PL/pgSQL function inline_code_block
+    line 1 at CALL''}'
+  status: resolved
+  last_seen: '2026-09-28T23:53:26Z'
+  occurrences: 2
+  resolved_ts: '2026-09-28T23:56:56Z'
+  resolution: passed on run-tests re-run

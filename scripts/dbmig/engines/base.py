@@ -7,6 +7,8 @@ and register it in ``engines/registry.py``.
 """
 from __future__ import annotations
 
+import contextlib
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 import re
@@ -37,6 +39,9 @@ def assert_identifier(*names: str) -> None:
 
 # Order in which an object-unit's components are concatenated for the LLM prompt.
 _COMPONENT_ORDER = [
+    # Engine-emitted advisories (SQL comments only, never executable DDL): e.g.
+    # an Oracle Text domain index that needs a design decision, not a 1:1 port.
+    ("advisories", "ADVISORIES (not DDL — decisions required before converting)"),
     ("table", "TABLE"),
     ("constraints", "CONSTRAINTS (PK / UNIQUE / CHECK)"),
     ("indexes", "INDEXES"),
@@ -75,6 +80,37 @@ class CodeObject:
     object_type: str
     name: str
     source_ddl: str
+
+
+def batch_by_size(items, size_of, *, max_items: int, max_bytes: int,
+                  key_of=None) -> List[list]:
+    """Group consecutive small items into shared prompts (order preserved).
+
+    An item larger than ``max_bytes`` gets its own batch; a batch closes at
+    ``max_items`` or ``max_bytes`` of source, or when ``key_of`` changes (e.g. the
+    code dependency tier, so a batch never mixes tiers). Fewer, fuller prompts
+    mean fewer per-prompt instruction/reference repeats and far fewer file reads
+    on schemas with hundreds or thousands of objects."""
+    batches: List[list] = []
+    cur: list = []
+    cur_bytes = 0
+    cur_key = object()
+    for it in items:
+        sz = max(0, int(size_of(it)))
+        k = key_of(it) if key_of else None
+        if cur and (k != cur_key or len(cur) >= max_items or cur_bytes + sz > max_bytes):
+            batches.append(cur)
+            cur, cur_bytes = [], 0
+        if sz > max_bytes:
+            batches.append([it])
+            cur_key = object()
+            continue
+        cur.append(it)
+        cur_bytes += sz
+        cur_key = k
+    if cur:
+        batches.append(cur)
+    return batches
 
 
 def batch_units(units: List[ObjectUnit], row_threshold: int,
@@ -150,10 +186,8 @@ class Engine(ABC):
 
     def close(self) -> None:
         if self._conn is not None:
-            try:
+            with contextlib.suppress(Exception):   # closing a dead connection
                 self._conn.close()
-            except Exception:
-                pass
             self._conn = None
 
     def __enter__(self):
@@ -211,10 +245,8 @@ class Engine(ABC):
         materializes in memory. Yields rows one at a time."""
         cur = self.connection.cursor()
         try:
-            try:
+            with contextlib.suppress(Exception):   # driver without arraysize
                 cur.arraysize = arraysize
-            except Exception:
-                pass
             cur.execute(sql, params or {}) if params else cur.execute(sql)
             if not cur.description:
                 return
@@ -228,16 +260,14 @@ class Engine(ABC):
             cur.close()
 
     def rollback(self) -> None:
-        try:
+        # Best effort: rollback runs on error paths where the connection may
+        # already be broken; the original error is what matters.
+        with contextlib.suppress(Exception):
             self.connection.rollback()
-        except Exception:
-            pass
 
     def commit(self) -> None:
-        try:
-            self.connection.commit()
-        except Exception:
-            pass
+        # A failed COMMIT means the work was NOT persisted — never swallow it.
+        self.connection.commit()
 
 
 class SourceEngine(Engine, ABC):
@@ -286,6 +316,19 @@ class SourceEngine(Engine, ABC):
     @abstractmethod
     def sample_rows(self, schema: str, table: str, n: int = 5):
         """Return (columns, rows) of up to n REAL rows."""
+
+    def set_session_schema(self, schema: str) -> None:
+        """Make unqualified names resolve to ``schema`` for this session, so test
+        probes work when the login user is not the schema owner (e.g. Oracle
+        ``admin`` vs owner ``DEMO``). Default no-op (engines without a session
+        schema switch, e.g. SQL Server, where the default schema is per-user)."""
+        return
+
+    def standalone_sequences(self, schema: str) -> List[Dict[str, Any]]:
+        """User-defined sequences NOT backing an identity column —
+        ``[{name, last_value}]``. These are not handled by identity reset and
+        must be synced to the source value at cutover. Default: none."""
+        return []
 
     @abstractmethod
     def primary_key_columns(self, schema: str, table: str) -> List[str]:
@@ -492,6 +535,29 @@ class TargetEngine(Engine, ABC):
         next generated key does not collide with migrated rows. Default no-op;
         target engines override as needed."""
         return
+
+    def identity_columns(self, schema: str) -> List[Dict[str, Any]]:
+        """Every identity/serial/AUTO_INCREMENT-backed column in ``schema``:
+        ``[{table, column, sequence}]`` (``sequence`` may be None for engines
+        without sequences). Used by ``dbmig reset-identity``. Default: none."""
+        return []
+
+    def identity_state(self, schema: str, table: str, column: str,
+                       sequence: Optional[str]) -> Dict[str, Any]:
+        """Current ``{max_id, next_value}`` for one identity column — the value
+        the NEXT generated key would take. Default: unknown."""
+        return {"max_id": None, "next_value": None}
+
+    def sync_identity(self, schema: str, table: str, column: str,
+                      sequence: Optional[str]) -> None:
+        """Set one identity so its next value is ``MAX(column)+1`` (or its start
+        value when the table is empty). Default no-op."""
+        return
+
+    def standalone_sequences(self, schema: str) -> List[Dict[str, Any]]:
+        """Sequences in ``schema`` NOT owned by a column — ``[{name, last_value}]``
+        (need a manual source-value sync at cutover). Default: none."""
+        return []
 
     def target_columns(self, schema: str, table: str) -> List[str]:
         """Return the existing target table's column names (lower-cased, ordinal

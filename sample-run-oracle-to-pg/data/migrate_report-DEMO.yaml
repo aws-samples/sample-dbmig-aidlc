@@ -1,58 +1,129 @@
 total_rows: 199
-results:
-- table: PERSISTENT_LOGINS
-  copied: 0
-  status: ok
-  error: null
-- table: ORDERS
-  copied: 0
-  status: ok
-  error: null
+tables:
+  CONDITIONS:
+    copied: 4
+    status: ok
+    error: null
+  CUSTOMERS:
+    copied: 3
+    status: ok
+    error: null
+  BOOK_TYPES:
+    copied: 3
+    status: ok
+    error: null
+  GENRES:
+    copied: 8
+    status: ok
+    error: null
+  ORDERS:
+    copied: 0
+    status: ok
+    error: null
+  PERSISTENT_LOGINS:
+    copied: 0
+    status: ok
+    error: null
+  PUBLISHERS:
+    copied: 10
+    status: ok
+    error: null
+  PASSWORD_RESET_TOKENS:
+    copied: 0
+    status: ok
+    error: null
+  ADDRESSES:
+    copied: 3
+    status: ok
+    error: null
+  BOOKS:
+    copied: 56
+    status: ok
+    error: null
+  LISTINGS:
+    copied: 56
+    status: ok
+    error: null
+  BOOKS_COVER:
+    copied: 56
+    status: ok
+    error: null
+  SHOPPING_CART_ITEMS:
+    copied: 0
+    status: ok
+    error: null
+  ORDER_ITEMS:
+    copied: 0
+    status: ok
+    error: null
+units:
 - table: CONDITIONS
+  shard: null
   copied: 4
   status: ok
   error: null
-- table: GENRES
-  copied: 8
+- table: CUSTOMERS
+  shard: null
+  copied: 3
   status: ok
   error: null
 - table: BOOK_TYPES
+  shard: null
   copied: 3
+  status: ok
+  error: null
+- table: GENRES
+  shard: null
+  copied: 8
+  status: ok
+  error: null
+- table: ORDERS
+  shard: null
+  copied: 0
+  status: ok
+  error: null
+- table: PERSISTENT_LOGINS
+  shard: null
+  copied: 0
   status: ok
   error: null
 - table: PUBLISHERS
+  shard: null
   copied: 10
   status: ok
   error: null
-- table: CUSTOMERS
-  copied: 3
-  status: ok
-  error: null
 - table: PASSWORD_RESET_TOKENS
+  shard: null
   copied: 0
   status: ok
   error: null
 - table: ADDRESSES
+  shard: null
   copied: 3
   status: ok
   error: null
 - table: BOOKS
+  shard: null
   copied: 56
   status: ok
   error: null
 - table: LISTINGS
+  shard: null
   copied: 56
   status: ok
   error: null
 - table: BOOKS_COVER
+  shard: null
   copied: 56
   status: ok
   error: null
 - table: SHOPPING_CART_ITEMS
+  shard: null
   copied: 0
   status: ok
   error: null
 - table: ORDER_ITEMS
+  shard: null
   copied: 0
   status: ok
   error: null

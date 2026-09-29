@@ -62,11 +62,35 @@ class FollowUp:
             return data.get("items", []) if isinstance(data, dict) else []
         return []
 
+    def _save(self, items: List[Dict[str, Any]]) -> None:
+        self.dir.mkdir(parents=True, exist_ok=True)
+        self.path.write_text(
+            yaml.safe_dump({"project": self.project, "items": items}, sort_keys=False))
+        self._render_md(items)
+
+    @staticmethod
+    def _now() -> str:
+        return _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
     def record(self, phase: str, kind: str, obj: str, detail: str,
                extra: Optional[Dict[str, Any]] = None) -> None:
+        """Log an item. If an OPEN item with the same phase/kind/object already
+        exists (e.g. the same test failing again on a re-run), it is updated in
+        place (latest detail + ``occurrences``) instead of duplicated."""
         items = self._load()
+        now = self._now()
+        for it in items:
+            if (it.get("status") == "open" and it.get("phase") == phase
+                    and it.get("kind") == kind and it.get("object") == obj):
+                it["detail"] = detail
+                it["last_seen"] = now
+                it["occurrences"] = int(it.get("occurrences", 1)) + 1
+                if extra:
+                    it.update(extra)
+                self._save(items)
+                return
         entry: Dict[str, Any] = {
-            "ts": _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "ts": now,
             "phase": phase,
             "kind": kind,
             "object": obj,
@@ -76,19 +100,39 @@ class FollowUp:
         if extra:
             entry.update(extra)
         items.append(entry)
-        self.dir.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(
-            yaml.safe_dump({"project": self.project, "items": items}, sort_keys=False))
-        self._render_md(items)
+        self._save(items)
+
+    def resolve(self, kind: str, objects, note: str = "passed on re-run") -> int:
+        """Auto-transition OPEN items of ``kind`` whose object is in ``objects``
+        to ``resolved`` (with timestamp + note). Returns how many changed. Used
+        by run-tests / compare so the ledger reflects a passing re-run without
+        manual edits. Items a human set to ``done`` are left untouched."""
+        wanted = set(objects)
+        if not wanted or not self.path.exists():
+            return 0
+        items = self._load()
+        now = self._now()
+        n = 0
+        for it in items:
+            if it.get("status") == "open" and it.get("kind") == kind \
+                    and it.get("object") in wanted:
+                it["status"] = "resolved"
+                it["resolved_ts"] = now
+                it["resolution"] = note
+                n += 1
+        if n:
+            self._save(items)
+        return n
 
     def _render_md(self, items: List[Dict[str, Any]]) -> None:
         open_n = sum(1 for i in items if i.get("status") == "open")
         lines = [
             f"# Follow-up items — {self.project}",
             "",
-            f"{open_n} open item(s). Recorded by dbmig (silent mode does not block "
+            f"{open_n} open item(s). Recorded by dbmig (silent mode does not block "  # nosemgrep: string-concat-in-list -- intentional: one long message split across lines
             "the run); resolve these manually, then set `status: done` in "
-            "`follow-up.yaml`.",
+            "`follow-up.yaml`. Items that pass on a later re-run are set to "
+            "`resolved` automatically.",
             "",
             "| When (UTC) | Phase | Kind | Object | Detail | Status |",
             "|---|---|---|---|---|---|",

@@ -66,7 +66,39 @@ Rules while fixing:
   attempt. If the same error survives two fix attempts, stop and reconsider the diagnosis rather
   than trying a third variation.
 
-## Step 3 — Tests
+## Step 3 — Boot against the migrated target (REQUIRED for runnable ORM/framework apps)
+
+**Compile + static scan are necessary but not sufficient.** In a real run, three ORM mismatches
+(`Boolean`↔`smallint`, `LocalDate`↔`timestamp`, `@Lob byte[]`↔`bytea`) passed a clean
+`mvn compile` and the inventory, and were only found by booting — one failure per table. Booting
+the app against the target is the only check that proves every entity mapping, so for any app
+that can be started (Spring Boot, Quarkus, ASP.NET, Django, …) it is a required step, not an
+optional smoke test.
+
+1. Point the app at the **migrated target** with credentials from the environment (never written
+   to a file), and set schema validation **on**, generation **off**:
+   - Spring/Hibernate: `SPRING_JPA_HIBERNATE_DDL_AUTO=validate` (never `update`/`create`).
+   - EF Core: start the app (no `EnsureCreated`/`Migrate`); run one query per `DbSet`.
+2. Start it, capture the log to a file, and wait for the ready line
+   (e.g. `Started <App> in N seconds`) or the first exception:
+   ```
+   DB_USERNAME=… DB_PASSWORD=… mvn -q spring-boot:run > /tmp/app-boot.log 2>&1 &
+   grep -nE "Started .* in|Schema-validation|wrong column type|APPLICATION FAILED|Caused by" /tmp/app-boot.log
+   ```
+3. Hibernate validation stops at the **first** bad table. For each failure: fix it (recipe from
+   the pair's `app-sql-rules.md` §5a), **add the missed row to the change plan/inventory type
+   cross-check** (it is an inventory gap), back up the file if not yet backed up, and boot again —
+   until it starts cleanly.
+4. Exercise the converted read paths over HTTP/CLI (home page, search, a detail page, an endpoint
+   per converted repository query) and record the status codes. Read-only: do not submit forms
+   that write to the target from this module.
+5. Stop the app.
+
+Record: command, ready line + startup time, each boot failure and its fix, and the endpoints hit.
+If the app cannot be started (missing external services, no network path to the target), mark
+every ORM mapping **`UNVERIFIED — not booted`** and say why; do not substitute compile success.
+
+## Step 4 — Tests
 
 Run the existing suite (`mvn -q test`, `./gradlew test`, `dotnet test`, `pytest -q`, `npm test`).
 
@@ -81,16 +113,20 @@ Run the existing suite (`mvn -q test`, `./gradlew test`, `dotnet test`, `pytest 
   each statement against it — that validates syntax *and* that every identifier resolves. Do this
   read-only; never write to the target from this module.
 
-## Step 4 — Report — `03-validation/build-report.md`
+## Step 5 — Report — `03-validation/build-report.md`
 
 1. **Build**: command, exit status, before/after error counts.
-2. **Fixes applied**: file, line, error, fix, and whether it was migration-caused or pre-existing.
-3. **Tests**: command, passed/failed/skipped, and which converted sites are actually covered.
-4. **Verification matrix** — per converted site, one of:
-   `compiled` · `prepared against target` · `covered by test` · **`UNVERIFIED`** (with why).
-5. **Remaining behavioural risks** with a named owner — these survive a green build by definition.
-6. **Residual work**: deferred items, blocked items, tests that should exist but do not.
+2. **Boot**: command, ready line/startup time (or why it could not be booted), each boot-time
+   failure with its fix, endpoints exercised with status codes.
+3. **Fixes applied**: file, line, error, fix, and whether it was migration-caused or pre-existing
+   — and for boot-time fixes, the inventory gap that let it through.
+4. **Tests**: command, passed/failed/skipped, and which converted sites are actually covered.
+5. **Verification matrix** — per converted site, one of:
+   `compiled` · `booted (validate)` · `prepared against target` · `covered by test` ·
+   **`UNVERIFIED`** (with why).
+6. **Remaining behavioural risks** with a named owner — these survive a green build by definition.
+7. **Residual work**: deferred items, blocked items, tests that should exist but do not.
 
 Be explicit about the limit of what a build proves: compilation shows the code is well-formed, not
-that a converted query returns the same rows. Only the equivalence tests, a live `PREPARE`, or a
-covering test do that.
+that a converted query returns the same rows or that an entity maps to its column. Only the boot
+with schema validation, the equivalence tests, a live `PREPARE`, or a covering test do that.

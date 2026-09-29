@@ -216,10 +216,10 @@ def _write_report(ws: Path, schema: str, target_schema: str, results: List[dict]
     lines = [
         f"# DMS SC diff vs live target — schema `{schema}` (target `{target_schema}`)",
         "",
-        f"_Generated {_now()} · source {smap.get('source_engine','?')} → "
+        f"_Generated {_now()} · source {smap.get('source_engine','?')} → "  # nosemgrep: string-concat-in-list -- intentional: one long message split across lines
         f"target {smap.get('target_engine','?')}_",
         "",
-        f"- MATCH: **{counts[MATCH]}**  ·  MISSING: **{counts[MISSING]}**  ·  "
+        f"- MATCH: **{counts[MATCH]}**  ·  MISSING: **{counts[MISSING]}**  ·  "  # nosemgrep: string-concat-in-list -- intentional: one long message split across lines
         f"UNMATCHED (system-named): **{counts[UNMATCHED]}**  ·  EXTRA: **{counts[EXTRA]}**",
         "",
     ]
@@ -235,7 +235,7 @@ def _write_report(ws: Path, schema: str, target_schema: str, results: List[dict]
     unm = [r for r in results if r["verdict"] == UNMATCHED]
     if unm:
         lines += [f"## UNMATCHED by name ({len(unm)}) — system-named constraints/indexes",
-                  "", "DMS SC assigns its own names to PK/UNIQUE/CHECK constraints and "
+                  "", "DMS SC assigns its own names to PK/UNIQUE/CHECK constraints and "  # nosemgrep: string-concat-in-list -- intentional: one long message split across lines
                   "many indexes, so a name miss here does **not** mean the object is "
                   "absent. Verify these by table + column set (a later capture/compare "
                   "step will do this automatically).", "",
@@ -249,7 +249,7 @@ def _write_report(ws: Path, schema: str, target_schema: str, results: List[dict]
         for e in extras:
             lines.append(f"| `{e['target_name']}` | {e['kind']} |")
         lines.append("")
-    lines += ["## MATCH", "", f"{counts[MATCH]} object(s) present and consistent. "
+    lines += ["## MATCH", "", f"{counts[MATCH]} object(s) present and consistent. "  # nosemgrep: string-concat-in-list -- intentional: one long message split across lines
               "(Full per-object detail is in `dms-sc-map-<SCHEMA>.json`.)", ""]
     (ws / "01-assessment" / f"dms-sc-diff-{schema.upper()}.md").write_text("\n".join(lines))
 
@@ -265,13 +265,13 @@ def _update_report_section(project: str, schema: str, counts: Counter,
     body = [
         f"#### Schema `{schema}`",
         "",
-        f"- MATCH **{counts[MATCH]}**, MISSING **{counts[MISSING]}**, "
+        f"- MATCH **{counts[MATCH]}**, MISSING **{counts[MISSING]}**, "  # nosemgrep: string-concat-in-list -- intentional: one long message split across lines
         f"UNMATCHED/system-named **{counts[UNMATCHED]}**, EXTRA **{counts[EXTRA]}**.",
         "",
     ]
     if miss:
         body += [
-            f"**{len(miss)} object(s) MISSING on the target** — DMS SC converted them but "
+            f"**{len(miss)} object(s) MISSING on the target** — DMS SC converted them but "  # nosemgrep: string-concat-in-list -- intentional: one long message split across lines
             "they were not applied (commonly foreign keys / triggers). Resolve with "
             f"`dbmig diff-target --schema {schema} --resolve apply-ours --apply`, or "
             "recreate them in the load phase. Examples:",

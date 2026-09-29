@@ -1,0 +1,25 @@
+object: uspProcessRefunds
+schema: DBO
+type: procedure
+notes: 3 real 'Refund Requested' orders -> 3 Refunded + 3 new Closed coupons with the next TicketIDs.
+cases:
+- id: p1
+  type: procedure
+  call_source: EXEC dbo.uspProcessRefunds
+  call_target: CALL dbo.uspprocessrefunds()
+  verify:
+  - name: coupons
+    source_sql: SELECT COUNT(*) FROM dbo.Coupons
+    target_sql: SELECT count(*) FROM dbo.coupons
+  - name: refunded
+    source_sql: SELECT COUNT(*) FROM dbo.Shopping WHERE Status = 'Refunded'
+    target_sql: SELECT count(*) FROM dbo.shopping WHERE status = 'Refunded'
+  - name: max_ticket
+    source_sql: SELECT MAX(TicketID) FROM dbo.Coupons
+    target_sql: SELECT max(ticketid) FROM dbo.coupons
+  - name: refund_orders
+    source_sql: SELECT ISNULL(SUM(OrderID),0) FROM dbo.Coupons WHERE IssueDescription LIKE 'Refund processed%'
+    target_sql: SELECT coalesce(sum(orderid),0) FROM dbo.coupons WHERE issuedescription LIKE 'Refund processed%'
+  - name: refund_text
+    source_sql: SELECT MAX(IssueDescription) FROM dbo.Coupons WHERE IssueDescription LIKE 'Refund processed%'
+    target_sql: SELECT max(issuedescription) FROM dbo.coupons WHERE issuedescription LIKE 'Refund processed%'

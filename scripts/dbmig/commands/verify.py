@@ -69,8 +69,8 @@ def run(args) -> int:
     try:
         report.update_phase(args.project, report.VALIDATION,
                             ver.render_validation_section(ws))
-    except Exception:  # noqa: BLE001 - report refresh must not fail the command
-        pass
+    except Exception as exc:  # noqa: BLE001 - report refresh must not fail the command
+        console.warn(f"migration-report.md not refreshed: {exc}")
 
     console.ok(f"marked {n} object(s) as '{set_to}' in schema {schema}")
     _list(schema, ledger)

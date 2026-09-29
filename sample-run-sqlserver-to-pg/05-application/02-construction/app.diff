@@ -1,0 +1,142 @@
+diff --git a/app/Bookstore.Data/ApplicationDbContext.cs b/app/Bookstore.Data/ApplicationDbContext.cs
+index 643ecec..bcfddaa 100644
+--- a/app/Bookstore.Data/ApplicationDbContext.cs
++++ b/app/Bookstore.Data/ApplicationDbContext.cs
+@@ -1,4 +1,4 @@
+-﻿using Bookstore.Domain.Addresses;
++using Bookstore.Domain.Addresses;
+ using Bookstore.Domain.Books;
+ using Bookstore.Domain.Carts;
+ using Bookstore.Domain.Customers;
+@@ -47,12 +47,38 @@ namespace Bookstore.Data
+             modelBuilder.Entity<Offer>().HasOne(x => x.Genre).WithMany().HasForeignKey(x => x.GenreId).OnDelete(DeleteBehavior.Restrict);
+             modelBuilder.Entity<Offer>().HasOne(x => x.Condition).WithMany().HasForeignKey(x => x.ConditionId).OnDelete(DeleteBehavior.Restrict);
+ 
+-            modelBuilder.Entity<Order>().ToTable("Orders");
++            // dbmig-aidlc: the SOURCE table is dbo.[Order] (singular); "Orders" never existed in the
++            // source schema (pre-existing model/DB drift that SQL Server's EnsureCreated masked).
++            // Conformed to the migrated table name.
++            modelBuilder.Entity<Order>().ToTable("Order");
+             modelBuilder.Entity<Order>().HasOne(x => x.Customer).WithMany().OnDelete(DeleteBehavior.Restrict);
+ 
++            // dbmig-aidlc: bit -> boolean on the target. These two model properties are int (0/1);
++            // SQL Server accepted `isactive = 1`, PostgreSQL raises 42883 (boolean = integer).
++            // Convert at the mapping so the int model and all LINQ (== 1 / = 0) keep working.
++            modelBuilder.Entity<Address>().Property(x => x.IsActive).HasConversion(v => v != 0, v => v ? 1 : 0);
++            modelBuilder.Entity<ShoppingCartItem>().Property(x => x.WantToBuy).HasConversion(v => v != 0, v => v ? 1 : 0);
++
+             PopulateDatabase(modelBuilder);
+ 
+             base.OnModelCreating(modelBuilder);
++
++            // dbmig-aidlc: the migration folded identifiers to lower case (PostgreSQL convention).
++            // EF Core quotes identifiers, so "Book"/"AddressLine1" would no longer resolve; fold the
++            // model's table and column names once here instead of editing every query.
++            modelBuilder.HasDefaultSchema("dbo");
++            foreach (var entity in modelBuilder.Model.GetEntityTypes())
++            {
++                entity.SetTableName(entity.GetTableName()?.ToLowerInvariant());
++                foreach (var property in entity.GetProperties())
++                    property.SetColumnName(property.GetColumnName().ToLowerInvariant());
++                foreach (var key in entity.GetKeys())
++                    key.SetName(key.GetName()?.ToLowerInvariant());
++                foreach (var fk in entity.GetForeignKeys())
++                    fk.SetConstraintName(fk.GetConstraintName()?.ToLowerInvariant());
++                foreach (var index in entity.GetIndexes())
++                    index.SetDatabaseName(index.GetDatabaseName()?.ToLowerInvariant());
++            }
+         }
+     }
+ }
+\ No newline at end of file
+diff --git a/app/Bookstore.Data/Bookstore.Data.csproj b/app/Bookstore.Data/Bookstore.Data.csproj
+index 96faca7..0aa1a7d 100644
+--- a/app/Bookstore.Data/Bookstore.Data.csproj
++++ b/app/Bookstore.Data/Bookstore.Data.csproj
+@@ -1,4 +1,4 @@
+-﻿<?xml version="1.0" encoding="utf-8"?>
++<?xml version="1.0" encoding="utf-8"?>
+ <Project Sdk="Microsoft.NET.Sdk">
+   <PropertyGroup>
+     <TargetFramework>net8.0</TargetFramework>
+@@ -14,7 +14,7 @@
+     <PackageReference Include="Microsoft.Build" Version="17.11.48" />
+     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.11" />
+     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.11" />
+-    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.11" />
++    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />
+     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.11" />
+     <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
+     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.1" />
+diff --git a/app/Bookstore.Web/Bookstore.Web.csproj b/app/Bookstore.Web/Bookstore.Web.csproj
+index b81e9a7..b0a531c 100644
+--- a/app/Bookstore.Web/Bookstore.Web.csproj
++++ b/app/Bookstore.Web/Bookstore.Web.csproj
+@@ -1,4 +1,4 @@
+-﻿<?xml version="1.0" encoding="utf-8"?>
++<?xml version="1.0" encoding="utf-8"?>
+ <Project Sdk="Microsoft.NET.Sdk.Web">
+   <PropertyGroup>
+     <TargetFramework>net8.0</TargetFramework>
+@@ -18,7 +18,7 @@
+     <PackageReference Include="AWSSDK.CloudWatchLogs" Version="4.0.9.1" />
+     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="8.0.21" />
+     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.11" />
+-    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.11" />
++    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />
+     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.20" />
+     <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="8.0.7" />
+   </ItemGroup>
+diff --git a/app/Bookstore.Web/Startup/ServicesSetup.cs b/app/Bookstore.Web/Startup/ServicesSetup.cs
+index b9af9b6..edfe432 100644
+--- a/app/Bookstore.Web/Startup/ServicesSetup.cs
++++ b/app/Bookstore.Web/Startup/ServicesSetup.cs
+@@ -1,11 +1,11 @@
+-﻿using Amazon.Rekognition;
++using Amazon.Rekognition;
+ using Amazon.S3;
+ using Amazon.SecretsManager.Model;
+ using Amazon.SecretsManager;
+ using Bookstore.Data;
+ using Bookstore.Domain.AdminUser;
+ using Microsoft.AspNetCore.Builder;
+-using Microsoft.Data.SqlClient;
++using Npgsql;
+ using Microsoft.EntityFrameworkCore;
+ using Microsoft.Extensions.Configuration;
+ using Microsoft.Extensions.DependencyInjection;
+@@ -31,7 +31,11 @@ namespace Bookstore.Web.Startup
+             builder.Services.AddAWSService<IAmazonRekognition>();
+ 
+             var connString = GetDatabaseConnectionString(builder.Configuration);
+-            builder.Services.AddDbContext<ApplicationDbContext>(option => option.UseSqlServer(connString));
++            // dbmig-aidlc: SQL Server -> PostgreSQL. The migrated columns are timestamp WITHOUT time zone
++            // (from datetime2). Npgsql 6+ refuses DateTime.Kind=Utc for that type; the legacy switch keeps
++            // SQL Server's 'store the DateTime as given' semantics (like-for-like, no model change).
++            AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
++            builder.Services.AddDbContext<ApplicationDbContext>(option => option.UseNpgsql(connString));
+             builder.Services.AddSession();
+ 
+             return builder;
+@@ -88,11 +92,17 @@ namespace Bookstore.Web.Startup
+                     PropertyNameCaseInsensitive = true
+                 });
+ 
+-                var partialConnString = $"Server={dbSecrets.Host},{dbSecrets.Port}; Initial Catalog=BobsUsedBookStore;MultipleActiveResultSets=true; Integrated Security=false;TrustServerCertificate=true;";
+-
+-                var builder = new SqlConnectionStringBuilder(partialConnString)
++                // Initial Catalog -> Database; schema via SearchPath; MARS / TrustServerCertificate have no
++                // Npgsql equivalent (MARS is unused by EF Core here). TLS required (Aurora).
++                var builder = new NpgsqlConnectionStringBuilder
+                 {
+-                    UserID = dbSecrets.Username,
++                    Host = dbSecrets.Host,
++                    Port = dbSecrets.Port,
++                    // Target database name decided at intake (source: Initial Catalog=BobsUsedBookStore).
++                    Database = configuration["dbname"] ?? "bobsusedbookstore",
++                    SearchPath = "dbo",
++                    SslMode = SslMode.Require,
++                    Username = dbSecrets.Username,
+                     Password = dbSecrets.Password
+                 };
+ 

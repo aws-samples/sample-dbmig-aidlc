@@ -158,7 +158,7 @@ def render_validation_section(ws) -> str:
     lines = [
         f"## {'Validation & Testing'}",
         "",
-        "VERIFY objects (kept from DMS SC but requiring proof — e.g. `5444` ML/GenAI "
+        "VERIFY objects (kept from DMS SC but requiring proof — e.g. `5444` ML/GenAI "  # nosemgrep: string-concat-in-list -- intentional: one long message split across lines
         "conversions) are tracked here so a verified object is **not re-verified**. "
         "Prove equivalence with `gen-tests` / `run-tests`, then record the verdict with "
         "`dbmig verify --schema <S> --set verified --objects <names>`.",

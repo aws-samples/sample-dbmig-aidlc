@@ -138,7 +138,7 @@ def _update_migration_report(project: str, ws_root: Path, result: ImportResult,
         "",
         "### Entry path: imported an existing AWS DMS Schema Conversion (DMS SC) project",
         "",
-        f"- Source **{result.source_engine or '?'}** → Target "
+        f"- Source **{result.source_engine or '?'}** → Target "  # nosemgrep: string-concat-in-list -- intentional: one long message split across lines
         f"**{result.target_engine or '?'}**",
         f"- Project workspace: `{ws_root}`",
         f"- Schemas imported: {', '.join(schemas)}",
@@ -157,7 +157,7 @@ def _update_migration_report(project: str, ws_root: Path, result: ImportResult,
         "",
         "### What you should be aware of",
         "",
-        f"- **{grand[MANUAL]} object(s) need manual reconversion** (CRITICAL/HIGH action "
+        f"- **{grand[MANUAL]} object(s) need manual reconversion** (CRITICAL/HIGH action "  # nosemgrep: string-concat-in-list -- intentional: one long message split across lines
         "items or explicit \"convert manually\" instructions). They are marked "
         "`needs_human` in the code manifest and must be converted before use"
         + (":" if manual_all else "."),
@@ -165,7 +165,7 @@ def _update_migration_report(project: str, ws_root: Path, result: ImportResult,
     for m in manual_all[:20]:
         lines.append(f"  - `{m}`")
     lines += [
-        f"- **{grand[VERIFY]} object(s) are probabilistic (GenAI/ML) or advisory "
+        f"- **{grand[VERIFY]} object(s) are probabilistic (GenAI/ML) or advisory "  # nosemgrep: string-concat-in-list -- intentional: one long message split across lines
         "conversions** kept from DMS SC — they must be proven equivalent and marked "
         "verified (see the Validation section).",
         f"- **{grand[ACCEPT]} object(s) were accepted as-is** (no action items).",
@@ -183,16 +183,16 @@ def _update_migration_report(project: str, ws_root: Path, result: ImportResult,
         "- Triage report per schema: `01-assessment/dms-sc-classification-<SCHEMA>.md`",
         "- Full mapping + classification: `01-assessment/dms-sc-map-<SCHEMA>.json`",
         "- DDL snapshots: `01-assessment/dms-sc/<SCHEMA>/{source,target}/*.sql`",
-        "- Code manifest (DMS SC output pre-loaded): "
+        "- Code manifest (DMS SC output pre-loaded): "  # nosemgrep: string-concat-in-list -- intentional: one long message split across lines
         "`02-construction/code-manifest-<SCHEMA>.yaml`",
         "",
         "### Next steps",
         "",
         "1. Review the per-schema triage reports.",
-        "2. Run `diff-target` to reconcile every object against the **live** target "
+        "2. Run `diff-target` to reconcile every object against the **live** target "  # nosemgrep: string-concat-in-list -- intentional: one long message split across lines
         "(resolve conflicts). *(Phase 2 — in progress)*",
         "3. Reconvert MANUAL objects with `convert-code` → `apply-schema --code`.",
-        "4. Prove VERIFY objects with `gen-tests` / `run-tests`, then record verdicts "
+        "4. Prove VERIFY objects with `gen-tests` / `run-tests`, then record verdicts "  # nosemgrep: string-concat-in-list -- intentional: one long message split across lines
         "with `dbmig verify` (tracked in the Validation section).",
         "",
     ]
@@ -337,9 +337,9 @@ def _report_md(project: str, schema: str, target_schema: str,
         f"# DMS SC import — triage for schema `{schema}`",
         "",
         f"- Project: **{project}**",
-        f"- Source: **{result.source_engine or '?'}** → Target: "
+        f"- Source: **{result.source_engine or '?'}** → Target: "  # nosemgrep: string-concat-in-list -- intentional: one long message split across lines
         f"**{result.target_engine or '?'}** (target schema `{target_schema}`)",
-        f"- Objects: **{sum(counts.values())}** "
+        f"- Objects: **{sum(counts.values())}** "  # nosemgrep: string-concat-in-list -- intentional: one long message split across lines
         f"(storage={by_cat.get('storage',0)}, code={by_cat.get('code',0)}, "
         f"other={by_cat.get('other',0)+by_cat.get('server',0)})",
         "",
@@ -351,7 +351,7 @@ def _report_md(project: str, schema: str, target_schema: str,
         f"| VERIFY | {counts[VERIFY]} | keep, but prove with equivalence tests (gen-tests/run-tests) |",
         f"| MANUAL | {counts[MANUAL]} | must be reconverted (convert-code) |",
         "",
-        "> **Policy:** MANUAL = any action item of severity CRITICAL/HIGH, or an explicit "
+        "> **Policy:** MANUAL = any action item of severity CRITICAL/HIGH, or an explicit "  # nosemgrep: string-concat-in-list -- intentional: one long message split across lines
         "\"convert your source code manually\" / method-stub instruction. VERIFY = any "
         "remaining action item (incl. `5444` ML/GenAI and LOW/MEDIUM advisories) or a "
         "GenAI-generated span. ACCEPT = no action items. Tune in `dbmig/dmssc/classify.py`.",
@@ -403,7 +403,7 @@ def _report_md(project: str, schema: str, target_schema: str,
 
     if result.unmatched_action_items:
         lines += ["## Unmatched action items (schema/column level)", "",
-                  "Action items reported against nodes that did not map to a parsed "
+                  "Action items reported against nodes that did not map to a parsed "  # nosemgrep: string-concat-in-list -- intentional: one long message split across lines
                   "object (e.g. column- or schema-level). Review manually.", ""]
         for name, items in result.unmatched_action_items.items():
             codes = ", ".join(sorted({a.code for a in items}))

@@ -60,12 +60,22 @@ def run(args) -> int:
                                   kind="data_mismatch", obj=table,
                                   detail=f"source={sc} target={tc}")
             else:
-                console.ok(f"{table}: {sc:,} rows match")
+                console.item_ok(f"{table}: {sc:,} rows match")
             results.append({"table": table, "source_rows": sc,
                             "target_rows": tc, "status": status})
     finally:
         source.close()
         target.close()
+
+    console.flush_items("03-validation/reconcile_report-<SCHEMA>.yaml")
+    # Tables that now match close any earlier mismatch/error ledger items.
+    ok_tables = [r["table"] for r in results if r.get("status") == "match"]
+    n_resolved = followup.resolve("data_mismatch", ok_tables,
+                                  note="matched on compare re-run")
+    n_resolved += followup.resolve("reconcile_error", ok_tables,
+                                   note="matched on compare re-run")
+    if n_resolved:
+        console.ok(f"{n_resolved} previously-open follow-up item(s) auto-resolved")
 
     outdir = config.workspace_dir(args.project) / "03-validation"
     outdir.mkdir(parents=True, exist_ok=True)

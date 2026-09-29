@@ -1,0 +1,14 @@
+object: VwOpenCoupons
+schema: DBO
+type: function
+notes: 'BEHAVIOURAL: filters OSUser = CURRENT_USER; every row has OSUser ''sqladmin'' and neither login is that user, so both return 0 rows — the user-mapping difference is NOT proven here (manual review).
+  The day arithmetic is checked on the unfiltered base.'
+cases:
+- id: v1
+  type: function
+  source_sql: SELECT COUNT(*) FROM dbo.VwOpenCoupons
+  target_sql: SELECT count(*) FROM dbo.vwopencoupons
+- id: v2
+  type: function
+  source_sql: SELECT SUM(DATEDIFF(DAY, CreatedDate, GETDATE())) FROM dbo.Coupons WHERE Status = 'Open'
+  target_sql: SELECT sum(current_date - createddate::date) FROM dbo.coupons WHERE status = 'Open'

@@ -6,8 +6,9 @@ build-backend = "setuptools.build_meta"
 name = "dbmig-aidlc"
 version = "0.2.0"
 description = "AI-DLC database migration toolkit — Oracle/SQL Server to PostgreSQL/MySQL (LLM-driven conversion by Kiro)"
-readme = "../README.md"
-requires-python = ">=3.9"
+# (no `readme` key: setuptools refuses files outside this directory, and the
+# project README lives at the repo root — ../README.md broke `pip install -e scripts/`)
+requires-python = ">=3.10"  # psycopg>=3.3 (security floor) requires Python 3.10+
 license = { text = "MIT" }
 # Minimum versions raised to the tested set; each floor is above any known
 # security-vulnerable release. pymysql must stay >=1.1.1 (1.1.0 → CVE-2024-36039).
@@ -29,13 +30,14 @@ test = ["pytest>=7.0"]
 dbmig = "dbmig.cli:main"
 
 # The package lives in this directory (scripts/), so install from here:
-#   pip install -e scripts/
+#   python3 -m venv .venv && .venv/bin/pip install -e scripts/   (repo-local venv; never global)
 [tool.setuptools]
 packages = [
     "dbmig",
     "dbmig.engines",
     "dbmig.commands",
     "dbmig.conversion",
+    "dbmig.dmssc",
 ]
 
 [tool.pytest.ini_options]

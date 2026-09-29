@@ -1,0 +1,11 @@
+object: uspGetProductData
+schema: DBO
+type: function
+notes: 'CURSOR VARYING OUTPUT -> set-returning function: the SQL Server side drains the cursor and counts rows / sums a column.'
+cases:
+- id: r1
+  type: function
+  source_sql: SET NOCOUNT ON; DECLARE @c CURSOR, @n int = 0, @s bigint = 0, @id int, @nm nvarchar(100), @pn nvarchar(25), @ss smallint; EXEC dbo.uspGetProductData @my_cursor = @c OUTPUT; FETCH NEXT FROM
+    @c INTO @id, @nm, @pn, @ss; WHILE @@FETCH_STATUS = 0 BEGIN SET @n += 1; SET @s += @ss; FETCH NEXT FROM @c INTO @id, @nm, @pn, @ss; END; CLOSE @c; DEALLOCATE @c; SELECT CAST(@n AS bigint) * 100000 +
+    @s
+  target_sql: SELECT count(*) * 100000 + sum(safetystocklevel) FROM dbo.uspgetproductdata()

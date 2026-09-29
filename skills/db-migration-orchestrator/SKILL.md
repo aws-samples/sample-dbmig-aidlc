@@ -37,6 +37,28 @@ Before anything else, create a task list with the phases and the intake so progr
 visible: Intake → Inception → (gate) → Construction → (gate) → Validation → (gate) →
 Operations → (gate).
 
+## Step 0a — Location check (before intake)
+
+The framework only works from the **root of the dbmig-aidlc checkout**: that is where
+`.kiro/steering/`, `skills/`, `engines/`, `connections.yaml`, `migration-config.yaml` and
+`migrations/` live. Verify before asking any intake question:
+
+```bash
+pwd; ls -d skills engines scripts/dbmig dbmig 2>&1
+```
+
+- All four present → continue.
+- Current directory is a **subfolder** of the checkout (e.g. `scripts/`, `migrations/x/`) →
+  run every command from the root (use the `working_dir` of the root, or `cd <root> && …`).
+- Current directory is **outside** the checkout (the session was started elsewhere) → stop and
+  tell the user: *"This session is running in `<pwd>`, not in the dbmig-aidlc folder, so the
+  project instructions (phases, gates, safety rules) are not loaded. Exit, `cd` into the
+  dbmig-aidlc folder, and start the assistant again (`kiro-cli chat` or `claude`)."* If you can find the checkout (e.g. a `dbmig-aidlc/`
+  subfolder), give its path. Do not create `connections.yaml` or `migrations/` outside it.
+
+`./dbmig` enforces the same rule: from outside the checkout it refuses to run (exit 2) unless
+a connections file is passed explicitly with `--conn`.
+
 ## Step 1 — Intake interview
 
 Confirm these inputs, asking only for what is missing. Echo back a summary before proceeding.
@@ -46,6 +68,22 @@ Confirm these inputs, asking only for what is missing. Echo back a summary befor
 3. **Connection file** — path to `connections.yaml`.
    - If it does not exist, copy `templates/connections.example.yaml` to `connections.yaml`,
      tell the user to fill it in (using `${ENV_VAR}` references for secrets), and **pause**.
+   - **Credentials in AWS Secrets Manager?** If the user gives a secret name/ARN (and
+     region/profile) instead of filling the file, retrieve it yourself with the AWS CLI —
+     `dbmig` has no Secrets Manager integration and does not need one:
+     1. Read only the **keys** first, never print the value:
+        `aws secretsmanager get-secret-value --secret-id <ID> --region <R> --profile <P> --query SecretString --output text | python3 -c 'import json,sys; print(sorted(json.load(sys.stdin)))'`
+     2. Write the **non-secret** fields (`engine`, `host`, `port`, `username`,
+        `service_name`/`sid`/`database`) into `connections.yaml` as literal values; keep
+        `password: ${ORA_PASSWORD}` / `${PG_PASSWORD}` (etc.) as env-var references. The
+        password is never written to disk or echoed.
+     3. Supply the password per command from the secret, e.g.
+        `ORA_PASSWORD="$(aws secretsmanager get-secret-value --secret-id <ID> --region <R> --profile <P> --query SecretString --output text | python3 -c 'import json,sys; print(json.load(sys.stdin)["password"])')" ./dbmig test-connection --side both`
+        (each shell call is a fresh process, so repeat the export on every `dbmig` run).
+     4. **Oracle `dbname` is ambiguous** (RDS-style secrets store e.g. `dbname: ORCL`): it
+        may be a service_name or a SID. Try `service_name` first; if `test-connection`
+        fails with a listener/service error, retry with `sid`, and tell the user which worked.
+     Echo back the resulting (password-free) connection summary for confirmation.
 4. **Migration scope** — path to `migration-config.yaml` (schemas, object types, include/
    exclude). If missing, scaffold from `templates/migration-config.example.yaml`.
 5. **Strategy** — schema_only / data_only / full.
@@ -70,14 +108,33 @@ supported and stop.
 ## Step 2 — Connectivity pre-flight gate
 
 The `dbmig` Python package connects with Python drivers (oracledb thin + psycopg) — there
-are **no native client tools to install or verify**. Confirm the package deps are present
-(`pip install -r scripts/requirements.txt`), then test connectivity:
+are **no native client tools to install or verify**. It runs from a **repo-local virtual
+environment** (`.venv/`), never from the user's global Python:
+
+1. If `.venv/bin/python` (Windows: `.venv\Scripts\python.exe`) does not exist, tell the user
+   you will create an isolated environment inside the repo (it does not touch their other
+   Python projects; `rm -rf .venv` undoes it), then run:
+   ```bash
+   python3 -m venv .venv && .venv/bin/pip install -e scripts/
+   ```
+   **Never** run `pip install` against the system/user Python and never use `sudo pip` — the
+   toolkit's security floors (`cryptography>=46`, `pyOpenSSL>=26`) can upgrade packages other
+   tools depend on. **Python 3.10+ is required** — check `python3 --version` first; if it is
+   older (e.g. `/usr/bin/python3` is 3.9 on Amazon Linux 2023), build the venv with a newer
+   interpreter (`python3.12 -m venv .venv`). If the install reports `No matching distribution`
+   for psycopg, the venv was built with a too-old Python: `rm -rf .venv` and recreate it.
+   If `python3 -m venv` is unavailable (e.g. Debian without `python3-venv`),
+   stop and tell the user what to install rather than falling back to a global install.
+2. Always invoke the toolkit as **`./dbmig <command>`** from the repo root (it uses `.venv`
+   automatically; no `activate` needed across shell calls). Do not use `python -m dbmig`
+   from the repo root — it fails with `No module named dbmig`.
+3. Test connectivity:
 
 ```bash
-python -m dbmig test-connection --side both
+./dbmig test-connection --side both
 ```
 
-- If a driver is missing, the command exits non-zero asking you to install requirements.
+- If a driver is missing, the command exits non-zero with the venv install command — run it.
 - If connectivity fails, surface the actionable error and stop. Do not proceed to Inception
   with a broken connection.
 

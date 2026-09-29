@@ -1,0 +1,24 @@
+object: uspDeleteOldCoupons
+schema: DBO
+type: procedure
+notes: '26 Closed coupons resolved in 2022: 30 days deletes them all; 100000 days deletes none.'
+cases:
+- id: p1
+  type: procedure
+  call_source: EXEC dbo.uspDeleteOldCoupons @DaysOld = 30
+  call_target: CALL dbo.uspdeleteoldcoupons(30)
+  verify:
+  - name: coupons
+    source_sql: SELECT COUNT(*) FROM dbo.Coupons
+    target_sql: SELECT count(*) FROM dbo.coupons
+  - name: closed
+    source_sql: SELECT COUNT(*) FROM dbo.Coupons WHERE Status = 'Closed'
+    target_sql: SELECT count(*) FROM dbo.coupons WHERE status = 'Closed'
+- id: p2
+  type: procedure
+  call_source: EXEC dbo.uspDeleteOldCoupons @DaysOld = 100000
+  call_target: CALL dbo.uspdeleteoldcoupons(100000)
+  verify:
+  - name: coupons
+    source_sql: SELECT COUNT(*) FROM dbo.Coupons
+    target_sql: SELECT count(*) FROM dbo.coupons

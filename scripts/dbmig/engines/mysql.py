@@ -9,6 +9,8 @@ with backtick-quoted identifiers (database.table).
 """
 from __future__ import annotations
 
+import contextlib
+
 from typing import Any, Iterable, List, Optional, Sequence, Tuple
 
 
@@ -83,10 +85,8 @@ def apply_sql(conn, sql: str) -> Tuple[bool, Optional[str]]:
         conn.commit()
         return True, None
     except Exception as exc:  # noqa: BLE001
-        try:
+        with contextlib.suppress(Exception):   # connection may be broken already
             conn.rollback()
-        except Exception:
-            pass
         return False, str(exc).strip()
 
 
@@ -193,17 +193,38 @@ class MySQLEngine(TargetEngine):
 
     def reset_identity(self, schema, table):
         # Set AUTO_INCREMENT to MAX(col)+1 after a data load.
+        for ic in self.identity_columns(schema):
+            if ic["table"] == table:
+                self.sync_identity(schema, table, ic["column"], None)
+
+    def identity_columns(self, schema):
+        # MySQL has no sequences: at most one AUTO_INCREMENT column per table.
+        _, rows = self.fetch(
+            "SELECT table_name, column_name FROM information_schema.columns "
+            "WHERE table_schema = %s AND extra LIKE '%%auto_increment%%' "
+            "ORDER BY table_name", (schema,))
+        return [{"table": r[0], "column": r[1], "sequence": None} for r in rows]
+
+    def identity_state(self, schema, table, column, sequence):
+        with self.connection.cursor() as cur:
+            cur.execute(f"SELECT MAX({_quote_ident(column)}) "  # nosec B608
+                        f"FROM {_qualified(schema, table)}")
+            mx = cur.fetchone()[0]
+            # MySQL 8 caches information_schema table stats; force a fresh read.
+            with contextlib.suppress(Exception):   # MySQL 5.7 has no such variable
+                cur.execute("SET SESSION information_schema_stats_expiry = 0")
+            cur.execute(
+                "SELECT auto_increment FROM information_schema.tables "
+                "WHERE table_schema = %s AND table_name = %s", (schema, table))
+            row = cur.fetchone()
+        nxt = row[0] if row else None
+        return {"max_id": None if mx is None else int(mx),
+                "next_value": None if nxt is None else int(nxt)}
+
+    def sync_identity(self, schema, table, column, sequence):
         conn = self.connection
         with conn.cursor() as cur:
-            cur.execute(
-                "SELECT column_name FROM information_schema.columns "
-                "WHERE table_schema = %s AND table_name = %s "
-                "AND extra LIKE '%%auto_increment%%'", (schema, table))
-            row = cur.fetchone()
-            if not row:
-                return
-            col = row[0]
-            cur.execute(build_max_plus_one_sql(schema, table, col))
+            cur.execute(build_max_plus_one_sql(schema, table, column))
             nxt = cur.fetchone()[0]
             cur.execute(build_set_auto_increment_sql(schema, table, nxt))
         conn.commit()

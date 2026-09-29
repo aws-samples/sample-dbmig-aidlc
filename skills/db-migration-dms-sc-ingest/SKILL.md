@@ -11,7 +11,7 @@ target, and wants to *continue* — keeping the DMS SC output where it is clean 
 reworking what the conversion flagged. You still finish through the normal
 `db-migration-validation` and `db-migration-operations` phases.
 
-All the deterministic work is done by the `dbmig` toolkit (`python -m dbmig …`); you (Kiro)
+All the deterministic work is done by the `dbmig` toolkit (`./dbmig …`); you (the AI assistant)
 review the triage, drive the gates, and perform any MANUAL reconversion via the construction
 skill. See `docs/dms-sc-import-design.md`.
 
@@ -45,7 +45,7 @@ Confirm, asking only for what is missing:
      `aws s3 cp s3://<dms-sc-bucket>/<migration-project-name>/ ./dms-sc-project/ --recursive
      --exclude "*.zip" --exclude "*.pdf"` — then use `--dms-sc-dir ./dms-sc-project`.
 2. **Connection file** — `connections.yaml` pointing at the source and the **live target**
-   (the one DMS SC applied to). Test it: `python -m dbmig test-connection --side both`.
+   (the one DMS SC applied to). Test it: `./dbmig test-connection --side both`.
 3. **Project name** — the `migrations/<project>/` workspace.
 4. **Data movement owner** — `framework` (our `migrate-data`, dev/test) or `dms` (an AWS DMS
    task loads data). This decides who owns the load, but the secondary-object drop/restore
@@ -54,7 +54,7 @@ Confirm, asking only for what is missing:
 ## Step 2 — Import & classify (Inception)  →  GATE
 
 ```bash
-python -m dbmig import-dms-sc --dms-sc-dir <PATH> --project <P>     # loops all schemas
+./dbmig import-dms-sc --dms-sc-dir <PATH> --project <P>     # loops all schemas
 ```
 
 Produces per schema: a mapping sidecar (`01-assessment/dms-sc-map-<S>.json`), a triage
@@ -75,7 +75,7 @@ section is written for the human. Wait for approval.
 ## Step 3 — Reconcile against the live target (Construction)  →  GATE
 
 ```bash
-python -m dbmig diff-target --schema <S> --project <P>             # report-only first
+./dbmig diff-target --schema <S> --project <P>             # report-only first
 ```
 
 Classifies each object vs. the LIVE target: **MATCH / MISSING / UNMATCHED (system-named) /
@@ -83,7 +83,7 @@ EXTRA**. MISSING objects are things DMS SC converted but did not actually apply 
 foreign keys). Review `01-assessment/dms-sc-diff-<S>.md`. Resolve conflicts explicitly:
 
 ```bash
-python -m dbmig diff-target --schema <S> --project <P> --resolve apply-ours --apply
+./dbmig diff-target --schema <S> --project <P> --resolve apply-ours --apply
 # or --resolve keep-live / --resolve ask (interactive)
 ```
 
@@ -95,7 +95,7 @@ For MANUAL-disposition objects, reconvert via the construction skill (seed from 
 DDL; the DMS SC partial output is a hint), then apply:
 
 ```bash
-python -m dbmig apply-schema --schema <S> --project <P> --code
+./dbmig apply-schema --schema <S> --project <P> --code
 ```
 
 ACCEPT and VERIFY objects are **not** reconverted.
@@ -107,10 +107,10 @@ Because the schema already exists, capture and drop the load-hostile secondary o
 kept.
 
 ```bash
-python -m dbmig capture-target-objects --schema <S> --project <P>   # read-only; writes scripts
-python -m dbmig pre-load-drop         --schema <S> --project <P> --apply    # before load (gated)
+./dbmig capture-target-objects --schema <S> --project <P>   # read-only; writes scripts
+./dbmig pre-load-drop         --schema <S> --project <P> --apply    # before load (gated)
 #   … load data: `dbmig migrate-data` (framework) OR your AWS DMS task …
-python -m dbmig post-load-restore     --schema <S> --project <P> --apply    # after load; reconciles
+./dbmig post-load-restore     --schema <S> --project <P> --apply    # after load; reconciles
 ```
 
 Treat `pre-load-drop`/`post-load-restore` as gated: dry-run first (omit `--apply`), confirm,
@@ -121,16 +121,16 @@ then apply.
 Rejoin the standard flow:
 
 ```bash
-python -m dbmig compare    --schema <S> --project <P>        # row reconciliation
-python -m dbmig gen-tests  --schema <S> --project <P>        # Kiro writes equivalence specs
-python -m dbmig run-tests  --schema <S> --project <P>        # same input -> same result
+./dbmig compare    --schema <S> --project <P>        # row reconciliation
+./dbmig gen-tests  --schema <S> --project <P>        # Kiro writes equivalence specs
+./dbmig run-tests  --schema <S> --project <P>        # same input -> same result
 ```
 
 Then record VERIFY verdicts so the work is not repeated:
 
 ```bash
-python -m dbmig verify --schema <S> --project <P>            # list status
-python -m dbmig verify --schema <S> --project <P> --set verified --objects a,b \
+./dbmig verify --schema <S> --project <P>            # list status
+./dbmig verify --schema <S> --project <P> --set verified --objects a,b \
     --by <alias> --method equivalence-test
 ```
 

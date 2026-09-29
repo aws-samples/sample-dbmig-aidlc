@@ -1,0 +1,21 @@
+object: ufnLeadingZeros
+schema: DBO
+type: function
+notes: typical, zero, 8-digit and 9-digit (overflow) values.
+cases:
+- id: c1
+  type: function
+  source_sql: SELECT dbo.ufnLeadingZeros(123)
+  target_sql: SELECT dbo.ufnleadingzeros(123)
+- id: c2
+  type: function
+  source_sql: SELECT dbo.ufnLeadingZeros(0)
+  target_sql: SELECT dbo.ufnleadingzeros(0)
+- id: c3
+  type: function
+  source_sql: SELECT dbo.ufnLeadingZeros(12345678)
+  target_sql: SELECT dbo.ufnleadingzeros(12345678)
+- id: c4
+  type: function
+  source_sql: SELECT dbo.ufnLeadingZeros(123456789)
+  target_sql: SELECT dbo.ufnleadingzeros(123456789)

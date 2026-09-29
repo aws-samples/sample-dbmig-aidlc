@@ -2,13 +2,17 @@
   "schema": "DEMO",
   "object_counts": {
     "FUNCTION": 5,
-    "INDEX": 33,
+    "INDEX": 30,
     "PACKAGE": 5,
     "PACKAGE BODY": 5,
     "PROCEDURE": 5,
     "SEQUENCE": 12,
-    "TABLE": 18,
+    "TABLE": 14,
     "TRIGGER": 1
+  },
+  "excluded_internal_objects": {
+    "INDEX": 3,
+    "TABLE": 4
   },
   "tables": [
     {
@@ -40,26 +44,6 @@
       "name": "CUSTOMERS",
       "num_rows": -1,
       "columns": 16
-    },
-    {
-      "name": "DR$BOOKS_TEXT_IDX$I",
-      "num_rows": -1,
-      "columns": 6
-    },
-    {
-      "name": "DR$BOOKS_TEXT_IDX$K",
-      "num_rows": -1,
-      "columns": 2
-    },
-    {
-      "name": "DR$BOOKS_TEXT_IDX$N",
-      "num_rows": -1,
-      "columns": 2
-    },
-    {
-      "name": "DR$BOOKS_TEXT_IDX$U",
-      "num_rows": -1,
-      "columns": 1
     },
     {
       "name": "GENRES",
@@ -103,13 +87,11 @@
     }
   ],
   "datatypes": {
-    "NUMBER": 58,
-    "VARCHAR2": 45,
+    "NUMBER": 52,
+    "VARCHAR2": 44,
     "TIMESTAMP(6)": 21,
     "DATE": 5,
-    "ROWID": 2,
-    "BLOB": 2,
-    "CHAR": 1
+    "BLOB": 1
   },
   "code_units": [
     {
@@ -218,5 +200,31 @@
       "lines": 7
     }
   ],
-  "cross_schema_dependencies": []
+  "cross_schema_dependencies": [],
+  "domain_indexes": [
+    {
+      "index": "BOOKS_TEXT_IDX",
+      "table": "BOOKS",
+      "indextype": "CTXSYS.CONTEXT",
+      "parameters": "SYNC (ON COMMIT)",
+      "columns": [
+        "SEARCH_TEXT"
+      ]
+    }
+  ],
+  "decision_items": [
+    {
+      "id": "fulltext_redesign:BOOKS.BOOKS_TEXT_IDX",
+      "kind": "fulltext_redesign",
+      "object": "DEMO.BOOKS",
+      "index": "BOOKS_TEXT_IDX",
+      "columns": [
+        "SEARCH_TEXT"
+      ],
+      "indextype": "CTXSYS.CONTEXT",
+      "summary": "CTXSYS.CONTEXT index BOOKS_TEXT_IDX on BOOKS(SEARCH_TEXT) has no 1:1 target equivalent \u2014 choose a redesign (e.g. PostgreSQL tsvector + GIN, MySQL FULLTEXT); internal DR$ tables are excluded.",
+      "app_impact": "rewrite application CONTAINS()/SCORE() queries on BOOKS.SEARCH_TEXT to the chosen target full-text expression, matching the index verbatim",
+      "status": "open"
+    }
+  ]
 }

@@ -1,0 +1,21 @@
+object: VwCustomerShopping
+schema: DBO
+type: function
+notes: row count, a checksum and one real row's greeting (order 2, Bob Marley, 75.50).
+cases:
+- id: v1
+  type: function
+  source_sql: SELECT COUNT(*) FROM dbo.VwCustomerShopping
+  target_sql: SELECT count(*) FROM dbo.vwcustomershopping
+- id: v2
+  type: function
+  source_sql: SELECT SUM(TotalAmount) FROM dbo.VwCustomerShopping
+  target_sql: SELECT sum(totalamount) FROM dbo.vwcustomershopping
+- id: v3
+  type: function
+  source_sql: SELECT GreetingMessage FROM dbo.VwCustomerShopping WHERE OrderID = 2
+  target_sql: SELECT greetingmessage FROM dbo.vwcustomershopping WHERE orderid = 2
+- id: v4
+  type: function
+  source_sql: SELECT CustomerName FROM dbo.VwCustomerShopping WHERE OrderID = 2
+  target_sql: SELECT customername FROM dbo.vwcustomershopping WHERE orderid = 2

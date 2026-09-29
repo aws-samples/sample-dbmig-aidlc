@@ -25,6 +25,10 @@ import yaml
 from .. import config, console, engines, followup as fu
 from ..connections import load_pair
 
+# Data-coverage level (set per unit by gen-tests) meaning every table the object
+# reads was empty in the source.
+LOW_COVERAGE = "LOW_COVERAGE"
+
 
 # ---- execution helpers (operate on engine adapters: scalar/execute/rollback) ----
 
@@ -159,8 +163,21 @@ def run(args) -> int:
         console.err(str(exc))
         return 2
 
+    # The source login is often NOT the schema owner (e.g. Oracle 'admin' vs
+    # 'DEMO'), so unqualified probe SQL would fail (ORA-00942). Point the source
+    # session at the schema under test; a no-op for engines without the concept.
+    schema_name = args.schema or manifest.get("schema")
+    if schema_name:
+        try:
+            src.set_session_schema(schema_name)
+        except Exception as exc:  # noqa: BLE001
+            console.warn(f"could not set source session schema to {schema_name}: "
+                         f"{exc} — qualify source probe SQL with the schema")
+
     results: List[Dict[str, Any]] = []
     passed = failed = skipped = 0
+    passed_keys: List[str] = []
+    low_coverage: List[str] = []
     aborted = False
     try:
         for u in units:
@@ -176,10 +193,16 @@ def run(args) -> int:
                 continue
             obj = f"{spec.get('schema', u.get('schema'))}.{spec.get('object', u.get('name'))}"
             otype = (spec.get("type") or "function").strip().lower()
+            coverage = ((u.get("data_coverage") or {}).get("level")) or "n/a"
+            if coverage == LOW_COVERAGE and obj not in low_coverage:
+                low_coverage.append(obj)
             for case in spec.get("cases", []) or []:
                 cid = case.get("id", "?")
+                # A case may override the spec type — packages mix functions and
+                # procedures, so one package spec can hold both kinds of case.
+                ctype = (case.get("type") or otype).strip().lower()
                 try:
-                    if otype == "procedure":
+                    if ctype == "procedure":
                         ok, detail = _run_procedure_case(src, tgt, case, tol)
                     else:
                         ok, detail = _run_function_case(src, tgt, case, tol)
@@ -187,11 +210,13 @@ def run(args) -> int:
                     src.rollback(); tgt.rollback()
                     ok, detail = False, {"error": str(exc).strip()}
                 status = "pass" if ok else "fail"
-                results.append({"object": obj, "type": otype, "case": cid,
-                                "status": status, "detail": detail})
+                results.append({"object": obj, "type": ctype, "case": cid,
+                                "status": status, "coverage": coverage,
+                                "detail": detail})
                 if ok:
                     passed += 1
-                    console.ok(f"{obj} [{cid}] pass")
+                    passed_keys.append(f"{obj} [{cid}]")
+                    console.item_ok(f"{obj} [{cid}] pass")
                 else:
                     failed += 1
                     console.err(f"{obj} [{cid}] FAIL: {detail}")
@@ -207,11 +232,17 @@ def run(args) -> int:
         src.close()
         tgt.close()
 
+    console.flush_items("03-validation/equivalence-report-<SCHEMA>.md")
+    # A case that failed on an earlier run and passes now closes its ledger item.
+    resolved = followup.resolve("test_failure", passed_keys,
+                                note="passed on run-tests re-run")
+
     report = {
         "schema": args.schema.upper() if getattr(args, "schema", None) else manifest.get("schema"),
         "mode": mode,
         "summary": {"cases": len(results), "passed": passed, "failed": failed,
-                    "skipped": skipped},
+                    "skipped": skipped, "low_coverage_objects": len(low_coverage)},
+        "low_coverage": low_coverage,
         "results": results,
     }
     ws.mkdir(parents=True, exist_ok=True)
@@ -221,6 +252,12 @@ def run(args) -> int:
 
     console.heading("Equivalence test results")
     console.ok(f"passed {passed}/{len(results)} (skipped {skipped} ungenerated)")
+    if resolved:
+        console.ok(f"{resolved} previously-failed follow-up item(s) auto-resolved")
+    if low_coverage:
+        console.warn(f"{len(low_coverage)} object(s) are {LOW_COVERAGE} (every table "
+                     "they read was empty in the source — only the empty/default path "
+                     "was exercised): " + ", ".join(low_coverage))
     if failed:
         console.warn(f"{failed} case(s) failed — recorded to {followup.path.name} "
                      f"({followup.open_count()} open follow-up item(s))")
@@ -235,16 +272,27 @@ def _write_md(path: Path, report: Dict[str, Any]) -> None:
     lines = [
         f"# Equivalence Test Report — {report.get('schema')}",
         "",
-        f"Mode: `{report.get('mode')}`  |  Cases: {s['cases']}  "
+        f"Mode: `{report.get('mode')}`  |  Cases: {s['cases']}  "  # nosemgrep: string-concat-in-list -- intentional: one long message split across lines
         f"Passed: {s['passed']}  Failed: {s['failed']}  Skipped: {s['skipped']}",
         "",
-        "| Object | Type | Case | Status | Detail |",
-        "|---|---|---|---|---|",
+    ]
+    if report.get("low_coverage"):
+        lines += [
+            f"**{LOW_COVERAGE}** — every table these objects read was empty in the "  # nosemgrep: string-concat-in-list -- intentional: one long message split across lines
+            "source, so the tests exercised only the empty / default path. A pass here "
+            "is honest but shallow; re-test with representative data before cutover:",
+            "",
+            *[f"- `{o}`" for o in report["low_coverage"]],
+            "",
+        ]
+    lines += [
+        "| Object | Type | Case | Status | Coverage | Detail |",
+        "|---|---|---|---|---|---|",
     ]
     for r in report["results"]:
         d = str(r["detail"]).replace("\n", " ").replace("|", "\\|")
         if len(d) > 160:
             d = d[:160] + "…"
         lines.append(f"| {r['object']} | {r['type']} | {r['case']} | "
-                     f"{r['status']} | {d} |")
+                     f"{r['status']} | {r.get('coverage', 'n/a')} | {d} |")
     path.write_text("\n".join(lines) + "\n")

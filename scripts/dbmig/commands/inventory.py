@@ -51,5 +51,13 @@ def run(args) -> int:
                      f"{len(deps)} other schema(s)) — confirm these are in migration scope:")
         for d in deps:
             print(f"  -> {d['referenced_schema']:<18} {len(d['edges'])} reference(s)")
+    excluded = data.get("excluded_internal_objects") or {}
+    if excluded:
+        console.info("Excluded engine-internal objects (not migrated): " +
+                     ", ".join(f"{k}({v})" for k, v in excluded.items()))
+    decisions = data.get("decision_items") or []
+    for d in decisions:
+        console.warn(f"DECISION REQUIRED [{d['kind']}] {d['object']}: {d['summary']}")
+        console.info(f"  app impact: {d['app_impact']}")
     console.ok(f"Inventory written to {outdir}/{inv_yaml} (+ .json)")
     return 0

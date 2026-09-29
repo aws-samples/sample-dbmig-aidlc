@@ -22,19 +22,30 @@ definition is `engines/<pair>/` and the knowledge base is `skills/<pair>-playboo
 ## Steps
 
 ### 1. Re-verify pre-flight (idempotent)
-Ensure package deps are installed (`pip install -r scripts/requirements.txt`), then run
-`python -m dbmig test-connection --side both`. Record driver versions and connectivity
+Ensure the repo virtual environment exists (`.venv/`; if not, create it per the orchestrator's
+pre-flight: `python3 -m venv .venv && .venv/bin/pip install -e scripts/` — never a global
+`pip install`), then run
+`./dbmig test-connection --side both`. Record driver versions and connectivity
 status into `01-assessment/preflight.md`. Stop if it fails. (No native client tools are
 used — connectivity is via Python drivers.)
 
 ### 2. Inventory the source
 For each schema in `migration-config.yaml scope.schemas`, run:
 ```bash
-python -m dbmig inventory --schema <SCHEMA> --project <project>
+./dbmig inventory --schema <SCHEMA> --project <project>
 ```
 This writes structured `01-assessment/inventory.yaml` and `inventory.json` (object counts,
 tables + row counts, datatypes in use, stored-code volume). Summarize it into a clean
 `01-assessment/inventory.md` table.
+
+The inventory already excludes engine-internal objects (Oracle Text `DR$…` tables/indexes,
+MV logs, IOT overflow) and reports them under `excluded_internal_objects` — do not list
+them as user tables. It also emits **`decision_items`** (e.g. `fulltext_redesign` for a
+`CTXSYS.CONTEXT` index, with its `app_impact`). Each decision item is a **Manual** item and
+goes into the migration plan's *Open questions / decisions* list — present the options
+(e.g. tsvector + GIN vs. dropping search) with your recommendation and get the user's choice
+before Construction. Carry the `app_impact` note into the plan so the application
+counterpart (CONTAINS/SCORE rewrite) is tracked together with the DB redesign.
 
 ### 3. Compatibility assessment
 For each object type and notable construct found, consult the active pair's playbook

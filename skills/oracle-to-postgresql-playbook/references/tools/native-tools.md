@@ -23,7 +23,7 @@
 
 ## Conversion notes
 - In dbmig, connectivity, DDL extraction, apply, data COPY, and reconciliation are all done
-  through the Python drivers — see `python -m dbmig test-connection`, `inventory`,
+  through the Python drivers — see `./dbmig test-connection`, `inventory`,
   `apply-schema`, `migrate-data`, `compare`.
 - Use `sslmode=require` (or stricter) for Aurora endpoints. dbmig reads connection details
   from `connections.yaml` with `${ENV_VAR}` expansion; never put plaintext passwords in

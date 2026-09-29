@@ -31,9 +31,23 @@ context, so keep it prescriptive.
   **not** re-create it in PostgreSQL — the `PRIMARY KEY` already creates its own unique index
   (duplicate → "relation already exists").
 - **LOB indexes (`SYS_IL…`)** are internal; drop them (PostgreSQL TOAST manages `bytea`/`text`).
-- **Oracle Text domain index** (`INDEXTYPE IS CTXSYS.CONTEXT`) → a **GIN full-text index**:
-  `CREATE INDEX … USING gin (to_tsvector('english', coalesce(col, '')))`. Rewrite `CONTAINS()`
-  predicates to `@@ to_tsquery(...)`.
+- **Oracle Text domain index** (`INDEXTYPE IS CTXSYS.CONTEXT`) → a **GIN full-text index**.
+  `dbmig inventory` emits it as a `fulltext_redesign` **decision item** and `convert-schema`
+  injects an `ADVISORIES` block into the owning table's unit — confirm the redesign with the
+  user before converting. Template (keep one expression, used by index AND queries):
+  `CREATE INDEX <idx> ON <s>.<t> USING gin (to_tsvector('english', coalesce(<col>, '')));`
+  - Do **not** migrate the `DR$<idx>$I/K/N/U` tables (auto-excluded), their `ROWID` /
+    `TOKEN_INFO` columns, or `SYNC (ON COMMIT)` parameters — PG maintains GIN on write.
+  - A trigger that only keeps the indexed text column populated (e.g. concatenating title +
+    author into `search_text`) stays if the column is part of the data model; a trigger that
+    only exists to feed Oracle Text is dropped.
+  - `CONTAINS(col, :q, 1) > 0 … ORDER BY SCORE(1) DESC` →
+    `to_tsvector('english', coalesce(col,'')) @@ plainto_tsquery('english', :q)
+     ORDER BY ts_rank(to_tsvector('english', coalesce(col,'')), plainto_tsquery('english', :q)) DESC`.
+    Use `plainto_tsquery` (not `to_tsquery`) for free-text input — it cannot raise syntax
+    errors. The query expression must match the index expression **verbatim** (same config,
+    same `coalesce`) or the planner silently seq-scans; confirm with `EXPLAIN` (Bitmap Index
+    Scan on the GIN index).
 
 ## PL/SQL → PL/pgSQL
 
@@ -41,6 +55,17 @@ context, so keep it prescriptive.
   `<package>_<subprogram>` (see `checks/package-naming.md` for collision handling).
 - **`PIPELINED` table functions** (`RETURN … PIPELINED` / `PIPE ROW`) → a set-returning function
   `RETURNS TABLE(...)` with `RETURN QUERY`.
+  **Hazard — declared column types must match the query EXACTLY.** PostgreSQL checks the
+  `RETURN QUERY` row type against `RETURNS TABLE(...)` at *execution* time: declaring
+  `book_id numeric` while the query returns `b.id` (`bigint`) compiles and applies cleanly,
+  then fails with `structure of query does not match function result type` on the first call.
+  Derive each `RETURNS TABLE` column type from the **converted** column it selects (identity
+  `bigint`, `numeric(p,s)`, `varchar(n)` → `varchar`/`text`, `timestamp(0)`), not from the Oracle
+  record/object type's `NUMBER`. Aggregates change type too: `COUNT(*)` → `bigint`,
+  `SUM(bigint)` → `numeric`, `SUM(numeric)` → `numeric`, `AVG` → `numeric`. When unsure, cast in
+  the select list (`b.id::bigint`, `SUM(x)::numeric(12,2)`) so declaration and query agree by
+  construction. The same rule applies to `RETURNS SETOF <composite>` and OUT-parameter functions.
+  Equivalence tests always execute set-returning functions to catch any miss.
 - **Collection accumulate-then-return → `RETURN NEXT`.** The Oracle idiom
   (`coll.EXTEND; coll(i).field := …; i := i+1; … RETURN coll;`) becomes a single row variable
   reset per element (`rec := NULL::type`), field assignments, then `RETURN NEXT rec;`, ending with

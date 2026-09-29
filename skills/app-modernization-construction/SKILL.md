@@ -32,9 +32,20 @@ Rules:
 - One timestamped directory for the whole run; never overwrite a previous run.
 - Preserve the path relative to the application root, so `diff -r` works over the whole tree.
 - `-p` to preserve timestamps and mode.
-- Back up only files actually edited.
+- **git repo**: back up only files actually edited (git history is the second safety net).
+- **Not a git repo** (`backup_mode: full-tree` in `00-intake/app-intake.md`): the backup is the
+  *only* rollback, so copy the **whole in-scope tree once, before the first edit**, excluding
+  build output and dependencies — then any file touched later (boot-time or validation fixes)
+  is already covered:
+  ```
+  (cd "<app>" && find <in-scope dirs> -type f \
+     ! -path '*/target/*' ! -path '*/build/*' ! -path '*/bin/*' ! -path '*/obj/*' \
+     ! -path '*/node_modules/*' ! -path '*/.git/*' ! -path '*/dist/*' \
+     -exec sh -c 'mkdir -p "$0/$(dirname "$1")" && cp -p "$1" "$0/$1"' "$BK" {} \;)
+  ```
+  `MANIFEST.md` then lists which files were actually edited (and why).
 - Never write a backup inside the application directory or inside build output.
-- Append every backed-up file to `$BK/MANIFEST.md` as you go: relative path, bytes, why it changed.
+- Append every edited file to `$BK/MANIFEST.md` as you go: relative path, bytes, why it changed.
 
 Rationale: an in-place `.bak` clutters the source tree, can be picked up by builds and packaging,
 and is easy to commit by accident. A mirrored tree keeps originals grouped, greppable and

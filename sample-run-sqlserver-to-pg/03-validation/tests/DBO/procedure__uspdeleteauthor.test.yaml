@@ -1,0 +1,16 @@
+object: uspDeleteAuthor
+schema: DBO
+type: procedure
+notes: delete real author 5 (no referencing FKs). The 'not found' path raises on both engines; the harness does not compare raised errors.
+cases:
+- id: p1
+  type: procedure
+  call_source: EXEC dbo.uspDeleteAuthor @BusinessEntityID = 5
+  call_target: CALL dbo.uspdeleteauthor(5)
+  verify:
+  - name: authors
+    source_sql: SELECT COUNT(*) FROM dbo.Author
+    target_sql: SELECT count(*) FROM dbo.author
+  - name: author5
+    source_sql: SELECT COUNT(*) FROM dbo.Author WHERE BusinessEntityID = 5
+    target_sql: SELECT count(*) FROM dbo.author WHERE businessentityid = 5
