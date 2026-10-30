@@ -6,6 +6,8 @@
 **Conversion category:** Manual (two-star feature compatibility)
 **SCT automation:** No automation. N/A. PostgreSQL doesn't support unused columns.
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): `pg_repack` for space reclaim, instant `ADD COLUMN … DEFAULT` (verified), which ALTERs rewrite.
+
 ## Oracle
 Oracle can mark columns as **unused** — not physically dropped but treated as dropped and not restorable. `SELECT` doesn't retrieve them and `DESCRIBE` doesn't show them. The advantage is avoiding the high load of physically dropping a column from a large table: mark it unused now, drop it physically later.
 
@@ -39,3 +41,5 @@ VACUUM FULL VERBOSE EMPLOYEES;   -- with activity report
 - The Oracle two-step (`SET UNUSED` then `DROP UNUSED COLUMNS`) maps to PostgreSQL's single `ALTER TABLE ... DROP COLUMN`, which is itself a fast metadata-only operation.
 - Space isn't reclaimed immediately in PostgreSQL; reuse happens via subsequent DML, or run `VACUUM FULL` to reclaim now (note: `VACUUM FULL` takes an exclusive lock and rewrites the table).
 - No equivalent to `USER_UNUSED_COL_TABS`; verify drops via `INFORMATION_SCHEMA.COLUMNS`.
+- To reclaim space without the exclusive lock of `VACUUM FULL`, use `pg_repack` (available on Aurora 18) from a client host.
+- Other `ALTER TABLE` costs that matter during migration (PG 11+): `ADD COLUMN … DEFAULT <constant or stable expression>` is **instant**, including `DEFAULT now()` (verified), like Oracle 12c metadata-only defaults. `ALTER COLUMN … TYPE` usually **rewrites** the table (except varchar length increases and some binary-compatible changes). `ADD COLUMN … GENERATED ALWAYS AS … STORED` rewrites, while `VIRTUAL` (PG 18 default) does not.

@@ -6,6 +6,8 @@
 **Conversion category:** Manual
 **SCT automation:** N/A (No automation; three-star feature compatibility)
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): DES functions removed (verified); fixed the example (BINARY(32) breaks decryption — verified); default aes-128-ecb ignores the IV (verified) — use aes-256-cbc with RANDOM_BYTES; key-logging risk; HASHBYTES mapping.
+
 ## SQL Server
 
 SQL Server provides encryption/decryption functions to secure individual column contents. These functions can be used anywhere in code (not just on table columns) — e.g. encrypting application user security tokens passed as parameters. They follow the SQL Server encryption hierarchy and use the Windows Server Data Protection API. Symmetric encryption/decryption consumes minimal resources and works for large data sets.
@@ -69,13 +71,13 @@ FROM Employees;
 
 Aurora MySQL provides encryption/decryption functions similar to SQL Server but with a much simpler security hierarchy that is easier to manage. The functions require the actual key as a string, so take extra measures to protect the data (e.g. hashing key values on the client).
 
-Aurora MySQL supports AES and DES algorithms:
+Aurora MySQL supports AES:
 - `AES_ENCRYPT` / `AES_DECRYPT`
-- `DES_ENCRYPT` / `DES_DECRYPT`
+- *(corrected)* `DES_ENCRYPT` / `DES_DECRYPT` were **removed in MySQL 8.0** (error 1305 on 3.13 and 8.4.8, verified).
 
 Notes:
-- `ENCRYPT`, `DECRYPT`, `ENCODE`, `DECODE` are deprecated (MySQL 5.7.2 / 5.7.6). Asymmetric encryption is **not** supported in Aurora MySQL.
-- Amazon RDS for MySQL 8 supports FIPS mode if compiled with OpenSSL and a FIPS Object Module is available at runtime.
+- *(corrected)* `ENCRYPT`, `ENCODE`, `DECODE` were **removed in MySQL 8.0**, not just deprecated (error 1305 on 3.13 and 8.4.8, verified). Asymmetric encryption functions (`create_asymmetric_priv_key` etc., MySQL Enterprise) are not available in Aurora MySQL (error 1305, verified).
+- `ssl_fips_mode` reports `ON` on both Aurora MySQL 3.13 and 8.4.8 (verified); there is nothing to compile or enable. *(Corrected: the playbook described community RDS for MySQL FIPS build requirements.)*
 
 Syntax:
 
@@ -96,7 +98,7 @@ Example — encrypt an employee SSN:
 CREATE TABLE Employees
 (
     EmployeeID INT NOT NULL PRIMARY KEY,
-    SSN_Encrypted BINARY(32) NOT NULL
+    SSN_Encrypted VARBINARY(64) NOT NULL   -- the original BINARY(32) zero-pads the ciphertext: AES_DECRYPT then returns NULL (verified)
 );
 
 -- Insert the encrypted data (UNHEX for more efficient storage and comparisons)
@@ -117,3 +119,9 @@ FROM Employees;
 - Asymmetric encryption (`EncryptByAsymKey`, `EncryptByCert`) has no Aurora MySQL equivalent and must be redesigned.
 - Use an initialization vector in MySQL to mitigate whole-value replacement attacks (SQL Server's authenticator flag serves a similar purpose).
 - Ensure SSL/TLS connections to protect key/data in transit; IAM connections are SSL by default.
+
+Verified on Aurora MySQL 3.13 and 8.4.8:
+- Store ciphertext in **`VARBINARY`/`BLOB`**, never fixed-length `BINARY(n)`: the original example's `BINARY(32)` made `AES_DECRYPT` return NULL; `VARBINARY(64)` round-trips.
+- The default `block_encryption_mode` is **`aes-128-ecb`**, which **ignores the IV** — the "use an immutable key as IV" advice has no effect in ECB mode. Set `block_encryption_mode = 'aes-256-cbc'` (session or parameter group) and use a random 16-byte IV from `RANDOM_BYTES(16)` stored next to the ciphertext; decryption with a different IV fails (verified).
+- Keys passed as SQL literals appear in the general/slow logs and Database Insights; prefer encrypting in the application with the AWS Encryption SDK and AWS KMS.
+- `ENCRYPTBYPASSPHRASE` → `AES_ENCRYPT` with a key derived via `UNHEX(SHA2(passphrase, 512))`; `HASHBYTES('SHA2_256', x)` → `UNHEX(SHA2(x, 256))`.

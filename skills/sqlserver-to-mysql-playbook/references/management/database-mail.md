@@ -6,6 +6,8 @@
 **Conversion category:** Manual (One star feature compatibility)
 **SCT automation:** No automation
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Native lambda_async/lambda_sync (mysql.lambda_async gone — verified), role and IAM setup (verified errors), queue table with SKIP LOCKED, rollback caveat, SES attachments.
+
 ## SQL Server
 
 Database Mail is an email client solution for sending messages directly from SQL Server (server administration messages such as alerts/logs/status reports, and application messages such as registration confirmations). It is turned off by default.
@@ -76,9 +78,11 @@ Aurora MySQL doesn't natively support sending mail from the database.
 
 - For **alerting**, use the event notification subscription feature (Amazon SNS) to email operators — see Alerting reference.
 - For **application email**, use a dedicated email framework. If email-generating code must live in the database, use a **queue table**: replace each `sp_send_dbmail` call with an `INSERT` into the queue table, and design an external app to read the queue, send the email, and update status periodically.
-- The only way to send email directly from the database is via **AWS Lambda integration** — see [Invoking a Lambda function from an Amazon Aurora MySQL DB cluster](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/AuroraMySQL.Integrating.Lambda.html).
+- The only way to send email directly from the database is via **AWS Lambda integration** — see [Invoking a Lambda function from an Amazon Aurora MySQL DB cluster](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/AuroraMySQL.Integrating.Lambda.html). On Aurora MySQL 3 / 8.4 use the native functions `lambda_async(arn, json)` / `lambda_sync(…)`; the older `mysql.lambda_async` procedure does not exist (verified). They need an IAM role in `aws_default_lambda_role` and the `AWS_LAMBDA_ACCESS` database role (verified: calls fail naming the missing role).
 
 ## Conversion notes
 - AWS service replacements: alerting email → **Amazon SNS**; direct DB-sent mail → **AWS Lambda integration**; application email → external mail service + **queue table** pattern.
 - No SCT automation; all `sp_send_dbmail` usage must be rewritten.
 - Replace `sp_send_dbmail` calls with INSERTs into a queue table consumed by an external process, or invoke Lambda for SMTP/SES delivery.
+- Prefer the queue table: a Lambda call made inside a transaction (for example from a trigger) still sends mail if the transaction rolls back. Workers can claim rows with `SELECT … FOR UPDATE SKIP LOCKED` (available on 3 / 8.4, verified).
+- `@query` result attachments → the worker runs the query (or the procedure writes rows to a staging table) and the Lambda function formats and sends them with Amazon SES.

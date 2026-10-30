@@ -4,7 +4,8 @@ A complete, real run of dbmig-aidlc, **converted from scratch** (no DMS SC), cap
 **masked** (hosts, account ids, local paths and credentials replaced with placeholders). It includes the
 optional application-modernization module for the Spring Boot / JPA app `JavaBobsUsedBooks`.
 
-- **Source:** Oracle 19c EE, schema `DEMO`  ·  **Target:** Aurora PostgreSQL 17.7, schema `demo`
+- **Source:** Oracle 19c EE, schema `DEMO`  ·  **Target:** Aurora PostgreSQL **18.6**, schema `demo`
+- **Refreshed 2026-10-30** on a fresh 18.6 cluster with the refreshed playbooks and the context wiring (target baseline, quick tips, target-aware construct hints, citation count). The previous run targeted 17.7.
 - **App:** Spring Boot 4.0.6, Java 21, Hibernate 7 / Spring Data JPA, Thymeleaf, raw JDBC demo classes
 
 ## Result at a glance
@@ -15,10 +16,11 @@ optional application-modernization module for the Spring Boot / JPA app `JavaBob
 | Tables | **14/14** applied first pass (FK guard: no invented FKs — `ORDERS` has none in the source) |
 | Stored code | **15/15** first pass (5 packages converted spec+body as one unit, flattened to `<pkg>_<subprogram>`) |
 | Data | 199 rows; **14/14** tables reconcile; post-data FKs + trigger **7/7** |
-| Equivalence tests | **53/53** first run (write paths proven with real deltas; 4 `LOW_COVERAGE` objects reported separately) |
+| Equivalence tests | **58/58** first run (write paths proven with real deltas; target behaviour differences from the PG 18 baseline covered; 4 `LOW_COVERAGE` objects reported separately) |
 | Identity | `reset-identity`: **12/12** identity columns safe (runbook step generated from the catalog) |
-| App | 17 files changed; builds; **boots with `ddl-auto=validate` first time** (all 16 entity type fixes were planned from `app-scan`, none found at boot); full-text search verified via index scan |
-| Prompt volume | 3 schema + 3 code + 4 test bundles + 3 shared context files ≈ **39K tokens** (the previous self-contained-bundle layout produced ~543K for the same schema) |
+| App | 18 files changed; builds; **boots with `ddl-auto=validate` first time**; full-text search verified via index scan; `LoadCoverImages` utility verified against the target |
+| Traceability | `conversion-log.md` cites **9 distinct playbook topics** (`./dbmig status` counts them) |
+| Shared context | `_context-schema.md` / `_context-code.md` ≈ 40 KB each, read once per session (datatype map, engine checks, PG 18 baseline sections, quick tips, topic index) |
 
 ## Folder map
 
@@ -45,10 +47,15 @@ optional application-modernization module for the Spring Boot / JPA app `JavaBob
 
 ## Found during this run (and fixed in the framework)
 
-- App: `BookService` built Oracle Text query syntax (`fuzzy(t, 40) OR …`) that PostgreSQL treats as
-  words — full-text returned nothing. `app-scan` now flags full-text query-language fragments.
-- `app-scan` missed one `LocalDate` field declared with modifiers, and reported `throws SQLException` as
-  error handling — both fixed.
+- **Baseline version check:** the PG 18 baseline would have been injected unchanged into a 17.x run (18-only
+  `VIRTUAL` columns, `uuidv7()`, `NOT ENFORCED`). `engine.yaml` now declares `target_baseline.verified_for`, and the
+  context carries a caution when `target.version` does not match.
+- **App utility:** `utils/LoadCoverImages` reads `application.properties` without Spring, so the externalised
+  `${DB_*}` settings reached `DriverManager` verbatim. Missed by the previous run; fixed with placeholder resolution.
+- **Test harness:** `compare: resultset` was documented but compared only the first value; now every row and column
+  is compared.
+- Operations documents now start with the verbatim disclaimer the operations skill requires (the previous sample
+  used a shortened one).
 
 ## Reproducing
 

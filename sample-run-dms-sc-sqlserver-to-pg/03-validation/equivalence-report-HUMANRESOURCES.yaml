@@ -1,0 +1,204 @@
+schema: HUMANRESOURCES
+mode: silent
+summary:
+  cases: 16
+  passed: 16
+  failed: 0
+  skipped: 4
+  low_coverage_objects: 0
+low_coverage: []
+results:
+- object: HUMANRESOURCES.vEmployee
+  type: function
+  case: c1
+  status: pass
+  coverage: OK
+  detail:
+    source: '290'
+    target: '290'
+- object: HUMANRESOURCES.vEmployee
+  type: function
+  case: c2
+  status: pass
+  coverage: OK
+  detail:
+    source_rows: 290
+    target_rows: 290
+    source_first: (259, None, 'Ben', 'T', 'Miller', None, 'Buyer', '151-555-0113',
+      'Work', 'ben0@adventure-works.com', 0, '101 Candy Rd.', None, 'Redmond', 'Washington',
+      '98052', 'United States')
+    target_first: "(1, None, 'Ken', 'J', 'S\xE1nchez', None, 'Chief Executive Officer',\
+      \ '697-555-0142', 'Cell', 'ken0@adventure-works.com', 0, '4350 Minute Dr.',\
+      \ None, 'Newport Hills', 'Washington', '98006', 'United States')"
+- object: HUMANRESOURCES.vEmployee
+  type: function
+  case: c3
+  status: pass
+  coverage: OK
+  detail:
+    source: United States
+    target: United States
+- object: HUMANRESOURCES.vEmployeeDepartment
+  type: function
+  case: c1
+  status: pass
+  coverage: OK
+  detail:
+    source: '290'
+    target: '290'
+- object: HUMANRESOURCES.vEmployeeDepartment
+  type: function
+  case: c2
+  status: pass
+  coverage: OK
+  detail:
+    source_rows: 290
+    target_rows: 290
+    source_first: "(1, None, 'Ken', 'J', 'S\xE1nchez', None, 'Chief Executive Officer',\
+      \ 'Executive', 'Executive General and Administration', datetime.date(2009, 1,\
+      \ 14))"
+    target_first: "(1, None, 'Ken', 'J', 'S\xE1nchez', None, 'Chief Executive Officer',\
+      \ 'Executive', 'Executive General and Administration', datetime.date(2009, 1,\
+      \ 14))"
+- object: HUMANRESOURCES.vEmployeeDepartmentHistory
+  type: function
+  case: c1
+  status: pass
+  coverage: OK
+  detail:
+    source: '296'
+    target: '296'
+- object: HUMANRESOURCES.vEmployeeDepartmentHistory
+  type: function
+  case: c2
+  status: pass
+  coverage: OK
+  detail:
+    source_rows: 296
+    target_rows: 296
+    source_first: (263, None, 'Jean', 'E', 'Trenary', None, 'Day', 'Information Services',
+      'Executive General and Administration', datetime.date(2008, 12, 11), None)
+    target_first: "(1, None, 'Ken', 'J', 'S\xE1nchez', None, 'Day', 'Executive', 'Executive\
+      \ General and Administration', datetime.date(2009, 1, 14), None)"
+- object: HUMANRESOURCES.uspUpdateEmployeeLogin
+  type: procedure
+  case: c1
+  status: pass
+  coverage: OK
+  detail:
+    jobtitle:
+      source_delta: (True, 'Lead Tool Designer')
+      target_delta: (True, 'Lead Tool Designer')
+      match: true
+    node:
+      source_delta: (True, '/1/1/5/')
+      target_delta: (True, '/1/1/5/')
+      match: true
+    level:
+      source_delta: '0.0'
+      target_delta: '0.0'
+      match: true
+- object: HUMANRESOURCES.uspUpdateEmployeeLogin
+  type: procedure
+  case: c2
+  status: pass
+  coverage: OK
+  detail:
+    node:
+      source_delta: (True, '/1/9/')
+      target_delta: (True, '/1/9/')
+      match: true
+    level:
+      source_delta: '-1.0'
+      target_delta: '-1.0'
+      match: true
+- object: HUMANRESOURCES.uspUpdateEmployeeLogin
+  type: procedure
+  case: c3
+  status: pass
+  coverage: OK
+  detail:
+    login:
+      source_delta: (False, 'adventure-works\\rob0')
+      target_delta: (False, 'adventure-works\\rob0')
+      match: true
+    errorlog_rows:
+      source_delta: '1.0'
+      target_delta: '1.0'
+      match: true
+- object: HUMANRESOURCES.uspUpdateEmployeePersonalInfo
+  type: procedure
+  case: c1
+  status: pass
+  coverage: OK
+  detail:
+    gender:
+      source_delta: (True, 'f')
+      target_delta: (True, 'f')
+      match: true
+    maritalstatus:
+      source_delta: (True, 'm')
+      target_delta: (True, 'm')
+      match: true
+    errorlog_rows:
+      source_delta: '0.0'
+      target_delta: '0.0'
+      match: true
+- object: HUMANRESOURCES.uspUpdateEmployeePersonalInfo
+  type: procedure
+  case: c2
+  status: pass
+  coverage: OK
+  detail:
+    gender:
+      source_delta: (False, 'M')
+      target_delta: (False, 'M')
+      match: true
+    errorlog_rows:
+      source_delta: '1.0'
+      target_delta: '1.0'
+      match: true
+- object: HUMANRESOURCES.uspUpdateEmployeePersonalInfo
+  type: procedure
+  case: c3
+  status: pass
+  coverage: OK
+  detail:
+    maritalstatus:
+      source_delta: (False, 'S')
+      target_delta: (False, 'S')
+      match: true
+    errorlog_rows:
+      source_delta: '1.0'
+      target_delta: '1.0'
+      match: true
+- object: HUMANRESOURCES.Employee
+  type: function
+  case: c1
+  status: pass
+  coverage: OK
+  detail:
+    source_rows: 290
+    target_rows: 290
+    source_first: (1, None, None)
+    target_first: (1, None, None)
+- object: HUMANRESOURCES.Employee
+  type: function
+  case: c2
+  status: pass
+  coverage: OK
+  detail:
+    source_rows: 5
+    target_rows: 5
+    source_first: (None, 1)
+    target_first: (None, 1)
+- object: HUMANRESOURCES.Department
+  type: procedure
+  case: c1
+  status: pass
+  coverage: OK
+  detail:
+    defaulted_rows:
+      source_delta: '1.0'
+      target_delta: '1.0'
+      match: true

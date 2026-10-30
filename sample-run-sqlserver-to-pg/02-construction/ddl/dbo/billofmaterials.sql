@@ -9,5 +9,7 @@ CREATE TABLE dbo.billofmaterials (
   CONSTRAINT ck_billofmaterials_perassemblyqty CHECK (perassemblyqty >= 1.00),
   CONSTRAINT ck_billofmaterials_productassemblyid CHECK (productassemblyid <> componentid)
 );
-CREATE UNIQUE INDEX ak_billofmaterials_productassemblyid_componentid_startdate ON dbo.billofmaterials (productassemblyid, componentid, startdate);
+-- productassemblyid is nullable: a SQL Server UNIQUE index admits ONE NULL per key, PostgreSQL admits many
+-- unless NULLS NOT DISTINCT (PG 15+; sqlserver target baseline, verified). Kept SQL Server semantics.
+CREATE UNIQUE INDEX ak_billofmaterials_productassemblyid_componentid_startdate ON dbo.billofmaterials (productassemblyid, componentid, startdate) NULLS NOT DISTINCT;
 CREATE INDEX ix_billofmaterials_unitmeasurecode ON dbo.billofmaterials (unitmeasurecode);

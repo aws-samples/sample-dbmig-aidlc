@@ -6,6 +6,8 @@
 **Conversion category:** Manual (★★ feature compatibility, no automation)
 **SCT automation:** N/A — use Lambda integration.
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Corrected the Lambda call (mysql.lambda_async procedure is gone on 3 / 8.4; native lambda_async/lambda_sync functions verified), AWS_LAMBDA_ACCESS role, commit-ordering caveat, SES.
+
 ## Oracle
 
 ### UTL_MAIL
@@ -54,6 +56,7 @@ For **application email** from within the database:
 
 ## Conversion notes
 - For DB monitoring/alerting: map `UTL_MAIL`/`UTL_SMTP` event notifications to **Amazon SNS** via RDS Event Notifications.
-- For transactional/application email: use a **queue table + external worker** or **AWS Lambda integration** (`CALL mysql.lambda_async(...)` / native Lambda invocation).
+- For transactional/application email: use a **queue table + external worker** or **AWS Lambda integration** with the native functions `lambda_async(arn, json_payload)` / `lambda_sync(…)`. The `mysql.lambda_async` **procedure** from older Aurora versions does not exist on Aurora MySQL 3 or 8.4 (verified: no `mysql.lambda%` routines); the native functions do (verified: both fail only for the missing `aws_default_lambda_role`). Grant `AWS_LAMBDA_ACCESS` to the calling user.
+- Call Lambda **after commit** (from an `AFTER INSERT` trigger only if you accept that a rolled-back transaction may still have sent the email), or better, have a worker read committed rows from the queue table. Use Amazon SES from the Lambda function to send mail.
 - No in-database SMTP client exists — all approaches move email-sending outside the database engine.
 - Attachments (supported by `UTL_MAIL`) require an external sender (Lambda + SES, etc.).

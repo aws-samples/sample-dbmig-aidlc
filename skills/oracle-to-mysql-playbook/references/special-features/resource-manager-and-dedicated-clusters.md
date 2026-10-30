@@ -6,6 +6,8 @@
 **Conversion category:** Manual (three-star feature compatibility) — distribute load, applications, or users across multiple instances.
 **SCT automation:** N/A
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Fixed the max_execution_time syntax (TO is a syntax error, verified); per-account MAX_USER_CONNECTIONS limits, wait_timeout, resource groups unavailable to the master user, processlist sources, custom endpoints — verified on both versions.
+
 ## Oracle
 
 Oracle Resource Manager manages multiple concurrent workloads under a single database by partitioning server resources. It can guarantee minimum CPU, distribute CPU by percentage, limit degree of parallelism and parallel servers, manage the parallel statement queue, create active session pools, monitor resource usage, kill/limit runaway sessions, cap query runtime, limit idle-session time, switch resource plans by workload, and do instance caging in RAC.
@@ -43,8 +45,9 @@ Example: replace a single Oracle DB + Resource Manager workload separation with 
 select count(*) from information_schema.processlist
 where user='USER_NAME' and COMMAND<>'Sleep';
 
--- cap query runtime (session level)
-SET max_execution_time TO X;
+-- cap SELECT runtime in milliseconds (session level); the original "SET … TO X" is a syntax error
+SET SESSION max_execution_time = 30000;
+-- or per statement:  SELECT /*+ MAX_EXECUTION_TIME(30000) */ …
 
 -- idle sessions for a user (sleeping beyond X seconds)
 select count(*) from information_schema.processlist
@@ -60,11 +63,14 @@ Mapping of Resource Manager capabilities to Aurora:
 | Set max CPU for a resource group | Dedicated Aurora instance per application |
 | Limit degree of parallelism per query | N/A |
 | Limit parallel runs | N/A |
-| Limit number of active sessions | Detect via `information_schema.processlist` and throttle in DB procedures or the app DAL |
-| Restrict max query runtime | `SET max_execution_time TO X;` |
-| Limit max idle time per session | Detect sleeping sessions via `processlist`, throttle in app/DAL |
+| Limit number of active sessions | Per-account limits: `CREATE/ALTER USER … WITH MAX_USER_CONNECTIONS n MAX_QUERIES_PER_HOUR n` (verified on 3.13 and 8.4); otherwise detect via the processlist and throttle in the app/DAL |
+| Restrict max query runtime | `SET SESSION max_execution_time = ms` or the `MAX_EXECUTION_TIME(ms)` hint (read-only `SELECT` only; verified) |
+| Limit max idle time per session | `wait_timeout` / `interactive_timeout` (28800 s by default, verified) per session or in the parameter group |
 | Limit idle session holding locks | Detect via `processlist`, throttle in app/DAL |
 | Instance caging in RAC | Separate workloads across Aurora clusters / read replicas |
 
 - Resource isolation is achieved architecturally (separate clusters/instances/endpoints) rather than via in-database plans.
 - Some fine-grained controls (parallelism limits, parallel-run limits) have no equivalent.
+- MySQL **resource groups** (`CREATE RESOURCE GROUP`, CPU affinity/priority) cannot be used on Aurora: the master user lacks `RESOURCE_GROUP_ADMIN` (error 1227, verified on both versions).
+- `information_schema.processlist` is deprecated; `performance_schema.processlist` needs `performance_schema` = ON (it returned 0 rows with the default Serverless v2 parameter group, verified). `SHOW PROCESSLIST` and `sys.session` also work.
+- Aurora Serverless v2 readers, Aurora custom endpoints (route reporting users to specific readers) and Aurora Global Database secondaries are the cloud equivalents of workload segregation.

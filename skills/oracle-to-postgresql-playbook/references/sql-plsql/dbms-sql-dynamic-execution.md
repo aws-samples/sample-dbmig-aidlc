@@ -6,6 +6,8 @@
 **Conversion category:** Manual (One-star feature compatibility, one-star automation; different paradigm and syntax require application and driver rewrite)
 **SCT automation:** One-star automation level; SCT action code index N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): orafce `dbms_sql` subset (verified with `:name` binds), implicit result sets have no equivalent.
+
 ## Oracle
 
 `DBMS_SQL` parses and runs dynamic SQL/DML/DDL with granular cursor control (open, parse, bind, execute, fetch, close).
@@ -46,7 +48,23 @@ Additional procedures:
 
 ## PostgreSQL
 
-PostgreSQL has **no equivalent for `DBMS_SQL`** (no granular programmatic cursor control). You can still parse/run dynamic SQL.
+Core PostgreSQL has **no equivalent for `DBMS_SQL`** (no granular programmatic cursor control). You can still parse/run dynamic SQL.
+
+**orafce `dbms_sql` (Aurora 18).** orafce implements a subset (`open_cursor`, `parse`, `bind_variable`, `define_column`, `execute`, `fetch_rows`, `column_value`, `close_cursor`). It uses Oracle-style `:name` placeholders. Verified on 18.6:
+```sql
+DO $$
+DECLARE c int; n int; v text;
+BEGIN
+  c := dbms_sql.open_cursor();
+  CALL dbms_sql.parse(c, 'select name from emp where id = :id');
+  CALL dbms_sql.bind_variable(c, 'id', 1);
+  CALL dbms_sql.define_column(c, 1, NULL::text);
+  n := dbms_sql.execute(c);
+  IF dbms_sql.fetch_rows(c) > 0 THEN CALL dbms_sql.column_value(c, 1, v); END IF;
+  CALL dbms_sql.close_cursor(c);
+END $$;
+```
+Note the procedure calls use `CALL`. The full orafce function list on Aurora 18.6 is `bind_array`, `bind_variable`, `close_cursor`, `column_value`, `define_array`, `define_column`, `describe_columns`, `execute`, `execute_and_fetch`, `fetch_rows`, `is_open`, `last_row_count`, `open_cursor`, `parse` (plus `_f` function variants and `debug_cursor`). Array binds cover many `FORALL`-style uses. `GET_NEXT_RESULT`, `RETURN_RESULT`, `TO_REFCURSOR` and `TO_CURSOR_NUMBER` are not provided. Use it for mechanical conversion of heavy `DBMS_SQL` code; prefer native `EXECUTE` for new or rewritten code.
 
 Dynamic cursor with `FOR … IN SELECT`:
 
@@ -98,7 +116,8 @@ $$ LANGUAGE plpgsql;
 
 ## Conversion notes
 
-- There is no PG analog to the `DBMS_SQL` open/parse/bind/execute/fetch API — redesign dynamic SQL entirely.
+- Core PostgreSQL has no analog to the `DBMS_SQL` open/parse/bind/execute/fetch API. Either use orafce `dbms_sql` (subset, Aurora-available) or redesign the dynamic SQL with `EXECUTE … USING`.
+- Oracle 12c **implicit result sets** (`DBMS_SQL.RETURN_RESULT`) have no PostgreSQL equivalent. Return `refcursor` values as `INOUT` parameters of a procedure, or use a set-returning function.
 - Use `EXECUTE 'sql' USING params` (PL/pgSQL) for parametrized dynamic statements, or `OPEN refcur FOR EXECUTE format(...) USING ...` for dynamic cursors.
 - For dynamic identifiers (table/column names), use `format()` with `%I` (identifier) / `%L` (literal) to avoid SQL injection.
 - `PREPARE`/`EXECUTE`/`DEALLOCATE` (SQL-level) handle reusable prepared statements.

@@ -6,6 +6,8 @@
 **Conversion category:** N/A (config topic) — feature compatibility: one star
 **SCT automation:** N/A. Key difference: SET options are significantly different in PostgreSQL.
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): `force_parallel_mode` → `debug_parallel_query`, plus timeouts, per-role defaults, and the `orafce.nls_date_format` scope.
+
 ## Oracle
 
 Certain parameters are modifiable per-session with `ALTER SESSION`. Not all parameters are session-modifiable. List those that are:
@@ -55,8 +57,9 @@ SELECT * FROM pg_settings where context = 'user';
 
 Commonly used session parameters:
 * `client_encoding` — configures the connected client character set
-* `force_parallel_mode` — forces use of parallel query for the session
+* `debug_parallel_query` — forces use of parallel query for the session (testing only). PostgreSQL 16 renamed it from `force_parallel_mode`, which no longer exists; verified on Aurora PostgreSQL 18.6.
 * `lock_timeout` — max duration to wait for a database lock to release
+* `statement_timeout`, `transaction_timeout` (PG 17+), `idle_in_transaction_session_timeout` — per-statement, per-transaction and idle-in-transaction limits
 * `search_path` — schema search order for non-schema-qualified object names
 * `transaction_isolation` — current Transaction Isolation Level for the session
 
@@ -96,3 +99,11 @@ Partial mapping of session-level parameters (not all are directly comparable):
 - Oracle separates sort vs hash memory (`sort_area_size`, `hash_area_size`); PostgreSQL consolidates both into `work_mem`.
 - Oracle tracing/event facilities (`10053`, `sql_trace`) have no PostgreSQL session-parameter equivalent.
 - Use `SET SESSION` for session scope; `SET LOCAL` for transaction scope; `RESET <param>` to restore defaults.
+
+### Aurora PostgreSQL 18 notes (validated on 18.6)
+
+- **Make session settings persistent per user or database** instead of relying on a logon trigger: `ALTER ROLE app_user SET search_path = app, public;` or `ALTER DATABASE appdb SET datestyle = 'ISO, DMY';`. This replaces most Oracle `AFTER LOGON` triggers that run `ALTER SESSION`. For logon logic that needs code, PostgreSQL 17+ has `CREATE EVENT TRIGGER … ON login` (verified on Aurora 18.6 as the master user). A failing login trigger blocks every connection, so keep it trivial and exception-safe.
+- `datestyle` affects only output and input parsing, so it is not a full replacement for `NLS_DATE_FORMAT`. Converted code should format dates explicitly with `to_char(…, 'DD-MON-YYYY')` and not depend on session settings. `lc_time` controls localized month/day names in `to_char` with the `TM` prefix.
+- With the `orafce` extension (version 4.16 on Aurora 18), `orafce.nls_date_format` sets the default format used by orafce's Oracle-compatible `oracle.date` functions. It does not change native PostgreSQL `date`/`timestamp` output.
+- Oracle `ALTER SESSION SET TIME_ZONE` → `SET TIME ZONE 'Europe/Paris'` (or `SET timezone`). The Aurora default is `UTC`.
+- Oracle `sql_trace` / 10046 tracing: use `auto_explain` (preloadable in Aurora 18) with `auto_explain.log_min_duration`, plus `pg_stat_statements`. Neither captures waits like a 10046 trace; use CloudWatch Database Insights for wait analysis.

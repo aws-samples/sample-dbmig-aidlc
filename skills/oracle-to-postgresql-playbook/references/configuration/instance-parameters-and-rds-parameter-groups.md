@@ -3,6 +3,8 @@
 > Source: AWS Oracle→Aurora PostgreSQL Migration Playbook
 > URL: https://docs.aws.amazon.com/dms/latest/oracle-to-aurora-postgresql-migration-playbook/chap-oracle-aurora-pg.configuration.parameters.html
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): corrected the `shared_buffers`/`effective_cache_size` formulas, and replaced the PG 10 parameter list with the PG 16–18 parameters that matter for a migration.
+
 **Conversion category:** N/A (config topic) — feature compatibility: one star
 **SCT automation:** N/A. Key difference: use Cluster and Database/Cluster parameters.
 
@@ -37,22 +39,25 @@ On Aurora PostgreSQL clusters, **Parameter Groups** are used to change cluster-l
 * `client_encoding` — controlled by a cluster parameter group
 
 **Database instance-level parameters** — managed by **database parameter groups** (each instance in a cluster can have a unique database parameter group). Examples:
-* `shared_buffers` — memory cache config; AWS-optimized default based on DB class: `{DBInstanceClassMemory/10922}`
+* `shared_buffers` — memory cache config; AWS-optimized default based on DB class. Aurora PostgreSQL 18 default: `SUM({DBInstanceClassMemory/12038},-50003)` (in 8 kB pages, about 2/3 of instance memory; Aurora does not rely on the OS page cache, so leave this high)
 * `max_connections` — max client connections; default optimized by AWS: `LEAST({DBInstanceClassMemory/9531392},5000)`
 * `authentication_timeout` — max time (seconds) to complete client authentication
 * `superuser_reserved_connections` — reserved connection slots for superusers
-* `effective_cache_size` — informs optimizer how much kernel cache exists (controls cost of large index scans); default optimized by AWS based on DB class (RAM): `{DBInstanceClassMemory/10922}`
+* `effective_cache_size` — informs optimizer how much kernel cache exists (controls cost of large index scans); Aurora PostgreSQL 18 default: `SUM({DBInstanceClassMemory/12038},-50003)`
 
-**PostgreSQL 10 new parameters:**
-* `enable_gathermerge` — enable run plan gather merge
-* `max_parallel_workers` — max number of parallel worker processes
-* `max_sync_workers_per_subscription` — max synchronous workers for a subscription
-* `wal_consistency_checking` — check WAL consistency on standby (can't be set in Aurora PostgreSQL)
-* `max_logical_replication_workers` — max logical replication worker processes
-* `max_pred_locks_per_relation` — max records predicate-locked before locking the entire relation
-* `max_pred_locks_per_page` — max records predicate-locked before locking the entire page
-* `min_parallel_table_scan_size` — minimum table size to consider a parallel table scan
-* `min_parallel_index_scan_size` — minimum table size to consider a parallel index scan
+**Parameters added in PostgreSQL 16–18 that matter for a migration** (all present in the `aurora-postgresql18` family, validated on 18.6):
+* `transaction_timeout` (17) — caps total transaction time; the closest equivalent to an Oracle resource-profile limit on long transactions.
+* `idle_session_timeout` (14) / `idle_in_transaction_session_timeout` — closes idle sessions, like Oracle profile `IDLE_TIME`.
+* `debug_parallel_query` (16) — replaces `force_parallel_mode`, which no longer exists. Not modifiable in Aurora parameter groups.
+* `autovacuum_worker_slots` (18) and `autovacuum_vacuum_max_threshold` (18) — let autovacuum workers be added without a restart, and cap the dead-tuple threshold so very large tables are vacuumed more often.
+* `idle_replication_slot_timeout` (18) — invalidates logical replication slots that stay idle (for example an abandoned DMS CDC slot) before they retain too much WAL.
+* `md5_password_warnings` (18) — warns when MD5 passwords are used. MD5 is deprecated in PostgreSQL 18; keep `password_encryption = scram-sha-256` (the default).
+* `log_connections` (18) — now a list (`receipt`, `authentication`, `authorization`, `setup_durations`, `all`).
+* `rds.force_ssl` — defaults to `1` (TLS required), with `ssl_min_protocol_version = TLSv1.2`.
+* `shared_preload_libraries` — Aurora 18 allows `auto_explain`, `orafce`, `pgaudit`, `pg_ad_mapping`, `pg_bigm`, `pg_similarity`, `pg_stat_statements`, `pg_tle`, `pg_hint_plan`, `pg_prewarm`, `plprofiler`, `pglogical`, `pg_cron`.
+* Aurora-specific planner/plan-management parameters are prefixed `apg_` / `apg_plan_mgmt.` (Query Plan Management) and `aurora_`.
+* `wal_consistency_checking` can't be set in Aurora PostgreSQL.
+* Not exposed in Aurora: PostgreSQL 18's asynchronous I/O setting `io_method`. Aurora's storage layer handles I/O differently, so community AIO tuning advice does not apply.
 
 **Create a parameter group:** Sign in to AWS console → RDS → **Parameter groups** → **Create parameter group**. You can't edit the default parameter group, so create a custom one. Choose the **Parameter group family** (database family), set **Type** = **DB Parameter Group**, then **Create**.
 

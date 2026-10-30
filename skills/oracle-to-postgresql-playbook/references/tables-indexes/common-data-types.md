@@ -6,6 +6,8 @@
 **Conversion category:** Automatic (four-star feature compatibility, four-star automation)
 **SCT automation:** Data Types action code index. AWS SCT automatically converts most data types; manual action recommended for `BFILE`, `ROWID`, `UROWID`.
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): aligned numeric mapping with the toolkit's `datatype-map.yaml` (`NUMBER` → `numeric`, not SCT's `double precision`), PG 15 negative-scale numeric, `timestamp(0)` rounding vs Oracle truncation, pgvector/PostGIS/JSON/23ai BOOLEAN (all verified).
+
 ## Oracle
 Oracle provides primitive data types for table columns and PL/SQL variables. The assigned data type defines valid values for each column/argument.
 
@@ -27,11 +29,13 @@ Oracle provides primitive data types for table columns and PL/SQL variables. The
 
 **Numeric types**
 
+> **Toolkit mapping wins.** The authoritative mapping for this toolkit is `engines/oracle-to-postgresql/datatype-map.yaml`: `NUMBER` → `numeric`, `NUMBER(p,0)` → `smallint`/`integer`/`bigint` by precision, `NUMBER(p,s)` → `numeric(p,s)`. The `DOUBLE PRECISION` rows below are the **AWS SCT defaults** from the playbook. They are kept for reference when reading SCT/DMS SC output, but are **not** the recommended target: `double precision` is binary floating point (`0.1 + 0.2 = 0.30000000000000004`, verified) while Oracle `NUMBER` is exact decimal (`numeric` gives `0.3`).
+
 | Oracle | Characteristic | PG identical? | PostgreSQL type |
 |---|---|---|---|
-| NUMBER | Floating-point | No | DOUBLE PRECISION |
-| NUMBER(*) | Floating-point | No | DOUBLE PRECISION |
-| NUMBER(p,s) | p 1–38, s -84–127 | No | DECIMAL(p,s) |
+| NUMBER | Exact decimal, up to 38 digits | No | NUMERIC (SCT default: DOUBLE PRECISION) |
+| NUMBER(*) | Exact decimal | No | NUMERIC (SCT default: DOUBLE PRECISION) |
+| NUMBER(p,s) | p 1–38, s -84–127 | No | NUMERIC(p,s). PG 15+ also accepts **negative scale** and **scale > precision**, e.g. `numeric(5,-2)` rounds 12345.678 to 12300 (verified), so Oracle `NUMBER(5,-2)` converts directly |
 | NUMERIC(p,s) | p 1–38 | Yes | NUMERIC(p,s) |
 | FLOAT(p) | Floating-point | No | DOUBLE PRECISION |
 | DEC(p,s) | Fixed-point | Yes | DEC(p,s) |
@@ -46,7 +50,7 @@ Oracle provides primitive data types for table columns and PL/SQL variables. The
 
 | Oracle | Characteristic | PG identical? | PostgreSQL type |
 |---|---|---|---|
-| DATE | Date + time (y,mo,d,h,mi,s) | Yes | TIMESTAMP(0) |
+| DATE | Date + time (y,mo,d,h,mi,s) | Yes | TIMESTAMP(0). Note: casting a fractional timestamp to `timestamp(0)` **rounds** (`13:45:59.9 → 13:46:00`, verified), while Oracle `CAST(ts AS DATE)` **truncates**. Use `date_trunc('second', ts)` where truncation matters |
 | TIMESTAMP(p) | Date+time with fraction | Yes | TIMESTAMP(p) |
 | TIMESTAMP(p) WITH TIME ZONE | + time zone | Yes | TIMESTAMP(p) WITH TIME ZONE |
 | INTERVAL YEAR(p) TO MONTH | Date interval | Yes | INTERVAL YEAR TO MONTH |
@@ -73,9 +77,11 @@ Oracle provides primitive data types for table columns and PL/SQL variables. The
 | Oracle | PostgreSQL type |
 |---|---|
 | XMLTYPE | XML |
-| BOOLEAN (PL/SQL only, can't be a table column) | BOOLEAN |
-| SDO_GEOMETRY, SDO_TOPO_GEOMETRY, SDO_GEORASTER (spatial) | N/A |
-| ORDDicom, ORDDoc, ORDImage, ORDVideo (media) | N/A |
+| BOOLEAN (PL/SQL only before Oracle 23ai; a column type in 23ai) | BOOLEAN |
+| JSON (Oracle 21c+ native type) | JSONB |
+| VECTOR (Oracle 23ai) | `vector(n)` from **pgvector** 0.8.2 (available on Aurora 18, verified) |
+| SDO_GEOMETRY, SDO_TOPO_GEOMETRY, SDO_GEORASTER (spatial) | `geometry` / `topogeometry` / `raster` from **PostGIS** 3.6 (available on Aurora 18, verified) |
+| ORDDicom, ORDDoc, ORDImage, ORDVideo (media) | N/A — store in S3, keep metadata in the database |
 
 > The "PostgreSQL identical compatibility" column indicates whether the exact Oracle data type syntax can be used when migrating to Aurora PostgreSQL.
 
@@ -194,6 +200,10 @@ OIDS=FALSE
 - **BFILE**: pointers to binary files. Either store a named file + a routine that fetches it from the filesystem, or store the blob inside the database.
 - **ROWID**: physical row addresses. PostgreSQL has a `ctid` system column (physical row-version location) but no comparable data type; use `CHAR` as a partial equivalent. Code using ROWID may need modification.
 - **UROWID**: supports logical/physical rowids including foreign (non-Oracle) table rowids via gateway. No equivalent; use `VARCHAR(n)` as a partial equivalent. Code using UROWID may need modification.
-- `NUMBER`/`NUMBER(*)`/`FLOAT(p)`/`REAL` map to `DOUBLE PRECISION` (not bit-identical to Oracle's variable-precision NUMBER).
+- `NUMBER`/`NUMBER(*)` → `numeric` (toolkit default, exact). Integer-only `NUMBER(p,0)` keys → `bigint`/`integer` (faster joins and indexes). `FLOAT(p)`/`BINARY_DOUBLE` → `double precision` and `BINARY_FLOAT` → `real` are genuinely floating point on both sides. SCT's `NUMBER` → `DOUBLE PRECISION` default changes results for money and quantities; fix it when importing SCT/DMS SC output.
+- `NUMBER(1)` / `CHAR(1)` flags: keep the source type unless the customer decides on `boolean` (record it in `customer-specific/`), because the application binds the existing values.
+- `CHAR(n)`: PostgreSQL ignores trailing spaces when comparing `char(n)` (`'abc  '::char(5) = 'abc'` is true) and `length()` excludes them (3, verified), but `varchar` comparison is space-sensitive. Oracle compares `CHAR` with blank-padded semantics too, but `VARCHAR2` vs `CHAR` comparisons can differ.
+- Case-insensitive text columns: `citext` (available, verified) or a nondeterministic collation.
+- `WITH (OIDS=FALSE)` in SCT output is accepted but meaningless since PG 12 (verified); drop it.
 - Oracle `DATE` includes a time component → maps to `TIMESTAMP(0)`, not PostgreSQL `DATE`.
 - Watch BYTE vs CHAR semantics: a `VARCHAR2(n BYTE)` column may need a larger length in PostgreSQL (which is char-based) when multi-byte data is involved.

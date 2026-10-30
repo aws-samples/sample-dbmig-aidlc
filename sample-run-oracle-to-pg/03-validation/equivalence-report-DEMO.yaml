@@ -1,8 +1,8 @@
 schema: DEMO
 mode: silent
 summary:
-  cases: 53
-  passed: 53
+  cases: 58
+  passed: 58
   failed: 0
   skipped: 0
   low_coverage_objects: 4
@@ -18,8 +18,8 @@ results:
   status: pass
   coverage: n/a
   detail:
-    source: '22.37'
-    target: '22.37'
+    source: '21.51'
+    target: '21.51'
 - object: DEMO.CALCULATE_DISCOUNT_PCT
   type: function
   case: c2
@@ -34,16 +34,32 @@ results:
   status: pass
   coverage: n/a
   detail:
-    source: '-7.69'
-    target: '-7.69'
+    source: '12.5'
+    target: '12.50'
 - object: DEMO.CALCULATE_DISCOUNT_PCT
   type: function
   case: c4
   status: pass
   coverage: n/a
   detail:
-    source: '66.67'
-    target: '66.67'
+    source: '33.33'
+    target: '33.33'
+- object: DEMO.CALCULATE_DISCOUNT_PCT
+  type: function
+  case: c5
+  status: pass
+  coverage: n/a
+  detail:
+    source: '-68.46'
+    target: '-68.46'
+- object: DEMO.CALCULATE_DISCOUNT_PCT
+  type: function
+  case: c6
+  status: pass
+  coverage: n/a
+  detail:
+    source: null
+    target: null
 - object: DEMO.GET_CONDITION_NAME
   type: function
   case: c1
@@ -68,6 +84,14 @@ results:
   detail:
     source: Unknown
     target: Unknown
+- object: DEMO.GET_CONDITION_NAME
+  type: function
+  case: c4
+  status: pass
+  coverage: OK
+  detail:
+    source: Unknown
+    target: Unknown
 - object: DEMO.GET_CUSTOMER_FULL_NAME
   type: function
   case: c1
@@ -82,8 +106,8 @@ results:
   status: pass
   coverage: OK
   detail:
-    source: John Doe
-    target: John Doe
+    source: Jane Doe
+    target: Jane Doe
 - object: DEMO.GET_CUSTOMER_FULL_NAME
   type: function
   case: c3
@@ -92,6 +116,14 @@ results:
   detail:
     source: Unknown Customer
     target: Unknown Customer
+- object: DEMO.GET_CUSTOMER_FULL_NAME
+  type: function
+  case: c4
+  status: pass
+  coverage: OK
+  detail:
+    source: '26'
+    target: '26'
 - object: DEMO.GET_CUSTOMER_LIFETIME_VALUE
   type: function
   case: c1
@@ -122,8 +154,8 @@ results:
   status: pass
   coverage: OK
   detail:
-    source: History
-    target: History
+    source: Children's Books
+    target: Children's Books
 - object: DEMO.GET_GENRE_NAME
   type: function
   case: c3
@@ -212,16 +244,16 @@ results:
   status: pass
   coverage: OK
   detail:
-    source: null
-    target: null
+    source: '1'
+    target: '1'
 - object: DEMO.INVENTORY_PKG
   type: function
   case: i4
   status: pass
   coverage: OK
   detail:
-    source: '0'
-    target: '0'
+    source: null
+    target: null
 - object: DEMO.INVENTORY_PKG
   type: function
   case: i5
@@ -231,22 +263,26 @@ results:
     source: '0'
     target: '0'
 - object: DEMO.INVENTORY_PKG
-  type: procedure
+  type: function
   case: i6
   status: pass
   coverage: OK
   detail:
-    qty_listing_1:
-      source_delta: '-3.0'
-      target_delta: '-3.0'
+    source: '0'
+    target: '0'
+- object: DEMO.INVENTORY_PKG
+  type: procedure
+  case: i7
+  status: pass
+  coverage: OK
+  detail:
+    listing1_qty:
+      source_delta: '-2.0'
+      target_delta: '-2.0'
       match: true
-    updated_set:
+    listing1_updated:
       source_delta: '1.0'
       target_delta: '1.0'
-      match: true
-    total_qty:
-      source_delta: '-3.0'
-      target_delta: '-3.0'
       match: true
 - object: DEMO.ORDER_PKG
   type: function
@@ -270,7 +306,7 @@ results:
   status: pass
   coverage: PARTIAL
   detail:
-    pending_cust1:
+    pending_orders_c2:
       source_delta: '1.0'
       target_delta: '1.0'
       match: true
@@ -280,15 +316,11 @@ results:
   status: pass
   coverage: PARTIAL
   detail:
-    items:
+    items_listing1:
       source_delta: '1.0'
       target_delta: '1.0'
       match: true
-    total_cust2:
-      source_delta: '21.9'
-      target_delta: '21.9'
-      match: true
-    item_price:
+    total_c2:
       source_delta: '21.9'
       target_delta: '21.9'
       match: true
@@ -298,7 +330,7 @@ results:
   status: pass
   coverage: PARTIAL
   detail:
-    shipped:
+    shipped_c3:
       source_delta: '1.0'
       target_delta: '1.0'
       match: true
@@ -325,20 +357,16 @@ results:
   coverage: PARTIAL
   detail:
     top_rows:
-      source_delta: '2.0'
-      target_delta: '2.0'
-      match: true
-    top_sold:
-      source_delta: '3.0'
-      target_delta: '3.0'
+      source_delta: '1.0'
+      target_delta: '1.0'
       match: true
     top_revenue:
-      source_delta: '35.85'
-      target_delta: '35.85'
+      source_delta: '21.9'
+      target_delta: '21.9'
       match: true
-    top_book_ids:
-      source_delta: '3.0'
-      target_delta: '3.0'
+    top_sold:
+      source_delta: '2.0'
+      target_delta: '2.0'
       match: true
 - object: DEMO.REPORTING_PKG
   type: procedure
@@ -372,59 +400,11 @@ results:
   status: pass
   coverage: n/a
   detail:
-    source: '1'
-    target: '1'
+    source: '0'
+    target: '0'
 - object: DEMO.VALIDATION_PKG
   type: function
   case: v4
-  status: pass
-  coverage: n/a
-  detail:
-    source: '1'
-    target: '1'
-- object: DEMO.VALIDATION_PKG
-  type: function
-  case: v5
-  status: pass
-  coverage: n/a
-  detail:
-    source: '0'
-    target: '0'
-- object: DEMO.VALIDATION_PKG
-  type: function
-  case: v6
-  status: pass
-  coverage: n/a
-  detail:
-    source: '0'
-    target: '0'
-- object: DEMO.VALIDATION_PKG
-  type: function
-  case: v7
-  status: pass
-  coverage: n/a
-  detail:
-    source: '1'
-    target: '1'
-- object: DEMO.VALIDATION_PKG
-  type: function
-  case: v8
-  status: pass
-  coverage: n/a
-  detail:
-    source: '0'
-    target: '0'
-- object: DEMO.VALIDATION_PKG
-  type: function
-  case: v9
-  status: pass
-  coverage: n/a
-  detail:
-    source: '0'
-    target: '0'
-- object: DEMO.VALIDATION_PKG
-  type: function
-  case: v10
   status: pass
   coverage: n/a
   detail:
@@ -432,15 +412,63 @@ results:
     target: '3'
 - object: DEMO.VALIDATION_PKG
   type: function
-  case: v11
+  case: v5
+  status: pass
+  coverage: n/a
+  detail:
+    source: '1'
+    target: '1'
+- object: DEMO.VALIDATION_PKG
+  type: function
+  case: v6
+  status: pass
+  coverage: n/a
+  detail:
+    source: '1'
+    target: '1'
+- object: DEMO.VALIDATION_PKG
+  type: function
+  case: v7
+  status: pass
+  coverage: n/a
+  detail:
+    source: '0'
+    target: '0'
+- object: DEMO.VALIDATION_PKG
+  type: function
+  case: v8
   status: pass
   coverage: n/a
   detail:
     source: '56'
     target: '56'
+- object: DEMO.VALIDATION_PKG
+  type: function
+  case: v9
+  status: pass
+  coverage: n/a
+  detail:
+    source: '1'
+    target: '1'
+- object: DEMO.VALIDATION_PKG
+  type: function
+  case: v10
+  status: pass
+  coverage: n/a
+  detail:
+    source: '0'
+    target: '0'
+- object: DEMO.VALIDATION_PKG
+  type: function
+  case: v11
+  status: pass
+  coverage: n/a
+  detail:
+    source: '0'
+    target: '0'
 - object: DEMO.ARCHIVE_OLD_ORDERS
   type: procedure
-  case: a1
+  case: p1
   status: pass
   coverage: LOW_COVERAGE
   detail:
@@ -450,17 +478,17 @@ results:
       match: true
 - object: DEMO.CLEAR_SHOPPING_CART
   type: procedure
-  case: s1
+  case: p1
   status: pass
   coverage: LOW_COVERAGE
   detail:
-    cart_count:
+    cart_rows:
       source_delta: '0.0'
       target_delta: '0.0'
       match: true
 - object: DEMO.GENERATE_SALES_REPORT
   type: procedure
-  case: g1
+  case: p1
   status: pass
   coverage: LOW_COVERAGE
   detail:
@@ -480,11 +508,11 @@ results:
       match: true
 - object: DEMO.SET_BOOK_FEATURED
   type: procedure
-  case: f1
+  case: p1
   status: pass
   coverage: OK
   detail:
-    featured:
+    featured_book1:
       source_delta: '0.0'
       target_delta: '0.0'
       match: true

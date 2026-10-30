@@ -6,6 +6,8 @@
 **Conversion category:** Manual
 **SCT automation:** N/A
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Verified TLS defaults: 8.4 enforces require_secure_transport=ON and only forward-secret GCM ciphers, 3.13 does not; CA bundle and verification, driver inventory, toolkit sslmode.
+
 With AWS DMS, you can secure data transmission between the replication instance and the source or target database by using encrypted connections, providing a private encrypted tunnel for data transfer.
 
 ## Oracle
@@ -56,3 +58,16 @@ mysql --ssl-mode=REQUIRED -h myhost -u testuser -p
 - Oracle native Net Services encryption (AES/ARIA/GOST/SEED/3DES via `sqlnet.ora`) has no direct MySQL equivalent — MySQL relies on TLS for in-transit encryption.
 - Configure TLS at the connection layer in MySQL (`REQUIRE SSL` per user, `--ssl-mode` on the client) rather than via an Oracle-style network parameter file.
 - On Amazon RDS/Aurora MySQL, prefer TLS v1.2/v1.3; v1.3 needs server and client built on OpenSSL 1.1.1+ (RDS MySQL 8.0.16+).
+
+Verified on the validation clusters (default parameter groups):
+| Setting | Aurora MySQL 3.13 | Aurora MySQL 8.4.8 |
+|---|---|---|
+| `require_secure_transport` | **OFF** | **ON** — unencrypted connections are refused |
+| `tls_version` | `TLSv1.2,TLSv1.3` | `TLSv1.2,TLSv1.3` |
+| `ssl_cipher` | includes CBC/SHA1 suites | forward-secret AES-GCM suites only (weak ciphers removed in 8.4) |
+| Negotiated by the Data API | TLSv1.3 | TLSv1.3 |
+
+- Set `require_secure_transport = ON` in the cluster parameter group on Aurora MySQL 3 too, rather than `REQUIRE SSL` per account.
+- Clients must trust the RDS CA bundle (`global-bundle.pem`) and should verify the server (`--ssl-mode=VERIFY_IDENTITY`, PyMySQL `ssl={'ca': …}`). Plan for CA rotation; certificate rotation without restart is supported on both versions.
+- Old drivers that only speak TLS 1.0/1.1 or legacy ciphers cannot connect to 8.4 at all — inventory them before migration.
+- In this toolkit, set `sslmode: require` (or stricter) in `connections.yaml` for Aurora targets.

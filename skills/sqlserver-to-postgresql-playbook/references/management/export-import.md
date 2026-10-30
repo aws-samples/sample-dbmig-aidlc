@@ -6,6 +6,8 @@
 **Conversion category:** N/A (no feature compatibility — non-compatible tool)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): PG 16–18 `pg_dump` options, client-side `\copy` (server file COPY unsupported, verified), PG 17/18 `ON_ERROR`/`REJECT_LIMIT`, fixed S3 pipe and restore examples, BCP mapping, DMS 3.5.4+.
+
 ## SQL Server
 
 SQL Server provides many options for exporting/importing text files for data migration, scripting, and backup:
@@ -38,40 +40,48 @@ PostgreSQL provides `pg_dump` and `pg_restore` for logical export/import (compar
 
 Dump files can be copied to Amazon S3 for cloud backup/retention, then copied back to a client and restored with `pg_restore`.
 
-Version additions:
-- PostgreSQL 10: exclude a schema in `pg_dump`/`pg_restore`; dumps with no blobs; allow `pg_dumpall` by non-superusers via `--no-role-passwords`; `fsync()` integrity option.
-- PostgreSQL 11: `pg_dump`/`pg_restore` export/import extension–object dependency relationships (`ALTER … DEPENDS ON EXTENSION`).
+Current `pg_dump`/`pg_restore` capabilities (use **PostgreSQL 18 client binaries** against Aurora PostgreSQL 18):
+- Schema/table include and exclude (`-n`/`-N`, `-t`/`-T`), or a filter file with `--filter=file` (PG 17+).
+- Compression `-Z gzip|lz4|zstd[:level]` (PG 16+).
+- Parallel dump/restore with the directory format (`-Fd -j N`).
+- Optimizer statistics with `--statistics` / `--statistics-only` (PG 18; off by default).
+- `pg_dumpall --no-role-passwords` (required on Aurora, where the master user cannot read `pg_authid`).
 
 Notes:
 - `pg_dump` creates consistent backups even under concurrent use and does not block readers/writers.
 - `pg_dump` exports a single database; use `pg_dumpall` for cluster-global objects (roles, tablespaces).
 - Dump files can be plain-text or custom format.
-- `COPY TO` / `COPY FROM` is another option; since PostgreSQL 12, `COPY FROM` supports row filtering with `WHERE`:
+- Dump files can be plain-text (restore with `psql -f`) or custom/directory (restore with `pg_restore`).
+- `COPY TO` / `COPY FROM` is the BCP equivalent, run **client-side** on Aurora. Server-side file `COPY` is not supported (verified on 18.6). Use `psql \copy`, `COPY … FROM STDIN` in a driver, or `aws_s3.table_import_from_s3` / `query_export_to_s3`. Row filtering with `WHERE` (PG 12+) and error tolerance `ON_ERROR ignore` (PG 17), `REJECT_LIMIT n` (PG 18), similar to BCP `-m max_errors`, are available. They are community features; test them with `\copy`:
 
   ```sql
   CREATE TABLE tst_copy(v TEXT);
-  COPY tst_copy FROM '/home/postgres/file.csv' WITH (FORMAT CSV) WHERE v LIKE '%apple%';
+  \copy tst_copy FROM 'file.csv' WITH (FORMAT CSV, ON_ERROR ignore, REJECT_LIMIT 100) WHERE v LIKE '%apple%'
   ```
 
 Examples:
 
 ```bash
-# Export with pg_dump
-pg_dump -h hostname.rds.amazonaws.com -U username -d db_name -f dump_file_name.sql
+# Export with pg_dump (custom format, zstd)
+pg_dump -Fc -Z zstd -h hostname.rds.amazonaws.com -U username -d db_name -f db_name.dump
 
-# Export and stream to S3 via pipe + AWS CLI
-pg_dump -h hostname.rds.amazonaws.com -U username -d db_name -f dump_file_name.sql \
-  | aws s3 cp - s3://<your-unique-bucket-name>/pg_bck-$(date "+%Y-%m-%d-%H-%M-%S")
+# Export and stream to S3 via pipe + AWS CLI (stdout: no -f)
+pg_dump -Fc -h hostname.rds.amazonaws.com -U username -d db_name \
+  | aws s3 cp - s3://<your-unique-bucket-name>/pg_bck-$(date "+%Y-%m-%d-%H-%M-%S").dump
 
-# Restore with pg_restore
-pg_restore -h hostname.rds.amazonaws.com -U username -d dbname_restore dump_file_name.sql
+# Restore a custom-format dump with pg_restore (plain .sql dumps are restored with psql -f)
+pg_restore -h hostname.rds.amazonaws.com -U username -d dbname_restore db_name.dump
+
+# BCP-style export of one query to CSV
+psql -h hostname.rds.amazonaws.com -U username -d db_name \
+  -c "\copy (SELECT * FROM sales WHERE year = 2024) TO 'sales_2024.csv' WITH (FORMAT csv, HEADER)"
 
 # Copy a dump file to/from S3 (date suffix is Linux-only)
 aws s3 cp /usr/Exports/hr.dmp s3://<your-unique-bucket-name>/backup-$(date "+%Y-%m-%d-%H-%M-%S")
 aws s3 cp s3://<your-unique-bucket-name>/backup-2017-09-10-01-10-10 /usr/Exports/hr.dmp
 ```
 
-Copy an existing database without `pg_dump`/`pg_restore` using a template:
+Copy an existing database without `pg_dump`/`pg_restore` using a template (no other sessions connected to the source; for a whole-cluster copy, an Aurora fast clone is faster):
 
 ```sql
 CREATE DATABASE mydb_copy TEMPLATE mydb;
@@ -89,4 +99,5 @@ CREATE DATABASE mydb_copy TEMPLATE mydb;
 - Non-compatible tooling — SQLCMD/BCP/SSMS wizard have no direct equivalent; use `pg_dump`/`pg_restore` (or `COPY`) instead.
 - AWS integration: stage/retrieve dump files in Amazon S3 (optionally piped through the AWS CLI); run client binaries from a workstation or Amazon EC2.
 - `pg_dump` is single-database; use `pg_dumpall` for cluster-wide global objects.
-- For large/production data movement prefer AWS DMS over manual dump/restore.
+- For large/production data movement prefer AWS DMS over manual dump/restore. SQL Server → Aurora PostgreSQL 18 needs DMS replication engine **3.5.4+**. In this toolkit, `dbmig migrate-data` handles dev/test loads.
+- `bcp out` / `bcp in` → `\copy … TO/FROM`; BCP format files have no equivalent (use column lists in `\copy`).

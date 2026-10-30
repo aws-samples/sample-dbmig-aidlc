@@ -6,6 +6,8 @@
 **Conversion category:** N/A (infrastructure topic — four-star feature compatibility)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Storage limit 256 TiB (was 64 TiB), delayed replication only via binlog replicas (8.4 procedure name verified), Global Database and write forwarding, replica-lag views, failover clients.
+
 ## SQL Server
 
 SQL Server provides several HA/DR solutions: Always On Failover Cluster Instances (FCI),
@@ -155,7 +157,7 @@ promotion.
 ### Amazon Aurora Storage
 Data is stored in a single virtual cluster volume on SSDs, comprising multiple copies
 distributed across AZs in a Region — minimizing data loss and enabling failover. Cluster
-volumes auto-grow up to 64 TiB; max table size is therefore also 64 TiB.
+volumes auto-grow; the limit is now **256 TiB** for Aurora MySQL clusters on recent versions ([AWS What's New, July 2025](https://aws.amazon.com/about-aws/whats-new/2025/07/amazon-aurora-mysql-database-clusters-256-tib-storage/); 128 TiB on older versions). The original 64 TiB limit is obsolete.
 
 ### Storage Auto-Repair
 Aurora maintains multiple data copies across three AZs. It detects disk failures and
@@ -172,11 +174,11 @@ Aurora MySQL recovers from a crash almost instantly, performing recovery asynchr
 parallel threads so the database stays open and available immediately after a crash.
 
 ### Delayed Replication
-> Note: RDS for MySQL supports delayed replication — a configurable lag for a read replica.
-> Useful for DR/human error: if a table is accidentally dropped, stop replication just before
-> that point and promote the replica to standalone. A stored procedure stops replication once
-> a specified binary-log point is reached. Available in MySQL 5.7.22+ and 5.6.40+ in all
-> Regions; configured via stored procedure at replica creation or for an existing replica.
+> Note: delayed replication is an **RDS for MySQL / binlog-replica** feature; Aurora replicas
+> share the storage volume and cannot be delayed. For an Aurora cluster, use a binlog replica
+> cluster with `mysql.rds_set_external_source_with_delay` (8.4 name, verified present) /
+> `rds_set_external_master_with_delay` (3.x), or rely on **Backtrack** (up to 72 h) or PITR to
+> undo human error.
 
 ### Examples
 
@@ -212,3 +214,13 @@ After creation, run reads/writes on the primary and read-only operations on the 
   auto-repair, near-instant crash recovery, and transparent failover via the cluster endpoint.
 - Up to 15 Aurora replicas (vs. 8 SQL Server secondaries) for read scale-out, addressable via
   the reader endpoint.
+- **Cross-Region DR** (SQL Server distributed AGs / log shipping to another site) → **Aurora Global
+  Database** (supported on 3 and 8.4, verified): storage-level replication with typically sub-second
+  lag, managed switchover and failover. Prefer it over binlog cross-Region read replicas.
+- **Readable secondaries with writes** (AG read-write redirect) → Aurora **local/global write
+  forwarding**, controlled by `aurora_replica_read_consistency`.
+- Replica lag: `information_schema.replica_host_status` and the `AuroraReplicaLag` metric (verified
+  present on both versions).
+- Failover: about 30 seconds or less; applications should use the AWS JDBC/Python wrappers or RDS
+  Proxy to reconnect quickly, instead of relying on DNS TTLs alone.
+- Aurora multi-master (in older material) is retired; there is one writer per cluster.

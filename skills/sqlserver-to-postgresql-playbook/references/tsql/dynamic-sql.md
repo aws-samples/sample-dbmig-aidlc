@@ -6,6 +6,8 @@
 **Conversion category:** Manual (two-star feature compatibility — different paradigm requires rewriting; five-star SCT automation)
 **SCT automation:** Five-star automation level; N/A action code
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): quoting functions (verified), `%s` warning, OUTPUT params, `EXEC … AT`, result-set declaration, transactional DDL.
+
 ## SQL Server
 
 Dynamic SQL minimizes hard-coded SQL and lets developers construct/run queries at run time as strings. Two options: `EXECUTE` command or `sp_executesql`.
@@ -122,8 +124,12 @@ EXECUTE numplan(102, 'New number 102', 'f');
 
 ## Conversion notes
 - No `sp_executesql` — use `EXECUTE ... USING` with `format()` for parameterized dynamic SQL.
-- Use `format()` with `%I` (identifiers) and `%s`/`%L` (values/literals) instead of string concatenation — safer against SQL injection and handles quoting.
+- Use `format()` with `%I` (identifiers) and `%L` (literals) instead of string concatenation — safer against SQL injection and handles quoting. `QUOTENAME(x)` → `quote_ident(x)` / `%I`; quoting a literal → `quote_literal(x)` / `%L` (verified). **Never use `%s` for user-supplied values**: it inserts them unquoted. Prefer `USING $1` binds for all values.
 - Bind values with `USING`; capture results with `INTO`.
 - Dynamic SQL must live inside a PL/pgSQL block (`DO $$ ... $$` or function), not standalone.
-- `EXECUTE AS USER` context switching has no direct equivalent — handle via roles/`SET ROLE`.
+- `EXECUTE AS USER` context switching has no direct equivalent — handle via roles/`SET ROLE`, or a `SECURITY DEFINER` function with `SET search_path`.
+- `sp_executesql` with `OUTPUT` parameters → `EXECUTE … INTO var USING …` (add `STRICT` to raise on no row or multiple rows).
+- `EXEC (@sql) AT LinkedServer` → `dblink_exec('server', sql)` or a foreign table (see `../management/linked-servers.md`).
+- `WITH RESULT SETS` has no equivalent; declare the result shape with `RETURNS TABLE` on a function instead.
+- DDL in PostgreSQL is transactional, so dynamic `CREATE`/`DROP` inside a transaction rolls back with it (SQL Server behaves the same for most DDL).
 - Use `PREPARE`/`EXECUTE` for repeated statements to gain performance.

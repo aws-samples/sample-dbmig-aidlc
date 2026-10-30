@@ -6,6 +6,8 @@
 **Conversion category:** Manual (Two star feature compatibility)
 **SCT automation:** Three star automation level
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Corrected 'functions can run DDL' (error 1422 — verified); self-table DML (1442), no UDFs in generated columns/functional indexes (verified), no defaults/overloading, binlog creation rule, LATERAL and JSON_TABLE for TVF patterns.
+
 ## SQL Server
 
 UDFs accept input parameters and return a scalar value or a row set. Implemented in T-SQL or CLR (CLR not covered). Functions can't have lasting database impact — can't modify data or schema, only local objects. May be deterministic or non-deterministic. Three T-SQL UDF types: scalar, inline table-valued, multi-statement table-valued. SQL Server 2019 adds scalar UDF inlining for performance.
@@ -66,7 +68,7 @@ END[;]
 
 ## MySQL
 
-Aurora MySQL supports **scalar functions only** — no table-valued functions. Unlike SQL Server, routines **may read and write data** (`INSERT`/`UPDATE`/`DELETE`) and run DDL (`CREATE`/`DROP`), but **cannot** contain explicit transaction statements (`COMMIT`/`ROLLBACK`).
+Aurora MySQL supports **scalar functions only** — no table-valued functions. Unlike SQL Server, functions **may write data** (`INSERT`/`UPDATE`/`DELETE`, verified), but *(corrected)* they **cannot run DDL or `COMMIT`/`ROLLBACK`** (error 1422 for `CREATE TABLE` in a function, verified on 3.13 and 8.4.8) and cannot use dynamic SQL (error 1336).
 
 Characteristics (saved with the definition, viewable via `SHOW CREATE FUNCTION`):
 - `DETERMINISTIC` must be stated explicitly (engine assumes non-deterministic otherwise; validity not checked — wrong declaration causes unexpected results).
@@ -101,7 +103,12 @@ SELECT UpperCaseFirstChar ('mIxEdCasE');  -- Mixedcase
 
 - Scalar UDFs migrate easily: similar syntax, but **remove the `AS` keyword** (invalid in Aurora MySQL) and drop `@` from parameter names.
 - Function determinism is implicit in SQL Server but must be **explicitly** declared `DETERMINISTIC` in Aurora MySQL (enables optimizations).
-- Aurora MySQL function rules are more lenient (can modify data/schema) — guard against unexpected side effects.
+- Aurora MySQL function rules are more lenient for data (DML allowed) but not for schema (DDL rejected) — guard against unexpected side effects. A function that modifies a table cannot be called from a statement that uses the same table (error 1442, verified).
+- User functions cannot be used in generated columns or functional indexes (errors 3763/3758, verified) — SQL Server persisted computed columns that call a UDF need a trigger-maintained column instead.
+- No parameter defaults, no overloading (error 1304), names ≤ 64 characters; parameters lose the `@` prefix. Declare `tinyint`/`smallint` parameters as `INT` when callers pass integer literals.
+- `WITH SCHEMABINDING` / `RETURNS NULL ON NULL INPUT` have no equivalents.
+- With binary logging on, creating a function that is not `DETERMINISTIC`/`NO SQL`/`READS SQL DATA` needs `log_bin_trust_function_creators` = 1 (0 by default, verified).
+- Inline TVFs used with `CROSS APPLY` → a view or derived table joined with `JOIN LATERAL` (MySQL 8.0.14+); TVFs that return parsed rows from a string → `JSON_TABLE` (see `string-functions.md`).
 - Inline TVF → use **views**, replacing parameters with `WHERE` filter predicates in the calling code.
 - Multi-statement TVF → rewrite as a **stored procedure** that populates a temp/standard table; read from the table directly.
 
@@ -111,4 +118,4 @@ SELECT UpperCaseFirstChar ('mIxEdCasE');  -- Mixedcase
 | Inline table-valued UDF | N/A | Use views + `WHERE` predicates |
 | Multi-statement table-valued UDF | N/A | Use stored procedures populating tables |
 | Determinism implicit | Explicit declaration | Use `DETERMINISTIC` |
-| Boundaries local only | Can change data and schema | More lenient — avoid unexpected changes |
+| Boundaries local only | Can change data (not schema) | DML allowed, DDL/COMMIT rejected (verified) |

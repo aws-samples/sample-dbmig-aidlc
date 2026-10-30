@@ -5,6 +5,8 @@
 
 **Conversion category:** N/A (no feature compatibility)
 **SCT automation:** N/A
+
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): SQL Server database options mapped to Aurora MySQL (isolation and snapshot behavior verified).
 **Key difference:** SQL Server database options are inapplicable to Aurora MySQL.
 
 ## SQL Server
@@ -48,3 +50,4 @@ Aurora MySQL has two settings saved with the database/schema:
 - Runtime/feature settings that were database options in SQL Server map instead to Aurora **server system variables** managed via DB cluster and DB parameter groups (see Server Options).
 - Only character set and collation defaults are persisted at the schema level in Aurora MySQL.
 - For migration considerations, see Server Options.
+- Common SQL Server database options and their Aurora MySQL counterparts: `READ_COMMITTED_SNAPSHOT ON` → InnoDB is always MVCC; set `transaction_isolation = READ-COMMITTED` to match SQL Server's read-committed semantics (Aurora default is `REPEATABLE-READ`, verified). `ALLOW_SNAPSHOT_ISOLATION` → `REPEATABLE READ` (there is no `SNAPSHOT` keyword, verified). `RECOVERY FULL/SIMPLE` → n/a (Aurora storage is always durable; binlog only for replication). `AUTO_CREATE/UPDATE_STATISTICS` → `innodb_stats_auto_recalc` (ON) and manual histograms. `COMPATIBILITY_LEVEL` → engine version. `COLLATE` → `ALTER DATABASE … DEFAULT COLLATE` (affects new tables only). `READ_ONLY` → no per-database switch; revoke write privileges. `SINGLE_USER` → no equivalent.

@@ -6,6 +6,8 @@
 **Conversion category:** Manual (One star feature compatibility)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): EventBridge rules on individual events, error-log metric filters for message-id alerts, CloudWatch metric alarms, Database Insights.
+
 ## SQL Server
 
 SQL Server Agent generates alerts. When running, it monitors Windows application log messages, performance counters, and WMI objects. When a new error event is detected, the agent checks MSDB for configured alerts and runs the specified action.
@@ -48,3 +50,6 @@ Example walkthrough (create an event notification subscription):
 - You can only subscribe to event *categories*, not individual events as in SQL Server.
 - Performance-threshold and WMI alerts have no direct equivalent; combine RDS event notifications with **Amazon CloudWatch** alarms for metric-based alerting.
 - Typical pattern: create multiple subscriptions (e.g., one for logging events, one for critical production events).
+- RDS events are also delivered to **Amazon EventBridge**, which allows rules on individual event IDs (closer to SQL Server's per-error alerts) and targets beyond SNS.
+- Error-number alerts (`sp_add_alert @message_id`) → export the MySQL error log to CloudWatch Logs and create metric filters + alarms on error codes/text.
+- Performance-condition alerts → CloudWatch alarms on `CPUUtilization`, `DatabaseConnections`, `Deadlocks`, `AuroraReplicaLag`, `FreeableMemory`, `ACUUtilization` (Serverless v2), or CloudWatch Database Insights (Performance Insights reached end of life on 2026-07-31).

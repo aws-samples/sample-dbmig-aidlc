@@ -1,7 +1,7 @@
-project: s2pg
+project: sqlserver-pg18-20261030
 schema: DBO
 phase: construction-code
-generated_at: '2026-09-28T16:17:24Z'
+generated_at: '2026-10-30T07:26:38Z'
 provider: kiro
 model: kiro
 unit_count: 25

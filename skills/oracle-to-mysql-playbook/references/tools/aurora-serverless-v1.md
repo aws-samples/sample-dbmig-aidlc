@@ -1,4 +1,4 @@
-# Amazon Aurora Serverless v1
+# Amazon Aurora Serverless (v2; v1 retired)
 
 > Source: AWS Oracle→Aurora MySQL Migration Playbook
 > URL: https://docs.aws.amazon.com/dms/latest/oracle-to-aurora-mysql-migration-playbook/chap-oracle-aurora-mysql.tools.auroraserverless.html
@@ -6,51 +6,34 @@
 **Conversion category:** N/A (Aurora deployment / capacity option)
 **SCT automation:** N/A
 
-## Overview
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): **Aurora Serverless v1 reached end of life on 2025-03-31.** This page now describes **Aurora Serverless v2**, the only serverless option for Aurora MySQL 3 and 8.4. The filename is kept so existing links still resolve. Both validation clusters for this review were Serverless v2.
 
-Amazon Aurora Serverless v1 is an on-demand, autoscaling configuration for Amazon Aurora. An Aurora Serverless DB cluster scales compute capacity up and down based on application needs, in contrast to provisioned clusters where you manage capacity manually. It is a relatively simple, cost-effective option for infrequent, intermittent, or unpredictable workloads — it automatically starts up, scales compute to match usage, and shuts down when not in use.
+## Oracle
+Not an Oracle feature. Relevant when sizing the target: instead of provisioning fixed capacity for an Oracle instance, the Aurora MySQL cluster can scale compute on demand.
 
-The cluster volume is the same high-capacity, distributed, highly available storage used by provisioned clusters and is **always encrypted** (you can choose the key but can't turn off encryption).
+## Aurora MySQL — Aurora Serverless v2
+Serverless v2 is an instance class (`db.serverless`) inside a normal Aurora cluster. Capacity is measured in **Aurora Capacity Units (ACUs)**, about 2 GiB of memory each with matching CPU and network. You set a minimum and maximum per cluster; capacity changes in fine-grained steps within seconds while connections stay open.
 
-### Advantages
-- **Simpler than provisioned** — Removes much of the complexity of managing DB instances and capacity.
-- **Scalable** — Seamlessly scales compute and memory with no disruption to client connections.
-- **Cost-effective** — Pay only for database resources consumed, on a per-second basis.
-- **Highly available storage** — Same fault-tolerant, distributed storage with six-way replication.
+- **Range:** minimum **0** or 0.5 ACU, maximum up to **256 ACU** per instance.
+- **Scale to zero (auto-pause):** with `MinCapacity=0` an idle instance pauses and costs only storage. The first connection after a pause waits (or, through the Data API, fails until the instance resumes). Use `MinCapacity ≥ 0.5` for latency-sensitive workloads.
+- **Mix with provisioned instances:** provisioned writer + Serverless v2 readers, or the reverse. Readers in promotion tiers 0–1 scale with the writer so they can take over after failover.
+- **Same engine features** as provisioned Aurora MySQL 3 / 8.4: Multi-AZ, Global Database, RDS Proxy, Data API, Backtrack, zero-ETL integrations.
+- **Capacity-dependent settings:** `max_connections` is derived from the maximum ACU (135 at 0.5–4 ACU, verified on both versions); InnoDB buffer pool size follows capacity. `performance_schema` is off by default (verified) and is a static parameter.
 
-### Use cases
-- **Infrequently used applications** (e.g., low-volume blog used a few minutes per day/week).
-- **New applications** where the needed instance size is unknown.
-- **Variable workloads** (e.g., HR, budgeting, operational reporting with short daily peaks).
-- **Unpredictable workloads** with sudden spikes.
-- **Development and test databases** used only during work hours.
-- **Multi-tenant applications** — manages individual database capacity for each app in your fleet.
+```bash
+aws rds create-db-cluster --db-cluster-identifier app --engine aurora-mysql \
+  --engine-version 8.4.mysql_aurora.8.4.8 \
+  --serverless-v2-scaling-configuration MinCapacity=0.5,MaxCapacity=64 \
+  --manage-master-user-password --storage-encrypted --enable-http-endpoint ...
+aws rds create-db-instance --db-instance-identifier app-1 --db-cluster-identifier app \
+  --engine aurora-mysql --db-instance-class db.serverless --no-publicly-accessible
+```
 
-### Scaling behavior (v1)
-Because storage is shared between nodes, Aurora can scale up or down in seconds for most workloads. Autoscaling thresholds: **1.5 minutes to scale up**, **5 minutes to scale down** (metrics must exceed/fall below limits for that duration to trigger). Cool-down between scaling activities: **5 minutes** to scale up, **15 minutes** to scale down. Scaling requires finding a "scaling point," which may take longer with long-running transactions. Scaling is transparent to connected clients (existing connections and session state transfer to new nodes). Pausing/resuming adds higher first-connection latency, typically ~25 seconds.
-
-## Amazon Aurora Serverless v2
-
-Aurora Serverless v2 is re-architected from the ground up for instantly scalable serverless clusters, on a lightweight foundation engineered for security and isolation in multitenant environments with very little overhead.
-
-You define capacity as a range between minimum and maximum **Aurora capacity units (ACUs)**:
-- **Minimum ACUs** — smallest number to which the cluster can scale down.
-- **Maximum ACUs** — largest number to which the cluster can scale up.
-
-Each ACU provides **2 GiB of memory (RAM)** plus associated vCPU and networking. Unlike v1 (which scales by **doubling** ACUs at each threshold), **v2 increases ACUs incrementally** to provide the best performance for resources consumed.
-
-## How to provision
-
-1. Sign in to the Management Console, choose **Amazon RDS**, then **Create database**.
-2. Under **Engine options** → **Engine versions**, choose **Show versions that support Serverless v2**.
-3. Choose the capacity settings for your use case.
-
-See: Amazon Aurora Serverless; "Aurora Serverless MySQL Generally Available"; "Amazon Aurora PostgreSQL Serverless Now Generally Available".
+**Good fits:** variable or unpredictable workloads, new applications with uncertain sizing, dev/test (scale to zero overnight), many small per-tenant databases, and readers that absorb reporting spikes.
 
 ## Conversion notes
-
-- A capacity/deployment model for the Aurora MySQL target — not a schema-conversion concern.
-- Good fit for migrated Oracle workloads that are intermittent or have unpredictable peaks; avoids provisioning for peak/average capacity.
-- v1 scales by **doubling** ACUs with cool-down windows (slower, coarser); v2 scales **incrementally** and near-instantly — prefer v2 for production-like, latency-sensitive workloads.
-- Storage is always encrypted (cannot be disabled) — factor into compliance planning.
-- v1 pause/resume adds ~25s latency on the first connection after a pause; not ideal for latency-critical online workloads.
+- Do not plan new targets on Serverless v1; it no longer exists. Old guidance about v1 scaling points, ACU doubling, 5/15-minute cool-downs and ~25 s resume latency does not apply to v2.
+- Size `MaxCapacity` from the Oracle AWR peak (CPU and memory) and `MinCapacity` from the steady baseline. Watch the `ACUUtilization` and `ServerlessDatabaseCapacity` CloudWatch metrics during performance tests.
+- Long batch jobs migrated from Oracle can hold the instance at max ACU for hours; compare cost with a provisioned (or I/O-Optimized) writer for steady heavy load.
+- Storage encryption is chosen at creation; create encrypted clusters.
+- Pair with RDS Proxy or the Data API for connection-heavy serverless applications.

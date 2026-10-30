@@ -1,3 +1,0 @@
-CREATE INDEX ix_employeedepartmenthistory_ix_employeedepartmenthist$3e917ebd
-ON humanresources.employeedepartmenthistory
-USING BTREE (shiftid ASC);

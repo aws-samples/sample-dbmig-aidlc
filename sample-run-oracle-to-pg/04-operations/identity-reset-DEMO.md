@@ -2,30 +2,30 @@
 
 # Identity / sequence reset — `DEMO` → `demo`
 
-Generated 2026-09-28T15:42:51Z — dry run (nothing changed). 12/12 identity column(s) safe.
+Generated 2026-10-30T06:48:53Z — **applied** and re-verified. 12/12 identity column(s) safe.
 
 ## Runbook step — run AFTER the final data sync, BEFORE opening app traffic
 
 ```bash
-./dbmig reset-identity --schema DEMO --target-schema demo --project o2pg --apply
+./dbmig reset-identity --schema DEMO --target-schema demo --project oracle-pg18-20261030 --apply
 ```
 
 Scope: exactly the 12 table(s) below with an identity-backed column (read from the catalog). Tables without one are not touched. The command exits non-zero if any column fails verification (`next_value > max_id`).
 
 | Table | Column | Sequence | MAX(id) | Next (before) | Next (after) | Status |
 |---|---|---|---|---|---|---|
-| addresses | id | demo.addresses_id_seq | 3 | 4 | — | OK |
-| book_types | id | demo.book_types_id_seq | 3 | 4 | — | OK |
-| books | id | demo.books_id_seq | 56 | 57 | — | OK |
-| conditions | id | demo.conditions_id_seq | 4 | 5 | — | OK |
-| customers | id | demo.customers_id_seq | 3 | 4 | — | OK |
-| genres | id | demo.genres_id_seq | 8 | 9 | — | OK |
-| listings | id | demo.listings_id_seq | 56 | 57 | — | OK |
-| order_items | id | demo.order_items_id_seq | — | 101 | — | OK |
-| orders | id | demo.orders_id_seq | — | 101 | — | OK |
-| password_reset_tokens | id | demo.password_reset_tokens_id_seq | — | 1 | — | OK |
-| publishers | id | demo.publishers_id_seq | 10 | 11 | — | OK |
-| shopping_cart_items | id | demo.shopping_cart_items_id_seq | — | 101 | — | OK |
+| addresses | id | demo.addresses_id_seq | 3 | 4 | 4 | OK |
+| book_types | id | demo.book_types_id_seq | 3 | 4 | 4 | OK |
+| books | id | demo.books_id_seq | 56 | 57 | 57 | OK |
+| conditions | id | demo.conditions_id_seq | 4 | 5 | 5 | OK |
+| customers | id | demo.customers_id_seq | 3 | 4 | 4 | OK |
+| genres | id | demo.genres_id_seq | 8 | 9 | 9 | OK |
+| listings | id | demo.listings_id_seq | 56 | 57 | 57 | OK |
+| order_items | id | demo.order_items_id_seq | — | 103 | 101 | OK |
+| orders | id | demo.orders_id_seq | — | 105 | 101 | OK |
+| password_reset_tokens | id | demo.password_reset_tokens_id_seq | — | 1 | 1 | OK |
+| publishers | id | demo.publishers_id_seq | 10 | 11 | 11 | OK |
+| shopping_cart_items | id | demo.shopping_cart_items_id_seq | — | 101 | 101 | OK |
 
 ## Standalone sequences (not covered by the identity reset)
 

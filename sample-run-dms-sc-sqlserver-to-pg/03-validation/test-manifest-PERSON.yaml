@@ -1,0 +1,47 @@
+project: aw-dms-sc-20261030
+schema: PERSON
+phase: validation-tests
+generated_at: '2026-10-30T09:28:14Z'
+provider: kiro
+unit_count: 3
+units:
+- name: vAdditionalContactInfo
+  object_type: VIEW
+  schema: PERSON
+  batch_id: 1
+  prompt_file: test_prompts/PERSON/batch_0001.prompt.md
+  spec_file: tests/PERSON/view__vadditionalcontactinfo.test.yaml
+  status: skipped
+  data_coverage:
+    level: OK
+    tables:
+      CountryRegion: 238
+      EmailAddress: 19972
+      Person: 19972
+      StateProvince: 181
+  skip_reason: MANUAL, not reconverted (xml XQuery, 7708); not on the target
+- name: vStateProvinceCountryRegion
+  object_type: VIEW
+  schema: PERSON
+  batch_id: 1
+  prompt_file: test_prompts/PERSON/batch_0001.prompt.md
+  spec_file: tests/PERSON/view__vstateprovincecountryregion.test.yaml
+  status: generated
+  data_coverage:
+    level: OK
+    tables:
+      CountryRegion: 238
+      Person: 19972
+      StateProvince: 181
+- name: AddressType
+  object_type: TABLE
+  schema: PERSON
+  batch_id: 0
+  prompt_file: ''
+  spec_file: tests/PERSON/table__addresstype.test.yaml
+  status: generated
+  note: 'added by hand: VERIFY column defaults (7826/7831)'
+  data_coverage:
+    level: OK
+    tables:
+      AddressType: 6

@@ -92,7 +92,44 @@ def _delta_equal(sd, td, tol: float) -> bool:
     return _equal(sd, td, tol)
 
 
+def _rows(eng, sql: str) -> List[tuple]:
+    """All rows of a query (or of the first result set of a CALL, e.g. a MySQL procedure
+    that replaced a set-returning function)."""
+    _cols, rows = eng.fetch(sql)
+    return [tuple(r) for r in rows]
+
+
+def _row_key(row: tuple) -> tuple:
+    """Engine-neutral sort key: numbers by value, everything else by its string form."""
+    return tuple((0, float(v), "") if isinstance(v, numbers.Number) else
+                 (1, 0.0, "" if v is None else " ".join(str(v).split())) for v in row)
+
+
+def _resultset_equal(srows: List[tuple], trows: List[tuple], tol: float,
+                     ordered: bool) -> bool:
+    if len(srows) != len(trows):
+        return False
+    if not ordered:
+        srows, trows = sorted(srows, key=_row_key), sorted(trows, key=_row_key)
+    for sr, tr in zip(srows, trows):
+        if len(sr) != len(tr) or not all(_equal(a, b, tol) for a, b in zip(sr, tr)):
+            return False
+    return True
+
+
 def _run_function_case(src, tgt, case: Dict[str, Any], tol: float):
+    if str(case.get("compare") or "scalar").strip().lower() == "resultset":
+        # Compare every row and column, not just the first value. Rows are sorted
+        # before comparing unless the case says `ordered: true` (ORDER BY ties and
+        # engine plan differences make row order unreliable otherwise).
+        s_rows = _rows(src, case["source_sql"])
+        t_rows = _rows(tgt, case["target_sql"])
+        src.rollback()
+        tgt.rollback()
+        ok = _resultset_equal(s_rows, t_rows, tol, bool(case.get("ordered")))
+        return ok, {"source_rows": len(s_rows), "target_rows": len(t_rows),
+                    "source_first": _str(s_rows[0]) if s_rows else None,
+                    "target_first": _str(t_rows[0]) if t_rows else None}
     s = _scalar(src, case["source_sql"])
     t = _scalar(tgt, case["target_sql"])
     src.rollback()

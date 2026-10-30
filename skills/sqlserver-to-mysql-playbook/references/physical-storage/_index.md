@@ -22,3 +22,5 @@ in a single reference file.
 - Aurora MySQL restrictions: no foreign keys, no `FULLTEXT`, no spatial types on
   partitioned tables; partitioning keys must be `INT` (with exceptions for COLUMNS and
   `[LINEAR] KEY` partitioning).
+
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): partitioned tables can't have FKs (1506), unique keys must include partition columns (1503), RANGE LEFT boundary conversion, REORGANIZE for SPLIT/MERGE RANGE.

@@ -6,6 +6,8 @@
 **Conversion category:** Manual (One star feature compatibility)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Glue Studio instead of legacy jobs, TLS/auth for 8.4 connections, LOAD DATA FROM S3, zero-ETL and orchestration alternatives, toolkit data movement.
+
 ## SQL Server
 
 SQL Server offers a native ETL framework. The legacy **Data Transformation Services (DTS)** was deprecated as of SQL Server 2008 and replaced with **SQL Server Integration Services (SSIS)** (introduced in 2005).
@@ -44,3 +46,6 @@ There are **no automatic tools** to migrate DTS/SSIS packages into AWS Glue — 
 - No automated DTS/SSIS → Glue migration; ETL logic must be re-authored.
 - Interim option: host SSIS on an EC2 SQL Server instance, re-pointing connectors/tasks to Aurora MySQL, then migrate incrementally to Glue.
 - Glue integrates with the Data Catalog, crawlers, CloudWatch logging/alerts, and IAM roles for security.
+- The console flow above uses **Jobs (legacy)**; current Glue authoring is AWS Glue Studio (visual or notebook jobs) with Glue 4/5 Spark runtimes. The JDBC connection to Aurora MySQL 8.4 must use TLS (required by default, verified) and a driver that supports `caching_sha2_password`.
+- Alternatives by pattern: bulk file loads → `LOAD DATA FROM S3` (verified available; needs `aurora_load_from_s3_role`); exports → `SELECT … INTO OUTFILE S3`; Aurora → Redshift analytics → **zero-ETL integration** (supported on 3.x and 8.4) instead of an SSIS export package; lightweight orchestration → Step Functions or Amazon MWAA.
+- In this toolkit, data movement during migration uses `./dbmig migrate-data` (dev/test) or AWS DMS (production).

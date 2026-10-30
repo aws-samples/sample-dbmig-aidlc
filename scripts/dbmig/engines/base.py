@@ -206,6 +206,11 @@ class Engine(ABC):
     def server_version(self) -> str:
         ...
 
+    def preflight_warnings(self) -> List[str]:
+        """Target-specific settings that make a migration unsafe or misleading (shown by
+        ``test-connection``). Engines override; the default has none."""
+        return []
+
     def ping(self) -> bool:
         return self.scalar(self.ping_sql()) == 1
 

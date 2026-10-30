@@ -6,6 +6,8 @@
 **Conversion category:** Manual (three-star feature compatibility — storage-level backup managed by Amazon RDS)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): mysqldbexport is discontinued (MySQL Shell/mysqldump instead); fast clone, Backtrack and history tables as faster alternatives; current instance class.
+
 ## Oracle
 
 Oracle Flashback Table undoes changes to a table and rewinds it to a previous state (not from a backup). While running, the affected tables are locked but the rest of the database stays available.
@@ -51,7 +53,12 @@ Snapshots are the primary backup mechanism for Aurora — fast, nonintrusive, no
 - **Automated backups** — always enabled; no performance impact.
 - **Manual backups** — create anytime; restore creates a **new instance**; up to 100 manual snapshots per database.
 
-Aurora has no table-level rewind. To recover a single table you restore a snapshot (or PITR) into a **new cluster**, then copy the table back to the original instance with `mysqldbexport`/`mysqldump` and `mysql`.
+Aurora has no table-level rewind. To recover a single table you restore a snapshot (or PITR) into a **new cluster**, then copy the table back to the original cluster with `mysqldump`/MySQL Shell `util.dumpTables()` and `mysql`/`util.loadDump()`. (`mysqldbexport`, mentioned in the original, belongs to the discontinued MySQL Utilities.)
+
+Faster options on Aurora MySQL 3 / 8.4:
+- **Fast clone** of the cluster (copy-on-write, minutes regardless of size) when the mistake is recent — but a clone shows the *current* data, so it only helps if taken before the change. Combine with Backtrack on the clone, or use PITR.
+- **Backtrack** rewinds the *whole* cluster in place (`aws rds backtrack-db-cluster`), useful when the bad change is the only recent activity.
+- For application-level undo, keep history tables (trigger-maintained) — MySQL has no `AS OF` flashback query.
 
 ### Summary mapping
 
@@ -76,7 +83,7 @@ aws rds create-db-instance
     --engine aurora-mysql
     --db-cluster-identifier clustername-restore
     --db-instance-identifier newinstance-nodeA
-    --db-instance-class db.r4.large
+    --db-instance-class db.r7g.large      # r4 classes are retired
 ```
 
 ## Conversion notes

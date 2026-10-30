@@ -6,6 +6,8 @@
 **Conversion category:** Manual (Three-star feature compatibility — distribute load/applications/users across multiple instances)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): write scaling (Limitless is on 16.x only, not 18), endpoint routing for former RAC services.
+
 ## Oracle
 
 Oracle Real Application Clusters (RAC) allows multiple Oracle instances to access a single database, providing highly available and scalable relational databases in **Active-Active** mode. Applications can access the database through multiple instances simultaneously.
@@ -70,13 +72,14 @@ Aurora focuses on scale-out of reads (RAC scales out both reads and writes), but
 | Application (read) TTR from node failure | Immediate | Immediate |
 | Max cluster nodes | Theoretical max 100 (2–10 common) | 15 |
 | Built-in read scaling | Yes | Yes |
-| Built-in write scaling | Yes (limited when sessions modify rows in same blocks) | No |
+| Built-in write scaling | Yes (limited when sessions modify rows in same blocks) | No (single writer). Horizontal write scale-out is **Aurora PostgreSQL Limitless Database**, which uses separate `16.x-limitless` engine versions and is not available on Aurora PostgreSQL 18 (checked 2026-10-29). Scale the writer up, or use Serverless v2 up to 256 ACU. |
 | Data loss on node failure | No data loss | No data loss |
 | Replication latency | N/A | Milliseconds |
 | Operational complexity | Requires DB, IT, network, storage expertise | Provided as a cloud solution |
 | Scale-up nodes | Difficult with physical hardware (replace servers) | Easy via AWS UI/CLI |
 | Scale-out cluster | Provision/deploy/configure new servers | Easy via AWS UI/CLI |
 
+- Applications must route writes to the **cluster endpoint** and reads to the **reader endpoint** (or custom endpoints). RAC services that split modules across nodes become custom endpoints for reads only; all writes go to one writer.
 - Aurora is a simplified Oracle RAC alternative for typical OLTP applications needing high-performance writes, scalable reads, and very high availability with lower operational overhead.
 - Aurora cluster spans three AZs ("stretch" cluster) for strong HA and durability; storage is automatically added as needed and you pay for one copy of your data.
 - See: [Amazon Aurora as an Alternative to Oracle RAC](https://aws.amazon.com/blogs/database/amazon-aurora-as-an-alternative-to-oracle-rac).

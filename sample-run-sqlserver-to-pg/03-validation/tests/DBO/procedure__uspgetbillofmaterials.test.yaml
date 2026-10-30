@@ -1,7 +1,8 @@
 object: uspGetBillOfMaterials
 schema: DBO
 type: function
-notes: recursive BOM walk (result-set procedure -> set-returning function); count + weighted checksum per real product.
+notes: "recursive BOM walk (result-set procedure -> set-returning function). The original cases (800/750/977 on 2010-12-01) return 0 rows on both engines \u2014 those products are not assemblies in this\
+  \ data, so they only prove the empty path. r4 (added 2026-10-30) compares every row and column for product 609 on 2011-01-01: 3 rows, recursion depth 2."
 cases:
 - id: r1
   type: function
@@ -33,3 +34,10 @@ cases:
   source_sql: SET NOCOUNT ON; DECLARE @t TABLE (ProductAssemblyID int, ComponentID int, ComponentDesc nvarchar(100), TotalQuantity decimal(18,2), StandardCost money, ListPrice money, BOMLevel smallint,
     RecursionLevel int); INSERT INTO @t EXEC dbo.uspGetBillOfMaterials @StartProductID = 977, @CheckDate = '2010-12-01'; SELECT ISNULL(SUM(TotalQuantity * (RecursionLevel + 1)),0) FROM @t
   target_sql: SELECT coalesce(sum(totalquantity * (recursionlevel + 1)),0) FROM dbo.uspgetbillofmaterials(977, '2010-12-01')
+- id: r4
+  type: function
+  compare: resultset
+  description: every row and column of a 3-row, 2-level BOM walk (product 609)
+  source_sql: SET NOCOUNT ON; DECLARE @t TABLE (ProductAssemblyID int, ComponentID int, ComponentDesc nvarchar(100), TotalQuantity decimal(18,2), StandardCost money, ListPrice money, BOMLevel smallint,
+    RecursionLevel int); INSERT INTO @t EXEC dbo.uspGetBillOfMaterials @StartProductID = 609, @CheckDate = '2011-01-01'; SELECT * FROM @t
+  target_sql: SELECT * FROM dbo.uspgetbillofmaterials(609, '2011-01-01')

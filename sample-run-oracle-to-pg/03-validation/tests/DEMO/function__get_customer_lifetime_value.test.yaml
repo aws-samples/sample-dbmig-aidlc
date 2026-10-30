@@ -1,13 +1,7 @@
 object: GET_CUSTOMER_LIFETIME_VALUE
 schema: DEMO
 type: function
-notes: LOW_COVERAGE — ORDERS is empty in the source, so only the COALESCE(SUM,0)=0 path is exercised.
+notes: LOW_COVERAGE — ORDERS is empty in the source, so every case exercises the NVL(SUM(),0) = 0 path only.
 cases:
-  - id: c1
-    type: function
-    source_sql: "SELECT DEMO.GET_CUSTOMER_LIFETIME_VALUE(1) FROM dual"
-    target_sql: "SELECT demo.get_customer_lifetime_value(1)"
-  - id: c2
-    type: function
-    source_sql: "SELECT DEMO.GET_CUSTOMER_LIFETIME_VALUE(999999) FROM dual"
-    target_sql: "SELECT demo.get_customer_lifetime_value(999999)"
+  - {id: c1, source_sql: "SELECT DEMO.GET_CUSTOMER_LIFETIME_VALUE(2) FROM dual", target_sql: "SELECT demo.get_customer_lifetime_value(2)"}
+  - {id: c2, source_sql: "SELECT DEMO.GET_CUSTOMER_LIFETIME_VALUE(999999) FROM dual", target_sql: "SELECT demo.get_customer_lifetime_value(999999)"}

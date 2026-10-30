@@ -6,6 +6,8 @@
 **Conversion category:** N/A (deployment option / service)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Still not available for Aurora; check RDS for MySQL version support on Outposts.
+
 > **Note:** This topic relates to Amazon RDS and is **not** supported with Amazon Aurora.
 
 ## Overview
@@ -37,3 +39,4 @@ See: AWS Outposts Family, Amazon RDS on Outposts, and "Create Amazon RDS DB Inst
 - **Not applicable to Aurora** — Aurora MySQL clusters cannot run on Outposts; this is an RDS-only deployment option. If your target is Aurora MySQL, this service does not apply.
 - Relevant only when data residency, very low latency to on-premises apps, or local inter-dependencies force an on-premises footprint while still wanting managed RDS (SQL Server / MySQL / PostgreSQL).
 - Backups/snapshots are stored in the parent AWS Region (not purely local), which has data-residency implications to consider.
+- Still Aurora-unsupported (2026-10). For an Outposts deployment, check which RDS for MySQL major versions (8.0 / 8.4) RDS on Outposts currently offers.

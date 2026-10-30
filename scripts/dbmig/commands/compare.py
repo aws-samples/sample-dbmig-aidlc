@@ -31,6 +31,7 @@ def run(args) -> int:
     if getattr(args, "tables", None):
         tables = [t.strip() for t in args.tables.split(",") if t.strip()]
 
+    tgt_schema = config.resolve_target_schema(args)
     failures = 0
     results: List[Dict] = []
     try:
@@ -42,7 +43,7 @@ def run(args) -> int:
         for table in names:
             try:
                 sc = source.count_rows(args.schema.upper(), table)
-                tc = target.get_row_count(args.schema.lower(), table.lower())
+                tc = target.get_row_count(tgt_schema, table.lower())
             except Exception as exc:  # noqa: BLE001
                 console.err(f"{table}: count failed: {exc}")
                 results.append({"table": table, "status": "error",

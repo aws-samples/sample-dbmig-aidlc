@@ -292,8 +292,24 @@ Operations   (cutover / rollback / monitoring — unchanged)
    `<db>_<schema>` (e.g. `adventureworks_person`), which the sidecar's `target_schema`
    captures and `diff-target`/`capture-target-objects` use directly (no code changes).
    **All four engine pairs are now validated for the DMS SC continuation path** (Oracle and
-   SQL Server → PostgreSQL and MySQL). **Remaining:** a captured
-   end-to-end sample run under `sample-run-*`.
+   SQL Server → PostgreSQL and MySQL).
+5. **End-to-end sample run (load + prove)** — **Done** in `sample-run-dms-sc-sqlserver-to-pg/`
+   on a fresh DMS SC project (AdventureWorks 2022, Person + HumanResources + dbo → Aurora
+   PostgreSQL 18.6), carried through the data load, `compare` and `run-tests`. It needed
+   these fixes:
+   - re-converted / re-exported projects: the newest target node of the same kind wins
+     (not a DMS SC-generated helper trigger), and the latest apply-result row wins;
+   - column-level action items (e.g. 7708 on a computed column) now count for the table,
+     which used to triage ACCEPT;
+   - re-running `import-dms-sc` keeps hand-edited or applied construction units, and MANUAL
+     storage objects get a construction unit too;
+   - `diff-target` truncates names to 63 bytes (PG identifier limit) before matching, and
+     does not count trigger functions as EXTRA;
+   - `apply-schema --code` applies the whole unit (it used to drop a `CREATE TRIGGER`);
+   - `migrate-data` / `compare` / `reset-identity` load into the DMS SC target schema
+     (`target_schema` from the sidecar, or `--target-schema`);
+   - the PostgreSQL loader writes Python bools as 1/0 (DMS SC maps `bit` to `numeric(1,0)`);
+   - the migration report keeps one target-prep section per schema.
 
 ## 9. Open questions / decisions
 

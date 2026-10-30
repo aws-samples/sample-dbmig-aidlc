@@ -6,6 +6,8 @@
 **Conversion category:** Assisted
 **SCT automation:** N/A
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Verified default auth plugins on 3.13 vs 8.4, profile → account password options, validate_password on 8.4 only, empty-password accounts accepted, correct IAM plugin name.
+
 Key difference: syntax and option differences, similar functionality.
 
 ## Oracle
@@ -42,7 +44,7 @@ CREATE USER app_user1 IDENTIFIED BY password DEFAULT TABLESPACE USERS;
 ## MySQL
 
 User accounts authenticate sessions and authorize object access. `CREATE USER` creates a row in the `mysql.user` system table; unspecified properties take defaults:
-- **Authentication** — plugin from `default_authentication_plugin`, empty credentials.
+- **Authentication** — Aurora MySQL 3: `default_authentication_plugin` = `mysql_native_password`; Aurora MySQL 8.4: `authentication_policy` = `*:caching_sha2_password` (verified: a new user gets `caching_sha2_password` on 8.4 and `mysql_native_password` on 3.13). Old drivers without `caching_sha2_password` support fail on 8.4 for new users.
 - **SSL/TLS** — None.
 - **Resource limits** — Unlimited.
 - **Password management** — `PASSWORD EXPIRE DEFAULT`.
@@ -79,3 +81,7 @@ CREATE USER jane_doe IDENTIFIED WITH AWSAuthenticationPlugin AS 'RDS';
 - Oracle 12c common (`C##`) / local PDB users have no MySQL equivalent; flatten to ordinary MySQL users.
 - Map Oracle external/OS authentication and Kerberos to MySQL IAM database authentication (`IDENTIFIED WITH AWSAuthenticationPlugin AS 'RDS'`) on RDS/Aurora — note the 20 new-connections-per-second limit.
 - Translate Oracle profiles/resource limits to MySQL account resource options (`MAX_QUERIES_PER_HOUR`, `MAX_USER_CONNECTIONS`, etc.). Oracle tablespace/quota properties have no MySQL counterpart.
+- Oracle profile password rules map to account options, all verified on both versions: `PASSWORD EXPIRE INTERVAL 90 DAY` (`PASSWORD_LIFE_TIME`), `FAILED_LOGIN_ATTEMPTS 3 PASSWORD_LOCK_TIME 1` (`FAILED_LOGIN_ATTEMPTS`/`PASSWORD_LOCK_TIME`), `PASSWORD HISTORY n` / `PASSWORD REUSE INTERVAL n DAY`, `ACCOUNT LOCK`. Global defaults (`default_password_lifetime`, `password_history`) are 0 (off).
+- Password complexity (`PASSWORD_VERIFY_FUNCTION`): Aurora MySQL 8.4 ships the `validate_password` component (policy `MEDIUM`, verified); 3.x has no such variable (verified). Note that `CREATE USER x` **without a password** was still accepted on both (verified) — forbid it in review.
+- The IAM plugin name is `AWSAuthenticationPlugin` (verified active); `aws_iam_auth` is not a valid plugin name (error 1524, verified). IAM tokens last 15 minutes; RDS Proxy can front IAM authentication for higher connection rates.
+- Kerberos/Active Directory authentication for Aurora MySQL is available through AWS Directory Service (check engine-version support).

@@ -1,0 +1,18 @@
+object: Employee
+schema: HUMANRESOURCES
+type: function
+notes: >
+  MANUAL reconversion of the computed column OrganizationLevel (OrganizationNode.GetLevel()).
+  DMS SC left it a plain column that was NULL for all 290 rows after the load. Compared for
+  every employee, together with the hierarchyid string form of OrganizationNode.
+cases:
+- id: c1
+  description: OrganizationNode (as text) and OrganizationLevel for every employee
+  compare: resultset
+  source_sql: SELECT BusinessEntityID, OrganizationNode.ToString(), OrganizationLevel FROM HumanResources.Employee
+  target_sql: SELECT businessentityid, organizationnode, organizationlevel FROM adventureworks_humanresources.employee
+- id: c2
+  description: employees per level (the CEO has a NULL node and level)
+  compare: resultset
+  source_sql: SELECT OrganizationLevel, COUNT(*) FROM HumanResources.Employee GROUP BY OrganizationLevel
+  target_sql: SELECT organizationlevel, count(*) FROM adventureworks_humanresources.employee GROUP BY organizationlevel

@@ -1,0 +1,9 @@
+results:
+- label: uspprinterror
+  status: applied
+  error: null
+  pass: 1
+- label: usplogerror
+  status: applied
+  error: null
+  pass: 1

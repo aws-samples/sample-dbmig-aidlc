@@ -1,0 +1,143 @@
+project: aw-dms-sc-20261030
+schema: HUMANRESOURCES
+phase: validation-tests
+generated_at: '2026-10-30T09:26:12Z'
+provider: kiro
+unit_count: 11
+units:
+- name: vEmployee
+  object_type: VIEW
+  schema: HUMANRESOURCES
+  batch_id: 1
+  prompt_file: test_prompts/HUMANRESOURCES/batch_0001.prompt.md
+  spec_file: tests/HUMANRESOURCES/view__vemployee.test.yaml
+  status: generated
+  data_coverage:
+    level: OK
+    tables:
+      Employee: 290
+- name: vEmployeeDepartment
+  object_type: VIEW
+  schema: HUMANRESOURCES
+  batch_id: 1
+  prompt_file: test_prompts/HUMANRESOURCES/batch_0001.prompt.md
+  spec_file: tests/HUMANRESOURCES/view__vemployeedepartment.test.yaml
+  status: generated
+  data_coverage:
+    level: OK
+    tables:
+      Department: 16
+      Employee: 290
+      EmployeeDepartmentHistory: 296
+- name: vEmployeeDepartmentHistory
+  object_type: VIEW
+  schema: HUMANRESOURCES
+  batch_id: 1
+  prompt_file: test_prompts/HUMANRESOURCES/batch_0001.prompt.md
+  spec_file: tests/HUMANRESOURCES/view__vemployeedepartmenthistory.test.yaml
+  status: generated
+  data_coverage:
+    level: OK
+    tables:
+      Department: 16
+      Employee: 290
+      EmployeeDepartmentHistory: 296
+      Shift: 3
+- name: vJobCandidate
+  object_type: VIEW
+  schema: HUMANRESOURCES
+  batch_id: 2
+  prompt_file: test_prompts/HUMANRESOURCES/view__vjobcandidate.prompt.md
+  spec_file: tests/HUMANRESOURCES/view__vjobcandidate.test.yaml
+  status: skipped
+  data_coverage:
+    level: OK
+    tables:
+      JobCandidate: 13
+  skip_reason: MANUAL, not reconverted (xml .value()/XQuery, 7708); not on the target
+- name: vJobCandidateEducation
+  object_type: VIEW
+  schema: HUMANRESOURCES
+  batch_id: 3
+  prompt_file: test_prompts/HUMANRESOURCES/view__vjobcandidateeducation.prompt.md
+  spec_file: tests/HUMANRESOURCES/view__vjobcandidateeducation.test.yaml
+  status: skipped
+  data_coverage:
+    level: OK
+    tables:
+      JobCandidate: 13
+  skip_reason: MANUAL, not reconverted (xml .value()/XQuery, 7708); not on the target
+- name: vJobCandidateEmployment
+  object_type: VIEW
+  schema: HUMANRESOURCES
+  batch_id: 4
+  prompt_file: test_prompts/HUMANRESOURCES/batch_0004.prompt.md
+  spec_file: tests/HUMANRESOURCES/view__vjobcandidateemployment.test.yaml
+  status: skipped
+  data_coverage:
+    level: OK
+    tables:
+      JobCandidate: 13
+  skip_reason: MANUAL, not reconverted (xml .value()/XQuery, 7708); not on the target
+- name: uspUpdateEmployeeHireInfo
+  object_type: PROCEDURE
+  schema: HUMANRESOURCES
+  batch_id: 4
+  prompt_file: test_prompts/HUMANRESOURCES/batch_0004.prompt.md
+  spec_file: tests/HUMANRESOURCES/procedure__uspupdateemployeehireinfo.test.yaml
+  status: skipped
+  data_coverage:
+    level: OK
+    tables:
+      Employee: 290
+      EmployeePayHistory: 316
+  transaction_managed: true
+  test_mode: manual
+  skip_reason: 'flagged test_mode: manual by gen-tests (source BEGIN TRAN/COMMIT);
+    reviewed by hand'
+- name: uspUpdateEmployeeLogin
+  object_type: PROCEDURE
+  schema: HUMANRESOURCES
+  batch_id: 4
+  prompt_file: test_prompts/HUMANRESOURCES/batch_0004.prompt.md
+  spec_file: tests/HUMANRESOURCES/procedure__uspupdateemployeelogin.test.yaml
+  status: generated
+  data_coverage:
+    level: OK
+    tables:
+      Employee: 290
+- name: uspUpdateEmployeePersonalInfo
+  object_type: PROCEDURE
+  schema: HUMANRESOURCES
+  batch_id: 5
+  prompt_file: test_prompts/HUMANRESOURCES/procedure__uspupdateemployeepersonalinfo.prompt.md
+  spec_file: tests/HUMANRESOURCES/procedure__uspupdateemployeepersonalinfo.test.yaml
+  status: generated
+  data_coverage:
+    level: OK
+    tables:
+      Employee: 290
+- name: Employee
+  object_type: TABLE
+  schema: HUMANRESOURCES
+  batch_id: 0
+  prompt_file: ''
+  spec_file: tests/HUMANRESOURCES/table__employee.test.yaml
+  status: generated
+  note: 'added by hand: MANUAL table reconversion (computed column OrganizationLevel)'
+  data_coverage:
+    level: OK
+    tables:
+      Employee: 290
+- name: Department
+  object_type: TABLE
+  schema: HUMANRESOURCES
+  batch_id: 0
+  prompt_file: ''
+  spec_file: tests/HUMANRESOURCES/table__department.test.yaml
+  status: generated
+  note: 'added by hand: VERIFY column defaults (7826/7831)'
+  data_coverage:
+    level: OK
+    tables:
+      Department: 16

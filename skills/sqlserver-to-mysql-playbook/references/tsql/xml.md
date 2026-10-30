@@ -6,6 +6,8 @@
 **Conversion category:** Manual (Two star feature compatibility) — minimal XML support; extensive JSON support
 **SCT automation:** Four star automation level
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Corrected LOAD XML (LOAD XML FROM S3 exists) and 'no OPENJSON/FOR JSON equivalent' (JSON_TABLE / JSON_ARRAYAGG on MySQL 8 — verified); ExtractValue namespace/malformed behavior (verified); multi-valued indexes; FOR XML PATH concatenation.
+
 ## SQL Server
 
 Provides native support for XML and JSON via T-SQL.
@@ -44,7 +46,7 @@ Opposite of SQL Server: minimal XML support, but a **native JSON data type** plu
 
 ### XML
 
-Two functions only: `ExtractValue` (XPath child CDATA, space-delimited on multiple matches) and `UpdateXML` (replace fragment by XPath; returns original if zero/multiple matches). `LOAD XML` is not supported in Aurora MySQL.
+Two functions only: `ExtractValue` (XPath child CDATA, space-delimited on multiple matches) and `UpdateXML` (replace fragment by XPath; returns original if zero/multiple matches). *(corrected)* XML files can be loaded with **`LOAD XML FROM S3`** (Aurora). Verified on 3.13 and 8.4.8: `ExtractValue` supports attributes and `count()`, **ignores namespaces**, and returns **NULL for malformed XML** (with a warning, not an error).
 
 ```sql
 SELECT ExtractValue('<Root><Person>John</Person><Person>Jim</Person></Root>', '/Root/Person');
@@ -82,18 +84,21 @@ SELECT JSON_ARRAY_INSERT('["Mary", "Paul", "Jim"]', '$[1]', 'Jack');
 
 ### JSON indexes
 
-JSON columns (BINARY family) can't be indexed directly. Add a generated (computed/persisted) column extracting a JSON value and index that; the optimizer can then use it for JSON expressions.
+JSON columns can't be indexed directly. Options (all verified on 3.13 and 8.4.8): a generated column (`VIRTUAL` or `STORED`) extracting a value plus an index; a functional index; or a **multi-valued index** on a JSON array (`INDEX ((CAST(d->'$.tags' AS CHAR(20) ARRAY)))`, used by `MEMBER OF` / `JSON_CONTAINS` / `JSON_OVERLAPS`).
 
 ## Conversion notes
 
 - No XQuery support in Aurora MySQL — optionally convert XML data to JSON.
 - XML: replace `XQUERY`/`XPATH`, `OPENXML`, `FOR XML` with the limited `ExtractValue`/`UpdateXML`.
-- JSON: SQL Server `NVARCHAR`+functions → Aurora native `JSON` type + 25+ functions (richer than SQL Server). Map `JSON_VALUE`/`JSON_QUERY`→`JSON_EXTRACT`, `OPENJSON`/`FOR JSON` have no direct equivalents.
+- JSON: SQL Server `NVARCHAR`+functions → Aurora native `JSON` type. *(corrected for MySQL 8)* direct mappings exist (verified): `ISJSON` → `JSON_VALID`; `JSON_VALUE` → `JSON_VALUE` (8.0.21+, with `RETURNING type`); `JSON_QUERY` → `JSON_EXTRACT` / `->`; `JSON_MODIFY` → `JSON_SET` / `JSON_REPLACE` / `JSON_REMOVE`; **`OPENJSON … WITH (…)` → `JSON_TABLE(…, '$[*]' COLUMNS (…))`**; **`FOR JSON PATH` → `JSON_ARRAYAGG(JSON_OBJECT(…))`**. Invalid JSON is rejected on insert into a `JSON` column (error 3140).
+- `FOR XML PATH('')` used for string concatenation → `GROUP_CONCAT(… SEPARATOR …)`; `FOR XML PATH('row')` producing XML → `CONCAT`/`GROUP_CONCAT` with manual escaping, or emit JSON instead.
+- `xml.value('(/a/b)[1]','int')` → `CAST(ExtractValue(x, '/a/b[1]') AS SIGNED)`; `xml.nodes()` shredding → no equivalent (convert the documents to JSON and use `JSON_TABLE`); `xml.modify()` → `UpdateXML` for single-node replacement only.
+- Toolkit datatype map: `XML` → `LONGTEXT`.
 - Indexing JSON requires generated columns + explicit index (vs SQL Server PATH/VALUE/PROPERTY indexes).
 
 | Feature | SQL Server | Aurora MySQL |
 |---|---|---|
 | Native semi-structured type | `XML` (with schema collections) | `JSON` |
-| JSON functions | `ISJSON`, `JSON_VALUE`, `JSON_QUERY`, `JSON_MODIFY`, `OPENJSON`, `FOR JSON` | 25+ dedicated JSON functions |
+| JSON functions | `ISJSON`, `JSON_VALUE`, `JSON_QUERY`, `JSON_MODIFY`, `OPENJSON`, `FOR JSON` | `JSON_VALID`, `JSON_VALUE`, `JSON_EXTRACT`, `JSON_SET`, `JSON_TABLE`, `JSON_ARRAYAGG`/`JSON_OBJECT` |
 | XML functions | `XQUERY`/`XPATH`, `OPENXML`, `FOR XML` | `ExtractValue`, `UpdateXML` |
 | Indexes | Primary/secondary PATH/VALUE/PROPERTY | Generated columns + index; optimizer uses JSON expressions |

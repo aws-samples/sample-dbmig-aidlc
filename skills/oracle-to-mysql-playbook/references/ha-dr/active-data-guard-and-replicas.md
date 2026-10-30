@@ -6,6 +6,8 @@
 **Conversion category:** N/A (infrastructure / HA topic — three-star feature compatibility)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Global Database and write forwarding as Data Guard / DML-redirect equivalents, verified replica-status views on both versions, reader isolation, multi-master retired.
+
 ## Oracle
 
 Oracle Active Data Guard (ADG) is a synced database architecture with primary and standby databases. The difference between Data Guard and ADG is that ADG standby databases allow **read access only**.
@@ -72,4 +74,9 @@ After creation, run reads/writes on the primary and read-only operations on the 
 - Oracle ADG offers a single physical standby with read access; Aurora supports up to 15 read replicas sharing the same distributed storage volume, with automatic promotion (typically under 30 seconds).
 - Aurora replication latency is in milliseconds because replicas read from the shared Aurora storage volume rather than replaying a full redo apply chain like a standalone standby.
 - Cross-region read replicas require `binlog_format` to be enabled and incur cross-region data transfer charges.
+- **Prefer Aurora Global Database** over binlog cross-Region replicas for DR (supported on Aurora MySQL 3 and 8.4, verified with `describe-db-engine-versions`): storage-level replication with typically sub-second lag, managed switchover/failover, and up to 5 secondary Regions. It is the closest match to Data Guard with Fast-Start Failover.
+- **Write forwarding** (local and global; supported on both versions) lets reader instances accept writes and forward them to the writer — the analog of ADG DML redirection. Choose the read-consistency level with `aurora_replica_read_consistency` (`EVENTUAL`, `SESSION`, `GLOBAL`; empty = not enabled, verified).
+- Replica lag: `information_schema.replica_host_status` (column `replica_lag_in_milliseconds`) and `mysql.ro_replica_status` exist on both 3.13 and 8.4 (verified); CloudWatch metric `AuroraReplicaLag`.
+- On readers the isolation level is `REPEATABLE READ`; `aurora_read_replica_read_committed` = ON gives `READ COMMITTED` there (see `../sql-plsql/transaction-model.md`).
+- Aurora multi-master (mentioned in older material) has been retired; there is one writer per cluster.
 - Management is console/CLI-driven on Aurora versus broker/SQL*NET configuration in Oracle.

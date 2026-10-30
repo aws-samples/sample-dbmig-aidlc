@@ -125,8 +125,10 @@ def _instruction(source_disp: str, target: str, *, code: bool = False,
                 f"(derived from the source schema — do NOT use the connection's "
                 f"database/catalog name for qualification).")
     if code:
+        proc = ("MySQL stored-program SQL: BEGIN … END, DECLARE … HANDLER, SIGNAL"
+                if target == "mysql" else "PL/pgSQL")
         return (f"Convert the following {source_disp} stored code object to {tdisp} "
-                f"(procedural SQL — e.g. PL/pgSQL). Return only valid {tdisp}, ready to "
+                f"({proc}). Return only valid {tdisp}, ready to "
                 f"execute. Packages/modules have no direct equivalent: map each routine to "
                 f"its own function/procedure. Note any construct that needs human review in "
                 f"a SQL comment.{qual}")
@@ -226,13 +228,119 @@ SCHEMA, CODE, TESTS = "schema", "code", "tests"
 # an object; the files stay on disk for on-demand reading.
 _PHASE_CHAPTERS = {
     SCHEMA: {"tables-indexes", "indexes", "physical-storage", "special-features",
-             "ansi-sql", "quick-tips", "deprecated-features"},
-    CODE: {"sql-plsql", "tsql", "ansi-sql", "special-features", "quick-tips",
-           "deprecated-features"},
+             "ansi-sql", "deprecated-features"},
+    CODE: {"sql-plsql", "tsql", "ansi-sql", "special-features", "deprecated-features"},
     TESTS: set(),
+}
+# Playbook files injected in FULL for a phase (relative to the playbook references
+# dir). quick-tips is the pair's checklist of common gotchas; it is short and is the
+# file the playbook tells the converter to read first.
+_PHASE_FULL_FILES = {
+    SCHEMA: ("quick-tips/quick-tips.md",),
+    CODE: ("quick-tips/quick-tips.md",),
+    TESTS: (),
 }
 # engines/<pair>/checks/* files routed per phase (by stem).
 _TEST_CHECKS = {"equivalence-spec", "package-naming"}
+
+
+def _markdown_sections(text: str, prefixes) -> str:
+    """Return the ``## `` sections of ``text`` whose heading starts with one of
+    ``prefixes`` (case-insensitive), in document order."""
+    wanted = [p.lower() for p in prefixes or ()]
+    parts = re.split(r"(?m)^(?=## )", text or "")
+    keep = [part.strip() for part in parts
+            if part.startswith("## ")
+            and any(part[3:].lower().startswith(w) for w in wanted)]
+    return "\n\n".join(keep)
+
+
+def _version_key(target: str, version: str) -> str:
+    """Comparable major version: PostgreSQL ``17.7`` → ``17``; MySQL ``8.4.x`` → ``8.4``
+    (Aurora MySQL 3.x is MySQL 8.0, so ``3.13`` → ``8.0``)."""
+    v = str(version or "").strip().lower()
+    nums = re.findall(r"\d+", v)
+    if not nums:
+        return ""
+    if target == "mysql":
+        if nums[0] == "3":
+            return "8.0"
+        return ".".join(nums[:2]) if len(nums) > 1 else nums[0]
+    return nums[0]
+
+
+def _baseline_version_note(target: str, version: str, verified) -> str:
+    """Caution prepended to the baseline when the declared target version is not one
+    the baseline was verified for (e.g. a PostgreSQL 18 baseline on a 17.7 target)."""
+    verified = [str(x) for x in (verified or [])]
+    if not verified:
+        return ""
+    key = _version_key(target, version)
+    shown = ", ".join(verified)
+    if not key:
+        return (f"> **Target version not declared** (`target.version` in connections.yaml). "
+                f"This baseline was verified on {shown}; confirm the target version before "
+                "using version-specific defaults.\n\n")
+    if key in verified:
+        return ""
+    return (f"> **CAUTION — target version {version} is not one this baseline was verified "
+            f"on ({shown}).** Features the text marks as introduced in a later version "
+            f"(for example \"PG 18\" or \"8.4 only\") are NOT available on {version}: use "
+            "the older form given in the same row or section, and check anything "
+            "version-specific against the target before relying on it.\n\n")
+
+
+def _load_target_baseline(repo_root: Path, pair: str, phase: str,
+                          target_version: Optional[str] = None) -> str:
+    """Selected sections of the target-version baseline for this phase.
+
+    Configured in engine.yaml under ``conversion.target_baseline``::
+
+        target_baseline:
+          file: skills/<playbook>/references/target-baseline-<target>.md
+          verified_for: ["18"]          # major versions the file was validated on
+          sections:
+            schema: [Conversion defaults, Behavior differences]
+            code:   [Conversion defaults, Behavior differences]
+            tests:  [Behavior differences]
+
+    When the declared target version (``target.version`` in connections.yaml, or
+    ``target_version``) is not in ``verified_for``, a caution is prepended so 18-only
+    or 8.4-only defaults are not applied to an older target.
+
+    The baseline holds the verified defaults and traps for the target version
+    (sql_mode, collation, removed features, version-specific breaks), which every
+    conversion and every equivalence test depends on. Returns '' when unconfigured.
+    """
+    cfg = ((_engine_yaml(repo_root, pair).get("conversion") or {})
+           .get("target_baseline") or {})
+    rel = str(cfg.get("file") or "").strip()
+    prefixes = (cfg.get("sections") or {}).get(phase) or []
+    if not rel or not prefixes:
+        return ""
+    body = _markdown_sections(_read(repo_root, rel), prefixes)
+    if not body:
+        return ""
+    version = config.target_version() if target_version is None else target_version
+    note = _baseline_version_note(_target_engine(pair), version, cfg.get("verified_for"))
+    return f"{note}Source: `{rel}`\n\n{body}"
+
+
+def _chapter_index(chapter_dir: Path) -> str:
+    """The chapter's ``_index.md``; for a chapter without one, a generated list of its
+    topic files (title + conversion category) so the chapter is not silently dropped."""
+    idx = chapter_dir / "_index.md"
+    if idx.is_file():
+        return idx.read_text()
+    lines = []
+    for f in sorted(chapter_dir.glob("*.md")):
+        text = _read(chapter_dir.parent, f"{chapter_dir.name}/{f.name}")
+        title = next((ln[2:].strip() for ln in text.splitlines() if ln.startswith("# ")),
+                     f.stem)
+        cat = re.search(r"\*\*Conversion category:\*\*\s*([^\n]+)", text)
+        lines.append(f"- [{f.name}]({f.name}) — {title}"
+                     + (f" ({cat.group(1).strip()})" if cat else ""))
+    return (f"# {chapter_dir.name}/\n\n" + "\n".join(lines)) if lines else ""
 
 
 def _phase_of(phase: Optional[str], for_code: bool) -> str:
@@ -243,8 +351,8 @@ def build_context(repo_root: Optional[Path] = None, *, for_code: bool = False,
                   pair: Optional[str] = None, phase: Optional[str] = None) -> str:
     """Build the context block for one phase (``schema`` | ``code`` | ``tests``).
 
-    Engine-pair aware: selects the datatype map, checks, playbook indexes and
-    customer-specific knowledge for the active pair. Customer-specific rules are
+    Engine-pair aware: selects the datatype map, checks, target-version baseline,
+    quick tips, playbook indexes and customer-specific knowledge for the active pair. Customer-specific rules are
     always included (highest precedence).
     """
     root = repo_root or config.find_repo_root()
@@ -274,6 +382,10 @@ def build_context(repo_root: Optional[Path] = None, *, for_code: bool = False,
         if tests_checks:
             blocks.append("# Semantic differences to test for (engine checks)\n\n"
                           + "\n\n".join(tests_checks))
+        baseline = _load_target_baseline(root, pair, phase)
+        if baseline:
+            blocks.append("# Target-version behavior differences to test for "
+                          "(verified on the target version)\n\n" + baseline)
         return "\n\n---\n\n".join(blocks)
 
     dtmap = _read(root, paths["datatype_map"])
@@ -289,14 +401,31 @@ def build_context(repo_root: Optional[Path] = None, *, for_code: bool = False,
             "# Engine-specific conversion checks — non-portable constructs "
             "(learned from real migrations; review before converting)\n\n" + checks)
 
+    # Target-version baseline: verified defaults and traps for the target version.
+    baseline = _load_target_baseline(root, pair, phase)
+    if baseline:
+        blocks.append("# Target-version baseline — conversion defaults and traps "
+                      "(verified on the target version; supersedes older playbook "
+                      "text)\n\n" + baseline)
+
+    idx_dir = root / paths["playbook"]
+    # Short playbook files injected in full (the pair's quick-tips checklist).
+    full = []
+    for rel in _PHASE_FULL_FILES.get(phase, ()):
+        body = _read(root, f"{paths['playbook']}/{rel}").strip()
+        if body:
+            full.append(f"Source: `{paths['playbook']}/{rel}`\n\n{body}")
+    if full:
+        blocks.append("# Playbook quick tips — common gotchas for this pair\n\n"
+                      + "\n\n".join(full))
+
     # Topic indexes for the chapters relevant to this phase only.
     idx_text = []
-    idx_dir = root / paths["playbook"]
     if idx_dir.is_dir():
-        for idx in sorted(idx_dir.glob("*/_index.md")):
-            if idx.parent.name not in _PHASE_CHAPTERS[phase]:
+        for chapter in sorted(d for d in idx_dir.iterdir() if d.is_dir()):
+            if chapter.name not in _PHASE_CHAPTERS[phase]:
                 continue
-            body = idx.read_text() if idx.exists() else ""
+            body = _chapter_index(chapter)
             if body:
                 idx_text.append(body)
     if idx_text:
@@ -339,76 +468,215 @@ def _context_or_ref(shared: Optional[str], root, pair, phase) -> str:
 
 
 # ---- construct detection (points attention at the relevant guidance) --------
+#
+# Each entry is (regex, {target: hint}, {target: topic file}). The hint depends on the
+# TARGET engine as well as the source: a MySQL target must not be told to write
+# PostgreSQL (ON CONFLICT, '||', EXECUTE format, nextval). The topic file is relative
+# to ``skills/<pair>-playbook/references/`` and is rendered as a path so the assistant
+# can open the refreshed detail (and cite it in the conversion log). A target with no
+# hint text gets no hint for that construct. Every topic path is checked by a unit test.
+PG, MY = "postgresql", "mysql"
 
-# (regex, hint) per source engine. The hint names the guidance to apply; the full
-# rules are in the shared context / playbook. Keeps prompts small but targeted.
 _CONSTRUCT_HINTS = {
     "oracle": [
-        (r"\bPIPELINED\b|\bPIPE\s+ROW\b", "PIPELINED table function → RETURNS TABLE/SETOF; declared column types must match the query's actual types (checked only at execution)"),
-        (r"\bCONNECT\s+BY\b", "hierarchical query → recursive CTE"),
-        (r"\bROWNUM\b", "ROWNUM applies BEFORE ORDER BY — reconstruct intent (LIMIT applies after)"),
-        (r"CTXSYS|\bCONTAINS\s*\(|\bSCORE\s*\(", "Oracle Text → tsvector/GIN redesign (decision item); do not create DR$ tables"),
-        (r"\bPARTITION\s+BY\b", "partitioning → see partitioning checks (DEFAULT partition, key in PK)"),
-        (r"SYS_REFCURSOR|\bREF\s+CURSOR\b", "ref cursor → refcursor or set-returning function"),
-        (r"%ROWTYPE|%TYPE\b", "anchored types → explicit target types or table rowtype"),
-        (r"\bBULK\s+COLLECT\b|\bFORALL\b", "bulk binds → set-based SQL / arrays"),
-        (r"\bEXECUTE\s+IMMEDIATE\b", "dynamic SQL → EXECUTE format(...) with %I/%L quoting"),
-        (r"\bPRAGMA\s+AUTONOMOUS_TRANSACTION\b", "autonomous transaction has no direct equivalent (dblink/redesign) — flag"),
-        (r"\b(?:DBMS|UTL)_\w+", "Oracle-supplied package call → playbook special-features / orafce"),
-        (r"\bRAISE_APPLICATION_ERROR\b", "RAISE_APPLICATION_ERROR → RAISE EXCEPTION ... USING ERRCODE (keep the code mapping consistent)"),
-        (r"\bTABLE\s+OF\b|\bVARRAY\b", "collections → arrays / SETOF composite (one RETURN NEXT per element)"),
-        (r"\bCOMMIT\b|\bROLLBACK\b", "transaction control inside code → procedure (not function); caller owns the txn"),
-        (r"\bGLOBAL\s+TEMPORARY\b", "global temporary table → temp table created per session / unlogged"),
-        (r"\bDECODE\s*\(|\bNVL2?\s*\(", "DECODE/NVL → CASE/COALESCE (NULL-safe comparison)"),
-        (r"\.NEXTVAL\b|\.CURRVAL\b", "sequence access → nextval()/currval()/identity"),
-        (r"\bMERGE\s+INTO\b", "MERGE → INSERT ... ON CONFLICT (or PG15+ MERGE)"),
+        (r"\bPIPELINED\b|\bPIPE\s+ROW\b",
+         {PG: "PIPELINED table function → RETURNS TABLE/SETOF; declared column types must match the query's actual types (checked only at execution)",
+          MY: "PIPELINED table function → MySQL has no table functions: a procedure returning a result set, a view, or JSON_TABLE; callers change"},
+         {PG: "sql-plsql/user-defined-functions.md", MY: "sql-plsql/user-defined-functions.md"}),
+        (r"\bCONNECT\s+BY\b",
+         {PG: "hierarchical query → WITH RECURSIVE",
+          MY: "hierarchical query → WITH RECURSIVE (depth limit: cte_max_recursion_depth)"},
+         {PG: "sql-plsql/common-table-expressions.md", MY: "sql-plsql/common-table-expressions.md"}),
+        (r"\bROWNUM\b",
+         {PG: "ROWNUM applies BEFORE ORDER BY — reconstruct intent (LIMIT applies after)",
+          MY: "ROWNUM applies BEFORE ORDER BY — reconstruct intent (LIMIT applies after; ROW_NUMBER() OVER for numbering)"},
+         {}),
+        (r"CTXSYS|\bCONTAINS\s*\(|\bSCORE\s*\(",
+         {PG: "Oracle Text → tsvector/GIN redesign (decision item); do not create DR$ tables",
+          MY: "Oracle Text → InnoDB FULLTEXT index + MATCH … AGAINST redesign (decision item); do not create DR$ tables"},
+         {}),
+        (r"\bPARTITION\s+BY\b",
+         {PG: "partitioning → see partitioning checks (DEFAULT partition, key in PK)",
+          MY: "partitioning → every unique key (incl. PK) must contain the partition columns; partitioned InnoDB tables cannot have foreign keys; LIST has no DEFAULT partition"},
+         {PG: "physical-storage/table-partitioning-and-inheritance.md", MY: "physical-storage/table-partitioning.md"}),
+        (r"SYS_REFCURSOR|\bREF\s+CURSOR\b",
+         {PG: "ref cursor → refcursor or set-returning function",
+          MY: "ref cursor → no cursor variables: return a result set from a procedure (final SELECT)"},
+         {PG: "sql-plsql/cursors.md", MY: "sql-plsql/cursors.md"}),
+        (r"%ROWTYPE|%TYPE\b",
+         {PG: "anchored types → explicit target types or table rowtype",
+          MY: "anchored types → explicit column types; records → one variable per field"},
+         {PG: "sql-plsql/procedures-and-functions.md", MY: "sql-plsql/procedures-and-functions.md"}),
+        (r"\bBULK\s+COLLECT\b|\bFORALL\b",
+         {PG: "bulk binds → set-based SQL / arrays",
+          MY: "bulk binds → set-based SQL or a temporary table (no collections)"},
+         {PG: "sql-plsql/collections-and-bulk-operations.md", MY: "sql-plsql/cursors.md"}),
+        (r"\bEXECUTE\s+IMMEDIATE\b",
+         {PG: "dynamic SQL → EXECUTE format(...) with %I/%L quoting",
+          MY: "dynamic SQL → PREPARE / EXECUTE … USING @vars / DEALLOCATE PREPARE (? placeholders, backtick identifiers); not allowed in stored functions or triggers"},
+         {PG: "sql-plsql/execute-immediate-and-prepare.md", MY: "sql-plsql/execute-immediate-and-prepare.md"}),
+        (r"\bPRAGMA\s+AUTONOMOUS_TRANSACTION\b",
+         {PG: "autonomous transaction has no direct equivalent (dblink/redesign) — flag",
+          MY: "autonomous transaction has no equivalent (no dblink) — redesign (separate connection from the app, or log after commit); flag"},
+         {PG: "sql-plsql/transaction-model.md", MY: "sql-plsql/transaction-model.md"}),
+        (r"\b(?:DBMS|UTL)_\w+",
+         {PG: "Oracle-supplied package call → playbook special-features / orafce",
+          MY: "Oracle-supplied package call → the DBMS_*/UTL_* files under sql-plsql/ (no orafce on MySQL)"},
+         {}),
+        (r"\bRAISE_APPLICATION_ERROR\b",
+         {PG: "RAISE_APPLICATION_ERROR → RAISE EXCEPTION ... USING ERRCODE (keep the code mapping consistent)",
+          MY: "RAISE_APPLICATION_ERROR → SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = …, MYSQL_ERRNO = … (SQLSTATE must be a literal; keep the code mapping consistent)"},
+         {PG: "sql-plsql/procedures-and-functions.md", MY: "sql-plsql/procedures-and-functions.md"}),
+        (r"\bTABLE\s+OF\b|\bVARRAY\b",
+         {PG: "collections → arrays / SETOF composite (one RETURN NEXT per element)",
+          MY: "collections → temporary table or JSON array (iterate with JSON_TABLE); MySQL has no collection types"},
+         {PG: "sql-plsql/collections-and-bulk-operations.md"}),
+        (r"\bCOMMIT\b|\bROLLBACK\b",
+         {PG: "transaction control inside code → procedure (not function); caller owns the txn",
+          MY: "transaction control inside code → procedure (functions and triggers cannot COMMIT/ROLLBACK); caller owns the txn"},
+         {PG: "sql-plsql/transaction-model.md", MY: "sql-plsql/transaction-model.md"}),
+        (r"\bGLOBAL\s+TEMPORARY\b",
+         {PG: "global temporary table → temp table created per session / unlogged",
+          MY: "global temporary table → CREATE TEMPORARY TABLE per session (no shared definition; cannot be referenced twice in one statement)"},
+         {PG: "tables-indexes/temporary-tables.md"}),
+        (r"\bDECODE\s*\(|\bNVL2?\s*\(",
+         {PG: "DECODE/NVL → CASE/COALESCE (NULL-safe comparison)",
+          MY: "DECODE/NVL → CASE / IFNULL / COALESCE (DECODE matches NULL = NULL: use <=>)"},
+         {PG: "sql-plsql/single-row-and-aggregate-functions.md", MY: "sql-plsql/single-row-and-aggregate-functions.md"}),
+        (r"\.NEXTVAL\b|\.CURRVAL\b",
+         {PG: "sequence access → nextval()/currval()/identity",
+          MY: "sequence access → MySQL has no sequences: AUTO_INCREMENT or a sequence table (LAST_INSERT_ID(expr) pattern)"},
+         {PG: "sql-plsql/sequences.md", MY: "sql-plsql/sequences-and-auto-increment.md"}),
+        (r"\bMERGE\s+INTO\b",
+         {PG: "MERGE → native MERGE (PG15+) or INSERT ... ON CONFLICT",
+          MY: "MERGE → INSERT … ON DUPLICATE KEY UPDATE (row-alias form; needs a unique key on the match columns) or UPDATE + INSERT; no MERGE in MySQL"},
+         {PG: "sql-plsql/merge-statement.md", MY: "sql-plsql/merge-statement.md"}),
     ],
     "sqlserver": [
-        (r"\bIDENTITY\b", "IDENTITY → GENERATED ... AS IDENTITY; reset after load"),
-        (r"\bTOP\s*\(?\d", "TOP → LIMIT (mind ORDER BY / WITH TIES)"),
-        (r"\b(?:CROSS|OUTER)\s+APPLY\b", "APPLY → LATERAL join"),
-        (r"\bMERGE\b", "MERGE → INSERT ... ON CONFLICT (or PG15+ MERGE)"),
-        (r"@@ROWCOUNT|@@IDENTITY|SCOPE_IDENTITY", "@@ROWCOUNT/SCOPE_IDENTITY → GET DIAGNOSTICS / RETURNING"),
-        (r"\bBEGIN\s+TRY\b|\bTHROW\b|\bRAISERROR\b", "TRY/CATCH/THROW → EXCEPTION blocks / RAISE"),
-        (r"#\w+", "#temp tables → CREATE TEMP TABLE"),
-        (r"\bhierarchyid\b|\bgeography\b|\bgeometry\b", "hierarchyid/spatial types → ltree/PostGIS or text (see datatype map)"),
-        (r"\bNOLOCK\b", "NOLOCK hint → remove (MVCC)"),
-        (r"\bOUTPUT\s+(?:INSERTED|DELETED)\b", "OUTPUT clause → RETURNING"),
-        (r"\bsp_executesql\b|\bEXEC\s*\(", "dynamic SQL → EXECUTE format(...)"),
-        (r"\bCURSOR\b", "cursor → FOR loop over query / set-based rewrite"),
-        (r"\bCOMMIT\b|\bROLLBACK\b|\bBEGIN\s+TRAN", "transaction control inside code → procedure; caller owns the txn"),
+        (r"\bIDENTITY\b",
+         {PG: "IDENTITY → GENERATED ... AS IDENTITY; reset after load",
+          MY: "IDENTITY → AUTO_INCREMENT (must be the first column of some index); reseed after load (reset-identity)"},
+         {PG: "tsql/identity-and-sequences.md", MY: "tsql/identity-sequences.md"}),
+        (r"\bTOP\s*\(?\d",
+         {PG: "TOP → LIMIT (mind ORDER BY / WITH TIES)",
+          MY: "TOP → LIMIT (mind ORDER BY; WITH TIES and PERCENT have no LIMIT form)"},
+         {PG: "tsql/top-fetch.md", MY: "tsql/top-fetch.md"}),
+        (r"\b(?:CROSS|OUTER)\s+APPLY\b",
+         {PG: "APPLY → LATERAL join",
+          MY: "APPLY → JOIN LATERAL / LEFT JOIN LATERAL … ON TRUE"},
+         {PG: "ansi-sql/table-join.md", MY: "ansi-sql/table-join.md"}),
+        (r"\bMERGE\b",
+         {PG: "MERGE → native MERGE (PG15+) or INSERT ... ON CONFLICT",
+          MY: "MERGE → INSERT … ON DUPLICATE KEY UPDATE (row-alias form; needs a unique key on the match columns) or UPDATE + INSERT; no MERGE in MySQL"},
+         {PG: "tsql/merge.md", MY: "tsql/merge.md"}),
+        (r"@@ROWCOUNT|@@IDENTITY|SCOPE_IDENTITY",
+         {PG: "@@ROWCOUNT/SCOPE_IDENTITY → GET DIAGNOSTICS / RETURNING",
+          MY: "@@ROWCOUNT/SCOPE_IDENTITY → ROW_COUNT() / LAST_INSERT_ID(), read immediately after the statement"},
+         {PG: "tsql/identity-and-sequences.md", MY: "tsql/identity-sequences.md"}),
+        (r"\bBEGIN\s+TRY\b|\bTHROW\b|\bRAISERROR\b",
+         {PG: "TRY/CATCH/THROW → EXCEPTION blocks / RAISE",
+          MY: "TRY/CATCH → DECLARE … HANDLER (EXIT/CONTINUE; no UNDO); THROW/RAISERROR → SIGNAL / RESIGNAL"},
+         {PG: "tsql/error-handling.md", MY: "tsql/error-handling.md"}),
+        (r"#\w+",
+         {PG: "#temp tables → CREATE TEMP TABLE",
+          MY: "#temp tables → CREATE TEMPORARY TABLE (cannot be referenced twice in one statement — error 1137; no foreign keys)"},
+         {MY: "ansi-sql/temporary-tables.md"}),
+        (r"\bhierarchyid\b|\bgeography\b|\bgeometry\b",
+         {PG: "hierarchyid/spatial types → ltree/PostGIS or text (see datatype map)",
+          MY: "hierarchyid/spatial types → MySQL spatial types with SRID, hierarchyid → path string (see datatype map)"},
+         {PG: "ansi-sql/data-types.md", MY: "ansi-sql/data-types.md"}),
+        (r"\bNOLOCK\b",
+         {PG: "NOLOCK hint → remove (MVCC)",
+          MY: "NOLOCK hint → remove (InnoDB MVCC reads do not block)"},
+         {PG: "performance-tuning/query-hints-and-plan-guides.md", MY: "performance-tuning/query-hints.md"}),
+        (r"\bOUTPUT\s+(?:INSERTED|DELETED)\b",
+         {PG: "OUTPUT clause → RETURNING",
+          MY: "OUTPUT clause → MySQL has no RETURNING: re-select by key / LAST_INSERT_ID(), or capture in a trigger"},
+         {PG: "tsql/delete-update-from.md", MY: "tsql/delete-update.md"}),
+        (r"\bsp_executesql\b|\bEXEC\s*\(",
+         {PG: "dynamic SQL → EXECUTE format(...)",
+          MY: "dynamic SQL → PREPARE / EXECUTE … USING @vars / DEALLOCATE PREPARE; not allowed in stored functions or triggers"},
+         {PG: "tsql/dynamic-sql.md", MY: "tsql/stored-procedures.md"}),
+        (r"\bCURSOR\b",
+         {PG: "cursor → FOR loop over query / set-based rewrite",
+          MY: "cursor → DECLARE CURSOR + CONTINUE HANDLER FOR NOT FOUND (a SELECT … INTO with no rows also fires it); or a set-based rewrite"},
+         {PG: "tsql/cursors.md", MY: "tsql/cursors.md"}),
+        (r"\bCOMMIT\b|\bROLLBACK\b|\bBEGIN\s+TRAN",
+         {PG: "transaction control inside code → procedure; caller owns the txn",
+          MY: "transaction control inside code → procedure (functions and triggers cannot COMMIT/ROLLBACK); caller owns the txn"},
+         {PG: "tsql/transactions.md", MY: "tsql/transactions.md"}),
         (r"\bDATEADD\s*\(|\bDATEDIFF\s*\(|\bDATEPART\s*\(|\bGETDATE\s*\(|\bSYSDATETIME\s*\(",
-         "date functions → interval arithmetic / date_part; DATEDIFF counts boundaries (current_date - d::date for DAY)"),
-        (r"\bCONVERT\s*\(|\bFORMAT(?:MESSAGE)?\s*\(", "CONVERT/FORMAT(MESSAGE) → CAST / to_char / format() (style codes and NULL rendering differ)"),
-        (r"\bISNULL\s*\(|\bIIF\s*\(|\bCHOOSE\s*\(", "ISNULL/IIF/CHOOSE → COALESCE / CASE / array index"),
+         {PG: "date functions → interval arithmetic / date_part; DATEDIFF counts boundaries (current_date - d::date for DAY)",
+          MY: "date functions → DATE_ADD/INTERVAL, EXTRACT, NOW(3); SQL Server DATEDIFF counts boundaries — MySQL DATEDIFF is whole days, TIMESTAMPDIFF counts complete units"},
+         {PG: "tsql/date-time-functions.md", MY: "tsql/datetime.md"}),
+        (r"\bCONVERT\s*\(|\bFORMAT(?:MESSAGE)?\s*\(",
+         {PG: "CONVERT/FORMAT(MESSAGE) → CAST / to_char / format() (style codes and NULL rendering differ)",
+          MY: "CONVERT/FORMAT → CAST / DATE_FORMAT (style codes differ; MySQL FORMAT() is number formatting only)"},
+         {PG: "tsql/cast-and-convert.md", MY: "tsql/datetime.md"}),
+        (r"\bISNULL\s*\(|\bIIF\s*\(|\bCHOOSE\s*\(",
+         {PG: "ISNULL/IIF/CHOOSE → COALESCE / CASE / array index",
+          MY: "ISNULL/IIF/CHOOSE → IFNULL or COALESCE / IF() or CASE / ELT() (MySQL ISNULL(x) is a 1-argument NULL test)"},
+         {}),
         (r"\bREPLICATE\s*\(|\bDATALENGTH\s*\(|\bLEN\s*\(|\bCHARINDEX\s*\(|\bSTUFF\s*\(",
-         "string functions → repeat/lpad, octet_length, length (LEN ignores trailing spaces), strpos, overlay"),
-        (r"\bTOP\s*\(?\s*\d+\s*\)?\s*PERCENT\b", "TOP n PERCENT → row_number() <= ceil(count * n / 100)"),
+         {PG: "string functions → repeat/lpad, octet_length, length (LEN ignores trailing spaces), strpos, overlay",
+          MY: "string functions → REPEAT, LENGTH (bytes), CHAR_LENGTH (LEN ignores trailing spaces), LOCATE, INSERT()"},
+         {PG: "tsql/string-functions.md", MY: "tsql/string-functions.md"}),
+        (r"\bTOP\s*\(?\s*\d+\s*\)?\s*PERCENT\b",
+         {PG: "TOP n PERCENT → row_number() <= ceil(count * n / 100)",
+          MY: "TOP n PERCENT → ROW_NUMBER() OVER (…) <= CEIL(COUNT(*) OVER () * n / 100) in a derived table"},
+         {PG: "tsql/top-fetch.md", MY: "tsql/top-fetch.md"}),
         (r"\bERROR_(?:NUMBER|MESSAGE|SEVERITY|STATE|LINE|PROCEDURE)\s*\(|\bRAISERROR\b",
-         "ERROR_*() / RAISERROR → GET STACKED DIAGNOSTICS in the handler; pass fields to logging procs"),
-        (r"\bCURRENT_USER\b|\bSUSER_S?NAME\s*\(|\bUSER_NAME\s*\(", "CURRENT_USER/SUSER_SNAME → current_user/session_user (DB user vs login differ — BEHAVIOURAL)"),
-        (r"'\s*\+|\+\s*'", "'+' string concatenation → '||' (NULL handling: CONCAT_NULL_YIELDS_NULL)"),
-        (r"\bWITH\s+SCHEMABINDING\b|\bSET\s+NOCOUNT\b|\bWITH\s+EXECUTE\s+AS\b", "SCHEMABINDING / SET NOCOUNT / EXECUTE AS → drop (no equivalent needed)"),
-        (r"\bOPTION\s*\(\s*MAXRECURSION", "MAXRECURSION → recursion-level guard in WITH RECURSIVE"),
-        (r"\bCURSOR\s+VARYING\s+OUTPUT\b", "cursor OUTPUT param → set-returning function (or refcursor)"),
+         {PG: "ERROR_*() / RAISERROR → GET STACKED DIAGNOSTICS in the handler; pass fields to logging procs",
+          MY: "ERROR_*() → GET DIAGNOSTICS CONDITION 1 … MYSQL_ERRNO, MESSAGE_TEXT, RETURNED_SQLSTATE in the handler"},
+         {PG: "tsql/error-handling.md", MY: "tsql/error-handling.md"}),
+        (r"\bCURRENT_USER\b|\bSUSER_S?NAME\s*\(|\bUSER_NAME\s*\(",
+         {PG: "CURRENT_USER/SUSER_SNAME → current_user/session_user (DB user vs login differ — BEHAVIOURAL)",
+          MY: "CURRENT_USER/SUSER_SNAME → CURRENT_USER() (the definer inside SQL SECURITY DEFINER routines) vs USER() (the login) — BEHAVIOURAL"},
+         {}),
+        (r"'\s*\+|\+\s*'",
+         {PG: "'+' string concatenation → '||' (NULL handling: CONCAT_NULL_YIELDS_NULL)",
+          MY: "'+' string concatenation → CONCAT() ('+' is numeric addition: 'a' + 'b' = 0 silently); CONCAT returns NULL if any argument is NULL, CONCAT_WS skips NULLs"},
+         {PG: "tsql/string-functions.md", MY: "tsql/string-functions.md"}),
+        (r"\bWITH\s+SCHEMABINDING\b|\bSET\s+NOCOUNT\b|\bWITH\s+EXECUTE\s+AS\b",
+         {PG: "SCHEMABINDING / SET NOCOUNT / EXECUTE AS → drop (no equivalent needed)",
+          MY: "SCHEMABINDING / SET NOCOUNT → drop; EXECUTE AS → SQL SECURITY DEFINER / INVOKER"},
+         {PG: "tsql/stored-procedures.md", MY: "tsql/stored-procedures.md"}),
+        (r"\bOPTION\s*\(\s*MAXRECURSION",
+         {PG: "MAXRECURSION → recursion-level guard in WITH RECURSIVE",
+          MY: "MAXRECURSION → SET SESSION cte_max_recursion_depth (or a level guard in WITH RECURSIVE)"},
+         {PG: "ansi-sql/common-table-expressions.md", MY: "ansi-sql/cte.md"}),
+        (r"\bCURSOR\s+VARYING\s+OUTPUT\b",
+         {PG: "cursor OUTPUT param → set-returning function (or refcursor)",
+          MY: "cursor OUTPUT param → no cursor parameters: return a result set from a procedure"},
+         {PG: "tsql/cursors.md", MY: "tsql/cursors.md"}),
     ],
 }
 
 
 def detect_constructs(source_text: str, pair: str) -> List[str]:
-    """Hints for constructs present in this object's source (comments stripped)."""
+    """Target-aware hints for constructs present in this object's source (comments
+    stripped). Each hint ends with the playbook topic file to open, when there is one."""
     body = re.sub(r"--[^\n]*", " ", source_text or "")
     body = re.sub(r"/\*.*?\*/", " ", body, flags=re.DOTALL)
-    return [hint for pat, hint in _CONSTRUCT_HINTS.get(_source_engine(pair), [])
-            if re.search(pat, body, re.IGNORECASE)]
+    target = _target_engine(pair)
+    out: List[str] = []
+    for pat, hints, topics in _CONSTRUCT_HINTS.get(_source_engine(pair), []):
+        hint = hints.get(target)
+        if not hint or not re.search(pat, body, re.IGNORECASE):
+            continue
+        topic = topics.get(target)
+        out.append(f"{hint} — see `skills/{pair}-playbook/references/{topic}`"
+                   if topic else hint)
+    return out
 
 
 def _hints_block(source_text: str, pair: str) -> str:
     hints = detect_constructs(source_text, pair)
     if not hints:
         return ""
-    return ("=== CONSTRUCTS DETECTED IN THIS PROMPT'S SOURCE (apply the matching guidance in "
-            "the context) ===\n" + "\n".join(f"- {h}" for h in hints) + "\n\n")
+    return ("=== CONSTRUCTS DETECTED IN THIS PROMPT'S SOURCE (apply the matching guidance; "
+            "open the named playbook file when the context is not enough, and cite it in "
+            "the conversion log) ===\n" + "\n".join(f"- {h}" for h in hints) + "\n\n")
 
 
 def build_unit_prompt(units, repo_root: Optional[Path] = None,
@@ -511,7 +779,8 @@ For a FUNCTION (compare the return value for the same inputs on both engines):
         description: <what this case covers>
         source_sql: "SELECT <schema>.<fn>(<real args>) FROM dual"
         target_sql: "SELECT <schema>.<fn>(<real args>)"
-        compare: scalar          # scalar | resultset
+        compare: scalar          # scalar | resultset (all rows/columns; add
+                                 # `ordered: true` only when row order is defined)
 
 For a PROCEDURE (no return value — verify the NET EFFECT is identical). YOU decide
 which probe queries capture the procedure's effect (the rows/columns/aggregates it
@@ -546,6 +815,9 @@ Rules:
   `SELECT COUNT(*) FROM <schema>.<fn>(<args>)`, plus a checksum/aggregate over a
   returned column. A declared RETURNS TABLE column type that differs from the query's
   actual type (e.g. `numeric` vs `bigint`) compiles fine and fails only at execution.
+- A routine converted to a procedure that RETURNS A RESULT SET (e.g. a PIPELINED function on
+  MySQL) is compared with a function-shape case: `compare: resultset`, source
+  `SELECT * FROM TABLE(<fn>(...))`, target `CALL <proc>(...)`.
 - If the tables an object reads are EMPTY in the sampled data, say so in `notes:` —
   the case only exercises the empty/default path (reported as LOW_COVERAGE).
 - For packages, generate cases for the public subprograms a caller would use. A package

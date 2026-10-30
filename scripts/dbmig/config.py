@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 from pathlib import Path
@@ -167,6 +168,31 @@ def workspace_dir(project: str) -> Path:
     return migrations_root() / project
 
 
+def resolve_target_schema(args) -> str:
+    """Target schema (PostgreSQL) / database (MySQL) for ``args.schema``.
+
+    Precedence: ``--target-schema`` on the command line, else the ``target_schema``
+    recorded by ``import-dms-sc`` in ``01-assessment/dms-sc-map-<SCHEMA>.json``
+    (AWS DMS SC names it ``<database>_<schema>``, e.g. ``adventureworks_person``),
+    else the source schema lower-cased (the framework's own convention).
+    """
+    explicit = (getattr(args, "target_schema", None) or "").strip()
+    if explicit:
+        return explicit.lower()
+    schema = getattr(args, "schema", "") or ""
+    project = getattr(args, "project", None)
+    if project:
+        p = workspace_dir(project) / "01-assessment" / f"dms-sc-map-{schema.upper()}.json"
+        if p.exists():
+            try:
+                ts = (json.loads(p.read_text()).get("target_schema") or "").strip()
+                if ts:
+                    return ts.lower()
+            except (OSError, ValueError):
+                pass
+    return schema.lower()
+
+
 _PROJECT_UNSAFE_RE = re.compile(r"[^A-Za-z0-9._-]+")
 
 
@@ -254,3 +280,13 @@ def active_pair() -> str:
     src = normalize_engine((raw.get("source") or {}).get("engine")) or "oracle"
     tgt = normalize_engine((raw.get("target") or {}).get("engine")) or "postgresql"
     return f"{src}-to-{tgt}"
+
+
+def target_version() -> str:
+    """The target engine version declared in the connections file (``target.version``,
+    e.g. ``17.7`` or ``8.4``), or '' when it is not set or the file can't be read."""
+    try:
+        raw = load_connections()
+    except Exception:
+        return ""
+    return str((raw.get("target") or {}).get("version") or "").strip()

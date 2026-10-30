@@ -24,7 +24,7 @@ import json
 import sys
 from collections import Counter
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from .. import config, console, report
 from ..connections import load_pair
@@ -42,6 +42,23 @@ _KIND = {
 # (DMS SC renames system PK/UNIQUE constraints and many indexes, so those are only
 # checked as an advisory, never reported as hard MISSING.)
 _RELIABLE_NAME_KINDS = {"tables", "views", "sequences", "triggers", "routines"}
+
+
+# Identifier length limits: a longer name in the DMS SC model is stored truncated on
+# the target (PostgreSQL silently cuts at 63 bytes; MySQL rejects > 64 characters, so
+# for MySQL the cut only matters if DMS SC applied a shortened name).
+_NAME_LIMIT_BYTES = {"postgresql": 63, "mysql": 64}
+
+
+def _live_name(name: str, engine: str) -> str:
+    """The name as the target stores it (truncated to the engine's identifier limit)."""
+    limit = _NAME_LIMIT_BYTES.get((engine or "").lower())
+    if not limit:
+        return name
+    raw = name.encode("utf-8")
+    if len(raw) <= limit:
+        return name
+    return raw[:limit].decode("utf-8", errors="ignore")
 
 
 def _now() -> str:
@@ -86,9 +103,15 @@ def run(args) -> int:
     results: List[dict] = []
     for o in objects:
         mt = (o.get("target_type") or o.get("source_type") or "").upper()
-        name = (o.get("target_name") or "").lower()
+        # DMS SC gave no target object (e.g. a MANUAL trigger it could not convert):
+        # a manual reconversion keeps the source name, lower-cased.
+        name = (o.get("target_name") or o.get("source_name") or "").lower()
         kind = _KIND.get(mt)
-        present = bool(name) and kind is not None and name in catalog.get(kind, set())
+        live = _live_name(name, getattr(target, "engine", ""))
+        present = bool(name) and kind is not None and (
+            name in catalog.get(kind, set()) or live in catalog.get(kind, set()))
+        if present and live != name and live in catalog.get(kind, set()):
+            name = live          # report/EXTRA-match by the name the target really has
         is_fk = mt == "CONSTRAINT" and _is_foreign_key(ws, o)
         reliable = (kind in _RELIABLE_NAME_KINDS) or is_fk
 
@@ -113,8 +136,11 @@ def run(args) -> int:
     # the meaningful ones; indexes/constraints have noisy system names).
     mapped = {(r["kind"], r["target_name"]) for r in results if r["kind"]}
     extras: List[dict] = []
+    trigger_fns = catalog.get("trigger_functions", set())
     for kind in ("tables", "views", "routines", "sequences"):
         for nm in sorted(catalog.get(kind, set())):
+            if kind == "routines" and nm in trigger_fns:
+                continue          # implements a trigger; the trigger itself is diffed
             if (kind, nm) not in mapped:
                 extras.append({"kind": kind, "target_name": nm})
 

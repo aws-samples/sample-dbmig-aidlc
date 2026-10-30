@@ -6,6 +6,8 @@
 **Conversion category:** N/A (managed service / post-migration architecture)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Version and auth-plugin check for 8.4, session-pinning caveat for converted package state, IAM and reader endpoints.
+
 ## Overview
 
 Amazon RDS Proxy is a fully managed, highly available database proxy for Amazon RDS that makes applications more scalable, more resilient to database failures, and more secure.
@@ -35,4 +37,7 @@ See: "Amazon RDS Proxy for Scalable Serverless Applications" and "Amazon RDS Pro
 - Helps mitigate Aurora MySQL `max_connections` pressure without application changes.
 - Reduces failover impact (up to 66% faster) — relevant for HA cutover planning.
 - Use Secrets Manager + IAM integration to remove plaintext DB credentials from the application.
-- Cost is per vCPU of the enabled database instance.
+- Cost is per vCPU of the enabled database instance (Serverless v2: per ACU).
+- Confirm RDS Proxy supports the target major version (Aurora MySQL 8.4) on the RDS Proxy supported-engines page before go-live, and that client-to-proxy authentication supports `caching_sha2_password` users.
+- Converted Oracle code that keeps **session state** — user variables emulating package globals, temporary tables, `SET` session variables, `GET_LOCK`, prepared statements — **pins** the client connection and removes most pooling benefit. Review it before putting the application behind the proxy.
+- RDS Proxy supports IAM authentication and read-only endpoints for read scaling.

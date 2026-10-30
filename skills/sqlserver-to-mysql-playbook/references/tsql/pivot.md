@@ -6,6 +6,8 @@
 **Conversion category:** Manual (Three star feature compatibility — no automation; straightforward rewrite)
 **SCT automation:** No automation
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Still no PIVOT/UNPIVOT (verified); added a verified LATERAL UNPIVOT that drops NULLs like SQL Server, NULL caveat for the original rewrite, dynamic pivot via GROUP_CONCAT + PREPARE, alias quoting.
+
 ## SQL Server
 
 `PIVOT` and `UNPIVOT` rotate rows into columns and columns into rows. The *anchor* column isn't pivoted (one row per unique value, like `GROUP BY`).
@@ -100,4 +102,20 @@ FROM
 
 - PIVOT → `GROUP BY` + conditional aggregation (`COUNT`/`SUM` with `CASE`), one expression per target column.
 - UNPIVOT → `CROSS JOIN` against a derived table of column-name literals (`SELECT ... UNION ALL ...`) plus a `CASE` to select the matching value.
-- Pivoted column lists are static — you must enumerate each output column manually (no dynamic pivot).
+- Pivoted column lists are static — you must enumerate each output column manually. A dynamic pivot (T-SQL built with `STUFF(… FOR XML PATH)` + `sp_executesql`) → build the column list with `GROUP_CONCAT` (raise `group_concat_max_len`) into a `PREPARE`d statement inside a procedure.
+- Still no `PIVOT`/`UNPIVOT` on Aurora MySQL 3 / 8.4 (syntax error, verified).
+
+Verified on Aurora MySQL 3.13 and 8.4.8 — preferred UNPIVOT form with `LATERAL` (MySQL 8.0.14+):
+
+```sql
+SELECT e.SaleDate, v.Employee, v.SaleAmount
+FROM EmployeeSales e
+CROSS JOIN LATERAL (
+    SELECT 'John' AS Employee, e.John AS SaleAmount
+    UNION ALL SELECT 'Kevin', e.Kevin
+    UNION ALL SELECT 'Mary',  e.Mary) AS v
+WHERE v.SaleAmount IS NOT NULL;   -- SQL Server UNPIVOT drops NULLs; the CROSS JOIN version above keeps them
+```
+- The `CROSS JOIN … CASE` UNPIVOT in the original **keeps NULL values** as rows; add `WHERE SaleAmount IS NOT NULL` for SQL Server equivalence.
+- Quote numeric pivot column aliases with backticks (`` AS `1` ``) rather than single quotes; single-quoted aliases are accepted but are string literals elsewhere.
+- `COUNT(*) FILTER (WHERE …)` does not exist in MySQL; keep the `COUNT(CASE … END)` / `SUM(CASE … END)` form.

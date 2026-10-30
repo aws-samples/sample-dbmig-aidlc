@@ -15,4 +15,5 @@ Microsoft SQL Server and Amazon Aurora PostgreSQL.
 
 - Aurora PostgreSQL delivers HA and backup as a **managed service**, not via DDL/scripts. There is no datatype/feature rule conversion here — these are infrastructure topics.
 - **Backup:** Aurora ≈ SQL Server `FULL` recovery model; continuous incremental backups, 1–35 day point-in-time restore, manual snapshots, copy-on-write cloning. No log/differential/partial backups; automated backups cannot be disabled.
-- **HA:** clustering and storage replication are automatic across **three Availability Zones**. FCI/Log Shipping have no equivalent; Always On Availability Groups map to **Aurora Replicas** (up to 15 + primary). Failover is via the **cluster endpoint**; read scale-out via the **reader endpoint**.
+- **HA:** clustering and storage replication are automatic across **three Availability Zones**. FCI/Log Shipping have no equivalent; Always On Availability Groups map to **Aurora Replicas** (up to 15 + primary) and cross-Region DR to **Aurora Global Database**. Failover is via the **cluster endpoint**; read scale-out via the **reader endpoint** / custom endpoints. Endpoints listen on port **5432**.
+- **Backtrack** (in-place rewind) is Aurora MySQL only; Aurora PostgreSQL restores (PITR, snapshot, fast clone) always create a new cluster.

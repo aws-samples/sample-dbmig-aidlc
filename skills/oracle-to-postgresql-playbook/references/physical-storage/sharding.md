@@ -6,6 +6,8 @@
 **Conversion category:** Blocked (No feature compatibility, no automation). PostgreSQL does not support sharding as a built-in feature.
 **SCT automation:** No automation. AWS SCT action code index: N/A. Key difference: PostgreSQL doesn't support sharding.
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): added Aurora PostgreSQL Limitless Database (16.x only, not 18) and noted that Citus is not available.
+
 ## Oracle
 
 Sharding is a data architecture where table data is horizontally partitioned across independent databases called shards. All shards together form a single logical database called a sharded database (SDB). Sharding a table splits it across shards, where each shard holds a sharded table with the same structure but a different subset of rows. This improves performance and availability.
@@ -26,6 +28,7 @@ PostgreSQL does not support sharding as a native/built-in feature, so there is n
 - Migrating off Oracle sharding requires re-architecting the data distribution strategy. Options to consider on Aurora PostgreSQL:
   - Consolidate shard data into a single Aurora PostgreSQL database/cluster (often viable since Aurora scales storage and read replicas independently), using native table partitioning (range/list/hash) for manageability within one database.
   - Implement application-level sharding/routing across multiple Aurora instances if horizontal scale-out across independent databases is still required.
-  - Use extensions/external tooling (e.g., partition-based or distributed-PostgreSQL approaches) outside the scope of native PostgreSQL if true distributed sharding is mandatory.
+  - **Aurora PostgreSQL Limitless Database** is AWS's managed sharded PostgreSQL (sharded and reference tables, distributed transactions). It runs on separate `16.x-limitless` engine versions. As of 2026-10-29 it is **not available on Aurora PostgreSQL 18**, so choosing it means targeting PostgreSQL 16 instead of 18. Present that trade-off to the customer. Do not choose it silently.
+  - Citus and other distributed-PostgreSQL extensions are **not** available on Aurora PostgreSQL 18 (checked against `pg_available_extensions` on 18.6).
 - AWS DMS handles the data movement from each Oracle shard into the chosen Aurora target; the logical re-mapping of shards to the new topology is a manual design decision.
 - Validate query patterns, cross-shard joins, and global uniqueness/sequence generation, since these often depend on Oracle sharding semantics that do not carry over.

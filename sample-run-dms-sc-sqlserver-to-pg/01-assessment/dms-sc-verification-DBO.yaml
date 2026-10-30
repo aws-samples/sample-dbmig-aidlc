@@ -1,0 +1,23 @@
+items:
+  Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.dbo.Tables.ErrorLog:
+    object: dbo.ErrorLog
+    type: TABLE
+    codes:
+    - '7826'
+    status: pending
+    method: ''
+    by: ''
+    at: ''
+    note: ''
+  Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.dbo.Tables.AWBuildVersion:
+    object: dbo.AWBuildVersion
+    type: TABLE
+    codes:
+    - '7826'
+    status: pending
+    method: ''
+    by: ''
+    at: ''
+    note: ''
+project: aw-dms-sc-20261030
+schema: DBO

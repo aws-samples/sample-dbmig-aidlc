@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (three-star feature compatibility; three-star SCT automation)
 **SCT automation:** Partitioning action code index. Aurora MySQL does **not** support interval partitioning, partition advisor, preference partitioning, virtual column-based partitioning, or automatic list partitioning.
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Added the design-changing restrictions (PK/UNIQUE must include partition columns — 1503; no FKs on partitioned tables — 1506; no DEFAULT list partition; HASH needs integers — 1659; NULL to lowest partition), corrected 'split only at the last partition' and 'virtual-column partitioning unsupported', events instead of triggers for interval partitioning — all verified on both versions.
+
 Table partitioning divides a large table into smaller pieces. Each partition has its own name and definition and can be managed separately or collectively. Partitioning is transparent to applications (unmodified SQL still works) and improves query performance, eases data management/ILM, and reduces maintenance downtime.
 
 ## Oracle
@@ -121,7 +123,15 @@ CREATE TABLE SYSTEM_LOGS
 
 ## MySQL
 
-MySQL partitioning is similar to Oracle and supports most features. The unsupported items are the automatic features (interval partitioning, automatic list partitioning) — implement these with triggers or procedures.
+MySQL partitioning is similar to Oracle and supports most features. The unsupported items are the automatic features (interval partitioning, automatic list partitioning) — implement these with a scheduled **event** that runs `ALTER TABLE … ADD PARTITION` / `REORGANIZE PARTITION pmax` ahead of time. (Triggers, suggested by the original, cannot run DDL.)
+
+**Restrictions that change the design** (verified on Aurora MySQL 3.13 and 8.4.8; also in `engines/oracle-to-mysql/checks/non-portable-constructs.md`):
+- **Every PRIMARY KEY and UNIQUE key must include all partitioning columns** (error 1503). Oracle allows global unique indexes; MySQL has only local indexes, so uniqueness weakens to (key, partition column). Get sign-off.
+- **Partitioned InnoDB tables cannot have foreign keys, in either direction** (error 1506). Drop the partitioning or the FK (enforce in the application) — a design decision, never silent.
+- No global indexes, no `DEFAULT` list partition (`VALUES IN (DEFAULT)` is a syntax error), no interval or reference partitioning.
+- `HASH` needs an integer expression (a `VARCHAR` column fails with error 1659); use `KEY` partitioning for strings.
+- A `NULL` range key goes to the **lowest** partition (verified: a NULL `k` landed in `p0`), not to a default partition.
+- Up to 8192 partitions (including subpartitions) per table.
 
 > **Note:** Amazon RDS for MySQL 8 supports `ADD PARTITION`, `DROP PARTITION`, `COALESCE PARTITION`, `REORGANIZE PARTITION`, and `REBUILD PARTITION ALTER TABLE` with `ALGORITHM={COPY|INPLACE}` and `LOCK` clauses. `DROP PARTITION` with `ALGORITHM=INPLACE` deletes the partition's data and drops it; with `ALGORITHM=COPY` (or `old_alter_table=ON`) it rebuilds the table and moves data to a partition with a compatible `PARTITION … VALUES` definition, deleting data that cannot be moved.
 
@@ -209,7 +219,7 @@ CREATE TABLE SYSTEM_LOGS
 
 ### Composite partitioning
 
-In MySQL 5.7 you can subpartition tables partitioned by range or list; subpartitions use hash or key partitioning. Either specify only the number of subpartitions per partition, or explicitly define them (to control names). All partitions must have the same number of subpartitions.
+You can subpartition tables partitioned by range or list (MySQL 5.7, 8.0 and 8.4); subpartitions use hash or key partitioning. Either specify only the number of subpartitions per partition, or explicitly define them (to control names). All partitions must have the same number of subpartitions.
 
 ```sql
 CREATE TABLE EMPLOYESS
@@ -227,7 +237,7 @@ CREATE TABLE EMPLOYESS
 
 ### Split partitions
 
-Oracle's `SPLIT PARTITION` maps to MySQL `REORGANIZE PARTITION`. Range partitions can be split at the last partition only.
+Oracle's `SPLIT PARTITION` maps to MySQL `REORGANIZE PARTITION`. Any range partition can be split as long as the new partitions cover exactly the old range (verified: splitting a middle partition `p1` into `p1a`, `p1b` worked). `MERGE PARTITIONS` → `REORGANIZE PARTITION p1, p2 INTO (PARTITION p12 …)`.
 
 ```sql
 CREATE TABLE SYSTEM_LOGS
@@ -257,9 +267,11 @@ ALTER TABLE orders
 - `STORE IN (tablespace...)` and `TABLESPACE` clauses are Oracle-specific and dropped in MySQL.
 - MySQL hash/list partitioning requires an integer key/expression; use `KEY` partitioning, `LIST COLUMNS`, or `RANGE COLUMNS` for non-integer (e.g. varchar/date) columns.
 - Oracle range-by-date `TO_DATE(...)` becomes MySQL `RANGE (YEAR(col))` or `RANGE COLUMNS (col)` with `'YYYY-MM-DD'` literals.
-- `SPLIT PARTITION` → `REORGANIZE PARTITION` (range splits only at the last partition).
+- `SPLIT PARTITION` → `REORGANIZE PARTITION` (any partition, new ranges must cover the old one exactly).
+- `ALTER TABLE … TRUNCATE PARTITION p` and `SELECT … FROM t PARTITION (p)` work (verified) — map Oracle partition-extended names `t PARTITION (p)` directly.
+- Partitioning on a **generated column** works (verified: `PARTITION BY RANGE (y)` with `y INT AS (YEAR(d)) STORED`), which covers many Oracle virtual-column-partitioning cases.
 - `EXCHANGE PARTITION` is supported by both with nearly identical syntax.
-- **Not supported in Aurora MySQL:** interval partitioning, partition advisor, preference partitioning, virtual column-based partitioning, automatic list partitioning. Emulate automatic features with triggers/procedures.
+- **Not supported in Aurora MySQL:** interval partitioning, partition advisor, preference partitioning, automatic list partitioning, reference partitioning, global indexes. Emulate interval/automatic partitioning with a scheduled event that pre-creates partitions.
 
 ### Summary of Oracle partition types vs MySQL support
 
@@ -272,6 +284,6 @@ ALTER TABLE orders
 | Interval | No |
 | Partition advisor | No |
 | Preference | No |
-| Virtual column-based | No |
+| Virtual column-based | Yes, via a generated column (verified) |
 | Automatic list partitioning | No |
 | Split and exchange | Yes |

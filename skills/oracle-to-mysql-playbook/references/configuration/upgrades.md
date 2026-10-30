@@ -6,6 +6,8 @@
 **Conversion category:** N/A
 **SCT automation:** N/A
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Current version schemes (3.x = 8.0, 8.4.x; verified AURORA_VERSION()), corrected the --engine mysql command, 3 → 8.4 upgrade path and its breaking changes (verified), blue/green deployments.
+
 ## Oracle
 
 Oracle upgrades are either **minor** or **major**. A version like `11.2.0.4.0` breaks down as:
@@ -38,12 +40,17 @@ aws rds describe-db-engine-versions --engine aurora-mysql --query '*[].[EngineVe
 SELECT AURORA_VERSION();
 ```
 
-Aurora MySQL version scheme example `2.08.1`: first digit is the major version. Aurora MySQL version 1 = MySQL 5.6 compatible; version 2 = MySQL 5.7 compatible.
+Version schemes (verified with `SELECT AURORA_VERSION()`: `3.13.0` and `8.4.8`):
+- Aurora MySQL **version 3** = MySQL 8.0 compatible, numbered `3.MM.p` (engine version string `8.0.mysql_aurora.3.13.0`). 3.10 is the current long-term-support (LTS) release.
+- Aurora MySQL **8.4** = MySQL 8.4 LTS compatible, numbered `8.4.x` (engine version `8.4.mysql_aurora.8.4.8`).
+- Versions 1 (5.6) and 2 (5.7) are past end of standard support; version 2 runs only under paid RDS Extended Support. See `../target-baseline-aurora-mysql.md` for support dates.
 
 - **Minor upgrades** can be applied automatically by enabling auto minor version upgrade on the RDS instance; applied during the scheduled maintenance window. List available minor versions:
 
   ```bash
-  aws rds describe-db-engine-versions --output=table --engine mysql --engine-version minor-version --region region
+  aws rds describe-db-engine-versions --engine aurora-mysql --engine-version 8.0.mysql_aurora.3.13.0 \
+    --query 'DBEngineVersions[0].ValidUpgradeTarget[].[EngineVersion,IsMajorVersionUpgrade]' --output table
+  # (the original used --engine mysql, which lists RDS for MySQL, not Aurora)
   ```
 
 - **Major upgrades** are never applied automatically (may not be backward-compatible). Application testing is highly recommended.
@@ -66,7 +73,8 @@ Aurora performs a major upgrade in multiple recorded steps (visible on the RDS E
 aws rds modify-db-cluster \
   --db-cluster-identifier sample-cluster \
   --engine aurora-mysql \
-  --engine-version 5.7.mysql_aurora.2.09.0 \
+  --engine-version 8.4.mysql_aurora.8.4.8 \
+  --db-cluster-parameter-group-name my-aurora-mysql84-params \
   --allow-major-version-upgrade \
   --apply-immediately
 ```
@@ -78,3 +86,7 @@ aws rds modify-db-cluster \
 - Always set `--allow-major-version-upgrade` for major version jumps; minor upgrades can be automated via the maintenance window.
 - Map upgrade prerequisites: select the right RDS instance class, commit/rollback open transactions, take an RDS snapshot, and stop application connections before upgrading.
 - Re-run the full test-and-upgrade flow in production after validating on a clone.
+- **3 → 8.4** is an in-place major upgrade (3.13.0 lists `8.4.mysql_aurora.8.4.8` as a valid major target, verified); 2 → 8.4 is not direct — go through 3 first. Use an `aurora-mysql8.4` parameter group (parameters such as `expire_logs_days` and `binlog_transaction_dependency_tracking` no longer exist).
+- Before 3 → 8.4, fix what 8.4 rejects (all verified on 8.4.8): foreign keys to non-unique keys, `AUTO_INCREMENT` on `FLOAT`/`DOUBLE`, `MASTER`/`SLAVE` replication SQL, and accounts that should move from `mysql_native_password` to `caching_sha2_password`.
+- Prefer **Aurora blue/green deployments** for major upgrades of production clusters: the green cluster is upgraded and kept in sync by binlog replication, and switchover takes about a minute. Binary logging must be on.
+- For a migration project, target 8.4 from the start so there is no near-term major upgrade.

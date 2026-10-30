@@ -4,7 +4,9 @@
 > URL: https://docs.aws.amazon.com/dms/latest/sql-server-to-aurora-postgresql-migration-playbook/chap-sql-server-aurora-pg.sql.constraints.html
 
 **Conversion category:** Automatic (Five-star compatibility, four-star automation)
-**SCT automation:** High — SCT action code index: Constraints. Key differences: `SET DEFAULT` referential action is missing; check constraints can't use subqueries.
+**SCT automation:** High — SCT action code index: Constraints. Key differences: check constraints can't use subqueries. (The original playbook also said `SET DEFAULT` is missing. That is wrong: PostgreSQL supports `ON DELETE/UPDATE SET DEFAULT`, verified on 18.6.)
+
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): corrected the `SET DEFAULT` claim (verified supported), UNIQUE single-NULL semantics via `NULLS NOT DISTINCT` (verified), `NOCHECK` → `NOT VALID`/`NOT ENFORCED` (PG 18), named NOT NULL.
 
 ## SQL Server
 
@@ -71,7 +73,7 @@ ON UPDATE CASCADE
 
 ## PostgreSQL
 
-Supported types: `PRIMARY KEY`, `FOREIGN KEY`, `UNIQUE`, `NOT NULL`, `EXCLUDE` (unique to PostgreSQL). Constraints on views aren't supported.
+Supported types: `PRIMARY KEY`, `FOREIGN KEY`, `UNIQUE`, `CHECK`, `NOT NULL`, `EXCLUDE` (unique to PostgreSQL). Constraints on views aren't supported. PostgreSQL 18 adds temporal keys (`WITHOUT OVERLAPS` / `PERIOD`) and `NOT ENFORCED` CHECK/FK constraints.
 
 Primary key (inline, named, out-of-line, alter, drop):
 ```sql
@@ -106,18 +108,19 @@ ALTER TABLE EMPLOYEES ADD CONSTRAINT FK_DEPT
 ALTER TABLE EMPLOYEES VALIDATE CONSTRAINT FK_DEPT;
 ```
 
-Unique (accepts multiple NULLs, same as SQL Server):
+Unique — **differs from SQL Server**. PostgreSQL by default accepts multiple NULLs, while SQL Server allows only one NULL per unique constraint. Use **`UNIQUE NULLS NOT DISTINCT`** (PG 15+) to get SQL Server's single-NULL behavior exactly (verified: the second NULL is rejected):
 ```sql
 CREATE TABLE EMPLOYEES (
   EMPLOYEE_ID NUMERIC PRIMARY KEY,
   ...
-  EMAIL VARCHAR(25) CONSTRAINT UNIQ_EMP_EMAIL UNIQUE,
+  EMAIL VARCHAR(25) CONSTRAINT UNIQ_EMP_EMAIL UNIQUE NULLS NOT DISTINCT,   -- SQL Server semantics
   DEPARTMENT_ID NUMERIC);
 ```
+SQL Server filtered unique indexes used to allow many NULLs (`CREATE UNIQUE INDEX … WHERE col IS NOT NULL`) map to PostgreSQL's default `UNIQUE`, or to a partial unique index.
 
 Check (Boolean only — no subqueries; wrap subquery logic in a Boolean function returning TRUE/FALSE).
 
-NOT NULL (inline only; can be named when expressed as a CHECK):
+NOT NULL — PostgreSQL 18 records NOT NULL as a named constraint (`CONSTRAINT nn_email NOT NULL`), and it can be added `NOT VALID`. The older CHECK form also works:
 ```sql
 CREATE TABLE EMPLOYEES (
   EMPLOYEE_ID NUMERIC PRIMARY KEY,
@@ -132,7 +135,8 @@ SET CONSTRAINTS / deferral:
 SET CONSTRAINTS { ALL | name [, ...] } { DEFERRED | IMMEDIATE }
 ```
 - `DEFERRABLE` constraints can be deferred until commit; `NOT DEFERRABLE` always runs `IMMEDIATE`.
-- `NOT VALID` (FK/check only) skips validation of existing rows; `VALIDATE CONSTRAINT` later scans the table to enforce it.
+- `NOT VALID` (FK/check, and NOT NULL since PG 18) skips validation of existing rows; `VALIDATE CONSTRAINT` later scans the table to enforce it. This corresponds to SQL Server `ALTER TABLE … WITH NOCHECK ADD CONSTRAINT`.
+- `NOT ENFORCED` (PG 18, CHECK/FK) keeps the constraint definition but does not check it, corresponding to SQL Server `ALTER TABLE … NOCHECK CONSTRAINT` (a disabled, "not trusted" constraint). `ALTER CONSTRAINT … ENFORCED` re-enables and validates it.
 
 Create a PK/unique constraint from an existing index (constraint owns the index; dropping the constraint drops the index):
 ```sql
@@ -151,11 +155,14 @@ Summary comparison:
 | Unique constraints | UNIQUE | UNIQUE |
 | Primary key constraints | PRIMARY KEY | PRIMARY KEY |
 | Foreign key constraints | FOREIGN KEY | FOREIGN KEY |
-| Cascaded referential actions | NO ACTION, CASCADE, SET NULL, SET DEFAULT | RESTRICT, CASCADE, SET NULL, NO ACTION |
+| Cascaded referential actions | NO ACTION, CASCADE, SET NULL, SET DEFAULT | NO ACTION, CASCADE, SET NULL, **SET DEFAULT** (verified), RESTRICT; PG 15+ allows a column list for SET NULL / SET DEFAULT |
+| UNIQUE and NULL | one NULL allowed | many NULLs by default; `NULLS NOT DISTINCT` = one NULL |
+| Disabled constraints | `NOCHECK CONSTRAINT` | `NOT ENFORCED` (PG 18) |
+| Untrusted (`WITH NOCHECK`) | yes | `NOT VALID` |
 | Indexing of referencing columns | Not required | N/A |
 | Indexing of referenced columns | PRIMARY KEY or UNIQUE | PRIMARY KEY or UNIQUE |
 
-- `SET DEFAULT` referential action is not available in PostgreSQL — rewrite required.
+- `SET DEFAULT` referential action **is** available in PostgreSQL and converts directly (the original playbook was wrong). The column default must reference an existing parent row or the cascade fails.
 - PostgreSQL check constraints cannot contain subqueries; SQL Server can use UDFs in check constraints to access other rows/tables. Replace with a Boolean function.
 - PostgreSQL adds `RESTRICT` and the `EXCLUDE` constraint type not present in SQL Server.
 - PostgreSQL supports `NOT VALID` / `VALIDATE CONSTRAINT` and `DEFERRABLE` constraint timing not available in SQL Server.

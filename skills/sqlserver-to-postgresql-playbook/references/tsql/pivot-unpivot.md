@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (three-star feature compatibility, no automation — straightforward manual rewrite)
 **SCT automation:** No automation; SCT action code index: PIVOT and UNPIVOT
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): Fixed the wrong UNPIVOT example (returned names, kept NULLs); added verified FILTER-based PIVOT and LATERAL VALUES UNPIVOT; crosstab NULL-vs-0 difference.
+
 ## SQL Server
 
 `PIVOT` and `UNPIVOT` rotate rows into columns and vice versa. In PIVOT, the *anchor column* is not pivoted (one row per unique value, like GROUP BY); pivoted columns come from the PIVOT clause with values from an aggregate.
@@ -66,30 +68,33 @@ FROM Orders AS O
 GROUP BY Customer;
 ```
 
-UNPIVOT → `CROSS JOIN` with a set of column names + `CASE`:
+Preferred PIVOT form — the SQL-standard `FILTER` clause (verified on Aurora PostgreSQL 18.6; returns `0` for an empty bucket, exactly like `PIVOT … COUNT`):
 
 ```sql
-SELECT SaleDate, Employee, SaleAmount
-FROM (
-  SELECT SaleDate, Employee,
-    CASE
-      WHEN Employee = 'John' THEN 'John'
-      WHEN Employee = 'Kevin' THEN 'Kevin'
-      WHEN Employee = 'Mary' THEN 'Mary'
-    END AS SaleAmount
-  FROM EmployeeSales as emp
-  CROSS JOIN
-  (
-    SELECT 'John' AS Employee
-    UNION ALL SELECT 'Kevin'
-    UNION ALL SELECT 'Mary'
-  ) AS Employees
-) AS UnpivotedSet;
+SELECT Customer,
+  COUNT(*) FILTER (WHERE extract(day FROM OrderDate) = 1) AS "1",
+  COUNT(*) FILTER (WHERE extract(day FROM OrderDate) = 2) AS "2" /* … "31" */
+FROM Orders
+GROUP BY Customer;
 ```
+
+UNPIVOT → `CROSS JOIN LATERAL (VALUES …)` (verified on 18.6):
+
+```sql
+SELECT e.SaleDate, v.Employee, v.SaleAmount
+FROM EmployeeSales e
+CROSS JOIN LATERAL (VALUES ('John', e.John), ('Kevin', e.Kevin), ('Mary', e.Mary))
+     AS v(Employee, SaleAmount)
+WHERE v.SaleAmount IS NOT NULL;   -- UNPIVOT drops NULL values; keep this filter for equivalence
+```
+
+> Correction: the original playbook's UNPIVOT example returned the employee **name** in `SaleAmount` (`THEN 'John'` instead of the `John` column) and kept NULL rows. Use the `LATERAL (VALUES …)` form above.
 
 ## Conversion notes
 - No PIVOT/UNPIVOT operators — rewrite is straightforward but manual (no automation).
 - PIVOT → `GROUP BY` + conditional aggregation (`COUNT/SUM(CASE WHEN ... THEN ... END)`).
-- UNPIVOT → `CROSS JOIN` against a derived set of column names, or use `UNION ALL`, or the `unnest()` function.
+- PIVOT → `agg(…) FILTER (WHERE …)` per pivoted column (preferred) or `agg(CASE WHEN … END)`.
+- UNPIVOT → `CROSS JOIN LATERAL (VALUES (…), …)` with `WHERE value IS NOT NULL`. All listed columns must share one type; cast where SQL Server would have required the same.
+- Pivoted column names that are numbers or mixed-case (`[1]`, `[Mary]`) need double quotes in PostgreSQL.
 - Pivoted column lists must be static (known at write time); for dynamic pivots build the SQL with dynamic SQL.
-- Consider the `tablefunc` extension's `crosstab()` as an alternative for PIVOT.
+- `tablefunc` `crosstab(source_sql, category_sql)` is available on 18.6 and works, but you must declare the output column list, and missing buckets come back as `NULL` rather than `0` (verified). Wrap with `coalesce` if it replaces `PIVOT … COUNT`.

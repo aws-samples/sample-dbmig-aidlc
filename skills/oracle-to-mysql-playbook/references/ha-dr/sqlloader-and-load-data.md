@@ -6,6 +6,8 @@
 **Conversion category:** Manual (no feature compatibility — the tool isn't compatible; use the MySQL equivalents)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): S3 load verified on both versions, strict-mode load behavior and staging-table reject handling, SET expressions, MySQL Shell importTable, toolkit data mover.
+
 ## Oracle
 
 SQL*Loader imports data from external flat files into database tables, with a strong parsing engine and few format limitations. It can run with or without a **control file** (control files handle more complex loads; for simple loads use SQL*Loader or SQL*Loader Express without one). Outputs include the loaded data, a log file, a bad/rejected-records file, and an optional discard file.
@@ -76,3 +78,9 @@ See [Loading data into an Aurora MySQL DB cluster from text files in an Amazon S
 - Aurora MySQL's `LOAD DATA FROM S3` is the cloud-native equivalent and avoids staging data on a client/EC2 host — preferred for large bulk loads into Aurora.
 - SQL*Loader's positional/fixed-width control-file mapping (`POSITION(...)`) must be re-expressed via MySQL field/line terminators and column lists; bad/discard file handling differs (MySQL reports warnings/errors rather than separate bad/discard files).
 - For ongoing cross-engine data migration, AWS DMS is the recommended path rather than flat-file tooling.
+- Verified on Aurora MySQL 3.13 and 8.4.8: `LOAD DATA FROM S3 [PREFIX|MANIFEST]` is available and needs `aurora_load_from_s3_role`/`aws_default_s3_role` plus the `AWS_LOAD_S3_ACCESS` role. Server-side `LOAD DATA INFILE '/path'` is not usable on Aurora; `LOAD DATA LOCAL INFILE` needs `local_infile` on both client and server.
+- Aurora's default `sql_mode` is **empty**, so `LOAD DATA` adjusts bad values (truncation, zero dates) with warnings only. With `STRICT_TRANS_TABLES` set (custom parameter group or session), a bad value aborts the whole `LOAD DATA` with an error; with `IGNORE` the row is adjusted or skipped with a warning. *(Corrected 2026-10-30: this said the default is `STRICT_TRANS_TABLES`.)* There is no bad/discard file: load into an all-`VARCHAR` staging table first, then validate and `INSERT … SELECT` the good rows, keeping rejects in an error table.
+- SQL*Loader `WHEN` clauses and SQL expressions → `LOAD DATA … (col1, @raw) SET col2 = STR_TO_DATE(@raw, '%d-%m-%Y')`.
+- MySQL Shell `util.importTable()` loads large delimited files in parallel chunks (closest to SQL*Loader direct path).
+- This toolkit's `./dbmig migrate-data` moves dev/test data with batched `INSERT`s; for production volumes hand off to AWS DMS.
+- Link updated: [mysqlimport (8.4)](https://dev.mysql.com/doc/refman/8.4/en/mysqlimport.html).

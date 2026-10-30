@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (three-star compatibility — syntax and option differences, similar functionality)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): identity instead of SERIAL, key-handling rules, Always Encrypted → AWS Encryption SDK, Dynamic Data Masking → `pg_columnmask`, verified pgcrypto.
+
 ## SQL Server
 
 SQL Server provides functions to encrypt/decrypt individual columns. They are not limited to table columns — a common use case is encrypting application security tokens passed as parameters. Common functions:
@@ -83,9 +85,9 @@ Example — encrypt an employee SSN:
 
 ```sql
 -- Create the table
-CREATE TABLE users (id SERIAL, name VARCHAR(60), pass TEXT);
+CREATE TABLE users (id int GENERATED ALWAYS AS IDENTITY, name VARCHAR(60), pass bytea);
 
--- Insert encrypted data
+-- Insert encrypted data ('AES_KEY' stands for a key passed in as a bind parameter; never a literal in code)
 INSERT INTO users (name, pass) VALUES ('John', PGP_SYM_ENCRYPT('123456', 'AES_KEY'));
 
 -- Verify data is encrypted
@@ -111,4 +113,8 @@ UPDATE users SET (name, pass) = ('John', PGP_SYM_ENCRYPT('0000', 'AES_KEY')) WHE
 - Map SQL Server `EncryptByKey`/`DecryptByKey` (and passphrase variants) to PostgreSQL `pgp_sym_encrypt`/`pgp_sym_decrypt` (symmetric) or PGP public-key functions as appropriate.
 - Encrypted columns are stored as `VARBINARY` in SQL Server vs `bytea`/`TEXT` in PostgreSQL; cast to `bytea` when decrypting.
 - This covers column-level encryption only — not TDE or Always Encrypted end-to-end encryption.
+- **Key handling is the hard part.** SQL Server keeps keys inside the database's key hierarchy. With `pgcrypto` the key travels in the SQL call, so: pass it as a bind parameter from the application (fetched from AWS Secrets Manager or KMS), never embed it in functions or views, and make sure `log_statement`/`pgaudit`/`auto_explain` do not log statements that contain it. `pgcrypto` 1.4 is available on Aurora 18 (`pgp_sym_encrypt`/`pgp_sym_decrypt`, `crypt()`/`gen_salt('bf')`, verified).
+- **Always Encrypted** (client-side, keys never reach the server) → client-side encryption in the application with the **AWS Encryption SDK** + KMS. No database feature is needed, and the column stays `bytea`.
+- **Dynamic Data Masking** (`MASKED WITH (FUNCTION = 'partial(…)')`) → Aurora's **`pg_columnmask`** extension (1.1.0 on Aurora 18: `pgcolumnmask.create_masking_policy`, `mask_text`, `mask_email`, `mask_timestamp`), or views that mask columns plus column-level privileges.
+- Password hashes (`HASHBYTES('SHA2_256', …)`) → `sha256(…)` (PG 11+) or, better, `crypt(pw, gen_salt('bf'))`.
 - See the PostgreSQL `pgcrypto` documentation for the full set of available functions and algorithms.

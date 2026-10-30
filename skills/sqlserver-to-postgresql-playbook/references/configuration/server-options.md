@@ -6,6 +6,8 @@
 **Conversion category:** N/A (One-star feature compatibility)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): corrected `shared_buffers`/`effective_cache_size` formulas, an `sp_configure` → PG 18 mapping table, and the PG 16–18 parameters that replace the PG 10 list.
+
 **Key difference:** Use Cluster and Database/Cluster Parameter Groups.
 
 ## SQL Server
@@ -54,22 +56,29 @@ In Amazon Aurora PostgreSQL clusters, **Parameter Groups** change cluster-level 
 - `client_encoding` — cluster parameter group.
 
 **Database instance-level parameters** — managed by **database parameter groups** (each instance can have a unique one). Examples:
-- `shared_buffers` — memory cache; AWS-optimized default by DB class: `{DBInstanceClassMemory/10922}`.
+- `shared_buffers` — memory cache; Aurora PostgreSQL 18 default: `SUM({DBInstanceClassMemory/12038},-50003)` (about two thirds of instance memory).
 - `max_connections` — max client connections; AWS-optimized default: `LEAST({DBInstanceClassMemory/9531392},5000)`.
 - `authentication_timeout` — max time (seconds) to complete client authentication.
 - `superuser_reserved_connections` — reserved connection slots for superusers.
-- `effective_cache_size` — informs the optimizer of kernel cache; AWS-optimized default by DB class (RAM): `{DBInstanceClassMemory/10922}`.
+- `effective_cache_size` — informs the optimizer of kernel cache; Aurora PostgreSQL 18 default: `SUM({DBInstanceClassMemory/12038},-50003)`.
 
-New parameters in PostgreSQL 10:
-1. `enable_gathermerge` — enables the gather-merge run plan.
-2. `max_parallel_workers` — max number of parallel worker processes.
-3. `max_sync_workers_per_subscription` — max synchronous workers for a subscription.
-4. `wal_consistency_checking` — checks WAL consistency on the standby (cannot be set in Aurora PostgreSQL).
-5. `max_logical_replication_workers` — max logical replication worker processes.
-6. `max_pred_locks_per_relation` — max records predicate-locked before locking the entire relation.
-7. `max_pred_locks_per_page` — max records predicate-locked before locking the entire page.
-8. `min_parallel_table_scan_size` — min table size to consider parallel table scan.
-9. `min_parallel_index_scan_size` — min table size to consider parallel index scan.
+`sp_configure` options and their Aurora PostgreSQL 18 counterparts (all present in the `aurora-postgresql18` parameter group family, validated 2026-10-29):
+
+| SQL Server `sp_configure` | Aurora PostgreSQL 18 |
+|---|---|
+| `max server memory` | instance class / Serverless v2 max ACU (`shared_buffers` is derived from it) |
+| `max degree of parallelism` | `max_parallel_workers_per_gather` (per session/role/parameter group), `max_parallel_workers` |
+| `cost threshold for parallelism` | `parallel_setup_cost`, `parallel_tuple_cost`, `min_parallel_table_scan_size` |
+| `user connections` | `max_connections` (static; default `LEAST({DBInstanceClassMemory/9531392},5000)`) |
+| `remote login timeout` / `remote query timeout` | `statement_timeout`, `transaction_timeout` (PG 17), `idle_session_timeout` |
+| `xp_cmdshell`, `clr enabled`, `Ole Automation Procedures` | Not available. No OS access; move to Lambda (`aws_lambda`) |
+| `c2 audit mode` / Server Audit | `pgaudit` (preload) + CloudWatch Logs export, or Database Activity Streams |
+| `nested triggers` / `server trigger recursion` | No switch; guard with `pg_trigger_depth()` |
+| `fill factor` | per table/index `WITH (fillfactor = n)` |
+| `backup compression default` | N/A; Aurora backups are continuous and storage-level |
+| `optimize for ad hoc workloads` | N/A; `plan_cache_mode` controls generic vs custom plans for prepared statements |
+
+Parameters added in PostgreSQL 16–18 that matter on Aurora 18: `transaction_timeout` (17), `debug_parallel_query` (16; replaces `force_parallel_mode`), `autovacuum_worker_slots` and `autovacuum_vacuum_max_threshold` (18), `idle_replication_slot_timeout` (18), `md5_password_warnings` (18), list-valued `log_connections` (18). `wal_consistency_checking` and PostgreSQL 18's `io_method` are not settable on Aurora. TLS is required by default (`rds.force_ssl = 1`).
 
 ### Examples
 

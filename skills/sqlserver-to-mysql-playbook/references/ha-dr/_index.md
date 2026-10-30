@@ -21,3 +21,5 @@ MySQL Migration Playbook.
   Mirroring, and Log Shipping vs. Aurora MySQL managed multi-AZ clusters, Aurora replicas
   (up to 15), cluster/reader/instance endpoints, storage auto-repair, survivable cache
   warming, crash recovery, and delayed replication.
+
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): storage limit 256 TiB, Global Database and write forwarding for AG-style DR, Backtrack on 2/3/8.4, no redo-log disable on Aurora.

@@ -6,6 +6,8 @@
 **Conversion category:** Automatic (★★★★ feature compatibility, ★★★★ SCT automation)
 **SCT automation:** AWS SCT action code — Indexes
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Indexes on VIRTUAL generated columns work (corrected, verified); functional, invisible and descending indexes verified; filtered-index and DISABLE/REBUILD mappings.
+
 Indexes are B-tree disk structures that optimize data access. SQL Server and Aurora
 MySQL both implement B-tree indexes, but terminology, options, and limits differ. The
 core migration concern is that **MySQL supports only clustered primary keys** and does
@@ -89,9 +91,9 @@ INCLUDE (Customer);
 
 ## MySQL
 
-Aurora MySQL supports B-tree indexes with different terminology and options. RDS for
-MySQL 8 adds invisible indexes (maintained but ignored by the optimizer) and descending
-indexes (`DESC` stores keys in descending order).
+Aurora MySQL supports B-tree indexes with different terminology and options. Aurora MySQL 3 and
+8.4 (MySQL 8) add invisible indexes, descending indexes and **functional key parts**
+(`INDEX ((expr))`) — all verified on 3.13 and 8.4.8.
 
 ### Primary key indexes (clustered)
 
@@ -127,9 +129,9 @@ CREATE INDEX IDX1 ON MyTable (Col1, Col2) USING BTREE;
 
 ### Secondary indexes on generated columns
 
-Equivalent of SQL Server computed columns. Generated columns are `STORED` or `VIRTUAL`,
-but **indexes can only be created on `STORED` generated columns**. Generated expressions
-cannot exceed 64 KB total per table.
+Equivalent of SQL Server computed columns. Generated columns are `STORED` or `VIRTUAL`; *(corrected)*
+InnoDB secondary indexes work on **both** (verified: `INDEX (v)` on a `VIRTUAL` column). A primary key
+cannot use a virtual column. Generated expressions cannot exceed 64 KB total per table.
 
 ### Prefix indexes
 
@@ -150,14 +152,18 @@ CREATE INDEX PrefixIndex1 ON Customers (CustomerName(10));
   or single, unique or non-unique, null or not null). Aurora MySQL clusters on the
   **primary key only** and it is not configurable. Map a SQL Server clustered index that
   is not the PK to either the PK (if appropriate) or a secondary index.
-- **Filtered indexes → not supported.** Aurora MySQL has no filtered-index equivalent;
-  rework the query/index design (e.g., narrow the table, or rely on full secondary
-  indexes).
+- **Filtered indexes → not supported** (`CREATE INDEX … WHERE` is a syntax error, verified). Closest
+  equivalent: a functional index on an expression that is NULL for excluded rows,
+  `INDEX ((CASE WHEN status = 'OPEN' THEN customer_id END))` (verified), and query with the same
+  expression. A filtered **unique** index (SQL Server's single-NULL workaround) → unique key on such an
+  expression, because MySQL unique keys allow many NULLs.
 - **Included (covering) columns → not supported.** Add the required columns as actual
   **index key columns** instead of `INCLUDE` columns.
-- **Computed → generated columns:** SQL Server persisted computed columns map to MySQL
-  `STORED` generated columns; only `STORED` (not `VIRTUAL`) generated columns are
-  indexable.
+- **Computed → generated columns:** SQL Server persisted computed columns map to `STORED`, non-persisted
+  ones to `VIRTUAL` generated columns; both are indexable.
+- `ALTER INDEX … DISABLE` → `ALTER TABLE t ALTER INDEX i INVISIBLE` (verified); `REBUILD` → `ALTER TABLE t FORCE` or `OPTIMIZE TABLE` (online for InnoDB).
+- Columnstore indexes have no equivalent; see `../physical-storage/storage.md`.
+- `INCLUDE` columns: append them as trailing key columns, within the 3072-byte key limit (InnoDB DYNAMIC row format, 16 KB pages — the Aurora default).
 - **Index name uniqueness:** MySQL does not require explicitly named constraints.
 - **BLOB/TEXT:** MySQL supports indexes on BLOBs (limited by max key size) via mandatory
   prefix lengths; SQL Server does not index BLOBs.
@@ -172,6 +178,6 @@ CREATE INDEX PrefixIndex1 ON Customers (CustomerName(10));
 | Max total index key size | 900 bytes. | 3072 bytes for 16 KB page size, 1536 bytes for 8 KB page size, 768 bytes for 4 KB page size. | |
 | Max columns for each index | 32. | 16. | |
 | Index prefix | N/A. | Optional for `CHAR`, `VARCHAR`, `BINARY`, `VARBINARY`. Mandatory for `BLOB` and `TEXT`. | |
-| Filtered indexes | Supported. | N/A. | |
+| Filtered indexes | Supported. | N/A. | Functional index with a `CASE` expression (verified). |
 | Included columns | Supported. | N/A. | Add the required columns as index key columns instead of included. |
 | Indexes on BLOBs | N/A. | Supported, limited by maximal index key size. | |

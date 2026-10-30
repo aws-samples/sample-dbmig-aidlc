@@ -6,6 +6,8 @@
 **Conversion category:** N/A (config topic) — feature compatibility: two stars
 **SCT automation:** N/A. Key difference: different cache names, similar usage.
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): corrected the `work_mem` description, updated the instance-class examples, and added Aurora sizing notes.
+
 ## Oracle
 
 An Oracle instance allocates several RAM "pools" used as caches: Buffer Cache, Redo Buffer, Java Pool, Shared Pool, Large Pool, and others. These reside in the **System Global Area (SGA)** and are shared across all sessions. Each session also gets a private **Program/Private Global Area (PGA)** for session-private operations (sorting, private SQL cursor elements, etc.).
@@ -38,7 +40,7 @@ Important PostgreSQL memory parameters:
 |---|---|
 | `shared_buffers` | Caches database data read from disk. ≈ Oracle Database Buffer Cache |
 | `wal_buffers` | Stores WAL (Write-Ahead-Log) records before writing to disk. ≈ Oracle Redo Log Buffer |
-| `work_mem` | Used for parallel queries and SQL sort operations. ≈ Oracle PGA and/or Large Pool (parallel workloads) |
+| `work_mem` | Memory per sort/hash operation (per plan node, per worker), before spilling to temp files. Hash operations may use `work_mem × hash_mem_multiplier` (default `2` on Aurora PostgreSQL 18). ≈ Oracle PGA work areas (`sort_area_size`/`hash_area_size`) |
 | `maintenance_work_mem` | Memory for backend ops such as `VACUUM`, `CREATE INDEX`, `ALTER TABLE ADD FOREIGN KEY` |
 | `temp_buffers` | Per-session buffers for reading data from temporary tables |
 | Total memory for the cluster | Controlled by choosing the **DB Instance Class** at instance creation |
@@ -88,9 +90,9 @@ Oracle → PostgreSQL mapping (general reference; functionality is not identical
 |---|---|---|
 | Memory for caching table data | `db_cache_size` | `shared_buffers` |
 | Memory for transaction log records | `log_buffer` | `wal_buffers` |
-| Memory for parallel queries | `large_pool_size` | `work_mem` |
+| Memory for parallel queries | `large_pool_size` | `work_mem` (per worker; each parallel worker gets its own `work_mem`) |
 | Java code and JVM | `Java_pool_size` | N/A |
-| Max physical memory for the instance | `sga_max_size` or `memory_max_size` | Configured by RDS/Aurora instance class — e.g. `db.r3.large: 15.25GB`, `db.r3.xlarge: 30.5GB` |
+| Max physical memory for the instance | `sga_max_size` or `memory_max_size` | Configured by RDS/Aurora instance class — e.g. `db.r8g.large`: 16 GiB, `db.r8g.xlarge`: 32 GiB; for Aurora Serverless v2, by ACU (about 2 GiB per ACU) |
 | Total private memory for all sessions | `pga_aggregate_target` and `pga_aggregate_limit` | `temp_buffers` (temp table reads), `work_mem` (sorts) |
 | View all parameters | `SELECT * FROM v$parameter;` | `SELECT * FROM pg_settings;` |
 | Configure session-level parameter | `ALTER SESSION SET ...` | `SET SESSION ...` |
@@ -99,3 +101,12 @@ Oracle → PostgreSQL mapping (general reference; functionality is not identical
 - No PostgreSQL equivalent for Oracle's Java Pool.
 - On Aurora you do not set a total memory limit directly — it is determined by the **DB Instance Class**.
 - Unlike Oracle's `ALTER SYSTEM`, Aurora instance-level memory parameters must be changed through parameter groups (OS access is restricted).
+
+### Aurora PostgreSQL 18 notes (validated on 18.6)
+
+- Default `shared_buffers` is `SUM({DBInstanceClassMemory/12038},-50003)` 8 kB pages, about two thirds of instance memory. Community advice to set `shared_buffers` to 25% of RAM does not apply to Aurora, which does not use a double-buffering OS page cache.
+- `work_mem` is allocated per sort/hash node and per parallel worker, so a single complex query can use several multiples of it. Do not copy a large Oracle `pga_aggregate_target` into `work_mem`. Set a modest global value and raise it per session or per role (`ALTER ROLE etl SET work_mem = '256MB'`) for batch jobs.
+- `hash_mem_multiplier` (default `2`) lets hash joins and hash aggregates use more memory than sorts.
+- For working sets larger than memory, **Aurora Optimized Reads** instance classes (for example `db.r8gd`/`db.r6gd`, local NVMe) add a tiered cache and put temporary objects on local storage.
+- `huge_pages` is `on` and not modifiable in Aurora.
+- Track spills with `log_temp_files = 0` and `temp_blks_written` in `pg_stat_statements`. PostgreSQL 18 `EXPLAIN ANALYZE` reports buffer usage by default, which shows spills without adding `BUFFERS`.

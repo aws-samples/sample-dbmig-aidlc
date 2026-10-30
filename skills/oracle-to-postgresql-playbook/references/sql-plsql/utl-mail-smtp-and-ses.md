@@ -6,6 +6,8 @@
 **Conversion category:** Manual (Three-star feature compatibility, no automation; redesign using Lambda + Amazon SES integration)
 **SCT automation:** No automation; SCT action code index N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): fixed sample bugs (table name, Python 3 `print`, handler name), EventBridge Scheduler, push pattern with `aws_lambda.invoke` + SES API (no SMTP secret), non-transactional caveat.
+
 ## Oracle
 
 ### UTL_MAIL
@@ -54,7 +56,7 @@ Amazon Aurora PostgreSQL has **no native in-database email**. Options:
 1. Configure Amazon SES: create SMTP credentials (SES → SMTP Settings → Create My SMTP Credentials), note SMTP server name and credentials (not retrievable later). Verify sender (and, in sandbox, recipient) email addresses.
 2. Create a table to queue messages:
    ```sql
-   CREATE TABLE emails (title varchar(600), body varchar(600), recipients varchar(600));
+   CREATE TABLE mails (title varchar(600), body varchar(600), recipients varchar(600));
    ```
 3. Create a Lambda function (e.g., Python) that connects to the DB, reads queued mails, sends via SES SMTP, then clears the table.
 
@@ -67,7 +69,7 @@ from db_util import make_conn, fetch_data
 
 def lambda_handler(event, context):
     query_cmd = "select * from mails"
-    print query_cmd
+    print(query_cmd)
     conn = make_conn()
     result = fetch_data(conn, query_cmd)
     conn.close()
@@ -134,13 +136,30 @@ def fetch_data(conn, query, params=None):
 
 > Note: the Lambda deletes the contents of the mails table after sending.
 
-4. Package `main.py` + `db_util.py` (with the `psycopg2` GitHub project) into a ZIP, upload to Lambda, set Handler to `mail.lambda_handler`.
-5. Schedule with an Amazon CloudWatch Events rule (e.g., every minute via a rate/cron expression). Note: you pay per Lambda execution.
+4. Package `main.py` + `db_util.py` (with a `psycopg2-binary` or `psycopg` Lambda layer) into a ZIP, upload to Lambda, set Handler to `main.lambda_handler`.
+5. Schedule with **Amazon EventBridge Scheduler** (the successor to CloudWatch Events rules), e.g. every minute via a rate/cron expression, or with `pg_cron` calling `aws_lambda.invoke`. Note: you pay per Lambda execution.
+
+### Simpler alternative on Aurora PostgreSQL 18: push instead of poll
+
+Instead of a polling Lambda, call Lambda **from the database** with the `aws_lambda` extension (2.1 on Aurora 18; the cluster needs an IAM role with the `Lambda` feature and `lambda:InvokeFunction`). Have the Lambda send through the **SES API** (`sesv2.send_email` with its IAM role), which removes the SMTP password entirely:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS aws_lambda CASCADE;
+-- utl_mail.send(sender, recipients, cc, bcc, subject, message) →
+SELECT * FROM aws_lambda.invoke(
+  aws_commons.create_lambda_function_arn('send-mail', 'us-west-2'),
+  json_build_object('to', 'recipient@example.com', 'subject', 'This is the subject',
+                    'body', 'This is the message body'),
+  'Event');                              -- asynchronous: does not wait for SES
+```
+
+Calling Lambda inside a transaction is **not transactional**: if the transaction rolls back, the mail is still sent. When mail must only go out after commit, keep the queue-table pattern (insert in the transaction, send after commit).
 
 ## Conversion notes
 
 - No in-database email — `UTL_MAIL`/`UTL_SMTP` calls must be removed and replaced with an external send mechanism.
 - Map the procedural send (`utl_mail.send` / `UTL_SMTP.*`) to: enqueue a row in an `emails`/`mails` table, then have a scheduled Lambda send it via SES SMTP.
 - For simple operational alerts (not arbitrary email), prefer RDS Event Notification Subscriptions or SNS.
-- Secure SMTP/DB credentials (use Secrets Manager / IAM rather than hardcoding as in the sample).
+- Secure credentials: IAM database authentication for the Lambda's DB connection, and the SES API with an IAM role instead of SMTP credentials where possible. If SMTP is required, keep the SMTP secret in Secrets Manager.
+- `aws_lambda.invoke` with `'Event'` (async) is the closest replacement for a direct `UTL_MAIL.SEND` call. The queue-table + scheduled Lambda pattern is the transactionally safe replacement.
 - SES sandbox requires verified sender and recipient addresses; request production access to send to arbitrary recipients.

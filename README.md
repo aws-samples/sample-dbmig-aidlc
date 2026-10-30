@@ -298,7 +298,8 @@ converted from scratch plus the ASP.NET Core / EF Core app; and
 **[sample-run-dms-sc-sqlserver-to-pg/](sample-run-dms-sc-sqlserver-to-pg/)** — a run that
 **starts from AWS DMS Schema Conversion output** and works forward (SQL Server
 `AdventureWorks` `Person` + `HumanResources`: import → ACCEPT/VERIFY/MANUAL triage →
-`diff-target` reconciliation → secondary-object capture → VERIFY sign-off). All are masked
+`diff-target` reconciliation → MANUAL reconversion → secondary-object drop/load/restore →
+`compare` + equivalence tests → VERIFY sign-off). All are masked
 (no real hosts/credentials) and hold each phase's artifacts so you can see the workflow's
 output without database access.
 

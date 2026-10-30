@@ -1,84 +1,238 @@
 items:
-  Servers.SQLSERVER_SOURCE.Databases.AdventureWorks.Schemas.Person.Tables.Person.Indexes.PXML_Person_AddContact:
+  Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.Person.Tables.Person.Indexes.PXML_Person_AddContact:
     object: Person.PXML_Person_AddContact
     type: INDEX
     codes:
     - '7791'
-    status: verified
-    method: equivalence-test
+    status: failed
+    method: manual
     by: migration-engineer
-    at: '2026-09-02T07:40:35Z'
-    note: sample sign-off
-  ? Servers.SQLSERVER_SOURCE.Databases.AdventureWorks.Schemas.Person.Tables.Person.Indexes.XMLVALUE_Person_Demographics
+    at: '2026-10-30T09:37:36Z'
+    note: 'not on the target: DMS SC emitted btree indexes on xml columns and the
+      apply failed (no btree opclass for xml). No PG equivalent; add expression indexes
+      on xpath() only if a query needs them'
+  ? Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.Person.Tables.Person.Indexes.XMLVALUE_Person_Demographics
   : object: Person.XMLVALUE_Person_Demographics
     type: INDEX
     codes:
     - '7791'
-    status: verified
-    method: equivalence-test
+    status: failed
+    method: manual
     by: migration-engineer
-    at: '2026-09-02T07:40:35Z'
-    note: sample sign-off
-  Servers.SQLSERVER_SOURCE.Databases.AdventureWorks.Schemas.Person.Views.vAdditionalContactInfo:
-    object: Person.vAdditionalContactInfo
-    type: VIEW
-    codes:
-    - '7744'
-    status: pending
-    method: ''
-    by: ''
-    at: ''
-    note: ''
-  ? Servers.SQLSERVER_SOURCE.Databases.AdventureWorks.Schemas.Person.Tables.Person.Indexes.XMLPATH_Person_Demographics
+    at: '2026-10-30T09:37:36Z'
+    note: 'not on the target: DMS SC emitted btree indexes on xml columns and the
+      apply failed (no btree opclass for xml). No PG equivalent; add expression indexes
+      on xpath() only if a query needs them'
+  ? Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.Person.Tables.Person.Indexes.XMLPATH_Person_Demographics
   : object: Person.XMLPATH_Person_Demographics
     type: INDEX
     codes:
     - '7791'
-    status: pending
-    method: ''
-    by: ''
-    at: ''
-    note: ''
-  ? Servers.SQLSERVER_SOURCE.Databases.AdventureWorks.Schemas.Person.Tables.Person.Indexes.XMLPROPERTY_Person_Demographics
+    status: failed
+    method: manual
+    by: migration-engineer
+    at: '2026-10-30T09:37:36Z'
+    note: 'not on the target: DMS SC emitted btree indexes on xml columns and the
+      apply failed (no btree opclass for xml). No PG equivalent; add expression indexes
+      on xpath() only if a query needs them'
+  ? Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.Person.Tables.Person.Indexes.XMLPROPERTY_Person_Demographics
   : object: Person.XMLPROPERTY_Person_Demographics
     type: INDEX
     codes:
     - '7791'
-    status: pending
-    method: ''
-    by: ''
-    at: ''
-    note: ''
-  Servers.SQLSERVER_SOURCE.Databases.AdventureWorks.Schemas.Person.Views.vStateProvinceCountryRegion:
+    status: failed
+    method: manual
+    by: migration-engineer
+    at: '2026-10-30T09:37:36Z'
+    note: 'not on the target: DMS SC emitted btree indexes on xml columns and the
+      apply failed (no btree opclass for xml). No PG equivalent; add expression indexes
+      on xpath() only if a query needs them'
+  Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.Person.Views.vStateProvinceCountryRegion:
     object: Person.vStateProvinceCountryRegion
     type: VIEW
     codes:
     - '7634'
     - '7795'
-    status: pending
-    method: ''
-    by: ''
-    at: ''
-    note: ''
-  Servers.SQLSERVER_SOURCE.Databases.AdventureWorks.Schemas.Person.Tables.Person.Indexes.PXML_Person_Demographics:
+    status: verified
+    method: equivalence-test
+    by: migration-engineer
+    at: '2026-10-30T09:37:05Z'
+    note: 'run-tests PERSON: 181 rows identical (resultset); indexed-view index not
+      carried over (performance only)'
+  Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.Person.Tables.Person.Indexes.PXML_Person_Demographics:
     object: Person.PXML_Person_Demographics
     type: INDEX
     codes:
     - '7791'
-    status: pending
-    method: ''
-    by: ''
-    at: ''
-    note: ''
-  Servers.SQLSERVER_SOURCE.Databases.AdventureWorks.Schemas.Person.Tables.Person.Constraints.CK_Person_PersonType:
+    status: failed
+    method: manual
+    by: migration-engineer
+    at: '2026-10-30T09:37:36Z'
+    note: 'not on the target: DMS SC emitted btree indexes on xml columns and the
+      apply failed (no btree opclass for xml). No PG equivalent; add expression indexes
+      on xpath() only if a query needs them'
+  Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.Person.Tables.Person.Constraints.CK_Person_PersonType:
     object: Person.CK_Person_PersonType
     type: CONSTRAINT
     codes:
     - '7795'
-    status: pending
-    method: ''
-    by: ''
-    at: ''
-    note: ''
-project: adventureworks-hr-person
+    status: verified
+    method: equivalence-test
+    by: migration-engineer
+    at: '2026-10-30T09:37:28Z'
+    note: 'CHECK uses lower(upper(col)) = lower(''X''): case-insensitive like the
+      source; 19,972 rows loaded under it'
+  Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.Person.Tables.BusinessEntityContact:
+    object: Person.BusinessEntityContact
+    type: TABLE
+    codes:
+    - '7826'
+    - '7831'
+    status: verified
+    method: catalog-check
+    by: migration-engineer
+    at: '2026-10-30T09:37:21Z'
+    note: same DEFAULT clock_timestamp()/uuid_generate_v4() as AddressType (proven
+      by test); data loaded and compare 13/13
+  Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.Person.Tables.Address:
+    object: Person.Address
+    type: TABLE
+    codes:
+    - '7826'
+    - '7831'
+    status: verified
+    method: catalog-check
+    by: migration-engineer
+    at: '2026-10-30T09:37:21Z'
+    note: same DEFAULT clock_timestamp()/uuid_generate_v4() as AddressType (proven
+      by test); data loaded and compare 13/13
+  Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.Person.Tables.StateProvince:
+    object: Person.StateProvince
+    type: TABLE
+    codes:
+    - '7826'
+    - '7831'
+    status: verified
+    method: catalog-check
+    by: migration-engineer
+    at: '2026-10-30T09:37:21Z'
+    note: same DEFAULT clock_timestamp()/uuid_generate_v4() as AddressType (proven
+      by test); data loaded and compare 13/13
+  Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.Person.Tables.CountryRegion:
+    object: Person.CountryRegion
+    type: TABLE
+    codes:
+    - '7826'
+    status: verified
+    method: catalog-check
+    by: migration-engineer
+    at: '2026-10-30T09:37:21Z'
+    note: same DEFAULT clock_timestamp()/uuid_generate_v4() as AddressType (proven
+      by test); data loaded and compare 13/13
+  Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.Person.Tables.Person:
+    object: Person.Person
+    type: TABLE
+    codes:
+    - '7826'
+    - '7831'
+    status: verified
+    method: catalog-check
+    by: migration-engineer
+    at: '2026-10-30T09:37:21Z'
+    note: same DEFAULT clock_timestamp()/uuid_generate_v4() as AddressType (proven
+      by test); data loaded and compare 13/13
+  Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.Person.Tables.BusinessEntity:
+    object: Person.BusinessEntity
+    type: TABLE
+    codes:
+    - '7826'
+    - '7831'
+    status: verified
+    method: catalog-check
+    by: migration-engineer
+    at: '2026-10-30T09:37:21Z'
+    note: same DEFAULT clock_timestamp()/uuid_generate_v4() as AddressType (proven
+      by test); data loaded and compare 13/13
+  Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.Person.Tables.PhoneNumberType:
+    object: Person.PhoneNumberType
+    type: TABLE
+    codes:
+    - '7826'
+    status: verified
+    method: catalog-check
+    by: migration-engineer
+    at: '2026-10-30T09:37:21Z'
+    note: same DEFAULT clock_timestamp()/uuid_generate_v4() as AddressType (proven
+      by test); data loaded and compare 13/13
+  Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.Person.Tables.PersonPhone:
+    object: Person.PersonPhone
+    type: TABLE
+    codes:
+    - '7826'
+    status: verified
+    method: catalog-check
+    by: migration-engineer
+    at: '2026-10-30T09:37:21Z'
+    note: same DEFAULT clock_timestamp()/uuid_generate_v4() as AddressType (proven
+      by test); data loaded and compare 13/13
+  Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.Person.Tables.EmailAddress:
+    object: Person.EmailAddress
+    type: TABLE
+    codes:
+    - '7826'
+    - '7831'
+    status: verified
+    method: catalog-check
+    by: migration-engineer
+    at: '2026-10-30T09:37:21Z'
+    note: same DEFAULT clock_timestamp()/uuid_generate_v4() as AddressType (proven
+      by test); data loaded and compare 13/13
+  Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.Person.Tables.Password:
+    object: Person.Password
+    type: TABLE
+    codes:
+    - '7826'
+    - '7831'
+    status: verified
+    method: catalog-check
+    by: migration-engineer
+    at: '2026-10-30T09:37:21Z'
+    note: same DEFAULT clock_timestamp()/uuid_generate_v4() as AddressType (proven
+      by test); data loaded and compare 13/13
+  Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.Person.Tables.BusinessEntityAddress:
+    object: Person.BusinessEntityAddress
+    type: TABLE
+    codes:
+    - '7826'
+    - '7831'
+    status: verified
+    method: catalog-check
+    by: migration-engineer
+    at: '2026-10-30T09:37:21Z'
+    note: same DEFAULT clock_timestamp()/uuid_generate_v4() as AddressType (proven
+      by test); data loaded and compare 13/13
+  Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.Person.Tables.AddressType:
+    object: Person.AddressType
+    type: TABLE
+    codes:
+    - '7826'
+    - '7831'
+    status: verified
+    method: equivalence-test
+    by: migration-engineer
+    at: '2026-10-30T09:37:13Z'
+    note: 'run-tests PERSON.AddressType: INSERT fills rowguid (uuid_generate_v4) and
+      ModifiedDate (clock_timestamp) on both engines'
+  Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.Person.Tables.ContactType:
+    object: Person.ContactType
+    type: TABLE
+    codes:
+    - '7826'
+    status: verified
+    method: catalog-check
+    by: migration-engineer
+    at: '2026-10-30T09:37:21Z'
+    note: same DEFAULT clock_timestamp()/uuid_generate_v4() as AddressType (proven
+      by test); data loaded and compare 13/13
+project: aw-dms-sc-20261030
 schema: PERSON

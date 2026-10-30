@@ -1,0 +1,21 @@
+object: vStateProvinceCountryRegion
+schema: PERSON
+type: function
+notes: >
+  VERIFY (7795, 7634). On SQL Server this is an indexed view (SCHEMABINDING + clustered
+  index IX_vStateProvinceCountryRegion, MANUAL 7937); on PostgreSQL it is a plain view, so
+  only performance differs. The join uses LOWER() on both codes. All 181 rows compared.
+cases:
+- id: c1
+  description: row count
+  source_sql: SELECT COUNT(*) FROM Person.vStateProvinceCountryRegion
+  target_sql: SELECT count(*) FROM adventureworks_person.vstateprovincecountryregion
+- id: c2
+  description: every row and column
+  compare: resultset
+  source_sql: >
+    SELECT StateProvinceID, StateProvinceCode, IsOnlyStateProvinceFlag, StateProvinceName,
+           TerritoryID, CountryRegionCode, CountryRegionName FROM Person.vStateProvinceCountryRegion
+  target_sql: >
+    SELECT stateprovinceid, stateprovincecode, isonlystateprovinceflag, stateprovincename,
+           territoryid, countryregioncode, countryregionname FROM adventureworks_person.vstateprovincecountryregion

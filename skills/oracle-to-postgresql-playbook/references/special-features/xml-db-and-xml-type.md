@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (Three-star feature compatibility, three-star automation)
 **SCT automation:** N/A. Key difference: different paradigm and syntax will require application or driver rewrite.
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): verified `xmlexists`/`xpath`/`xmltable`, PG 16 `XMLSERIALIZE … INDENT` and `xmltext`, `XMLQUERY` still unsupported; fixed a swapped mapping row and a malformed XML example.
+
 ## Oracle
 
 Oracle XML DB provides native XML support including the `XMLType` data type and `XMLIndex`. XMLType represents an XML document accessible from SQL and supports XML Schema, XPath, XQuery, XSLT, DOM. XML can be schema-based (validated against XSD) or non-schema-based.
@@ -134,7 +136,7 @@ Note: `xmltable()` and `xpath()` may not work with non-ASCII data when server en
 ```sql
 CREATE TABLE test (a xml);
 
-insert into test values (XMLPARSE (DOCUMENT '<?xml vesion=" 1.0"?><Series><title>Simpsons</title><chapter>...</chapter></Series>'));
+insert into test values (XMLPARSE (DOCUMENT '<?xml version="1.0"?><Series><title>Simpsons</title><chapter>...</chapter></Series>'));
 insert into test values (XMLPARSE (CONTENT 'note<tag>value</tag><tag>value</tag>'));
 
 select * from test where a IS DOCUMENT;
@@ -173,12 +175,17 @@ SELECT xmltable.*
 | Create fulltext index | `CREATE INDEX my_funcidx ON test USING GIN ( CAST(xpath('/PNAME/text()', a) AS TEXT[]) );` | `CREATE INDEX test_idx ON test (OBJECT_VALUE) INDEXTYPE IS CTXSYS.CONTEXT PARAMETERS('storage pref section group secgroup');` |
 | Query using XQuery | Not Supported | `SELECT XMLQuery('for $i in /PurchaseOrder/.../Description where $i[. contains text "Big"] return <Title>{$i}</Title>' PASSING OBJECT_VALUE RETURNING CONTENT) FROM xml_tbl;` |
 | Query using XPath | `SELECT xpath('//student/firstname/text()', a) FROM test` | `select sys.XMLType.extract(doc,'/student/firstname/text()') firstname from test;` |
-| Check tag exists + cast type | `SELECT XMLCast(XMLQuery('/PurchaseOrder/Reference' PASSING OBJECT_VALUE RETURNING CONTENT) AS VARCHAR2(100)) "REFERENCE" FROM purchaseorder WHERE XMLExists(...);` | `select cast (xpath('//book/title/text()', a) as text[]) as BookTitle from test where xmlexists('//book/title' PASSING by ref a);` |
+| Check tag exists + cast type | `select (xpath('//book/title/text()', a))[1]::text as BookTitle from test where xmlexists('//book/title' PASSING BY VALUE a);` | `SELECT XMLCast(XMLQuery('/PurchaseOrder/Reference' PASSING OBJECT_VALUE RETURNING CONTENT) AS VARCHAR2(100)) "REFERENCE" FROM purchaseorder WHERE XMLExists(...);` |
+| Pretty-print | `XMLSERIALIZE(DOCUMENT x AS text INDENT)` (PG 16+, verified) | `XMLSERIALIZE(DOCUMENT x AS CLOB INDENT)` |
+| Escape text as XML | `xmltext('< & >')` (PG 16+, verified) | `XMLTEXT` / `DBMS_XMLGEN.CONVERT` |
+| Well-formedness check | `xml_is_well_formed_document(text)` | `XMLType` constructor error |
 | Validate schema using XSD | Not out-of-the-box; use a before-insert/delete trigger that finds tags with XPath and casts values to validate | Supported |
 
 ## Conversion notes
 - Different paradigm/syntax — **application or driver rewrite required**.
-- PostgreSQL has **no XQuery support** — rewrite XQuery to XPath (`xpath()`, `xmltable()`).
+- PostgreSQL has **no XQuery support**. `XMLQUERY` is still a syntax error on PG 18 (verified). Rewrite XQuery to XPath 1.0 (`xpath()`, `xmlexists()`, `xmltable()`). XQuery FLWOR expressions become `xmltable()` + SQL `WHERE`/`ORDER BY`.
+- `XMLExists(... PASSING x)` maps directly to `xmlexists('xpath' PASSING BY VALUE x)` (both `BY VALUE` and `BY REF` accepted, verified).
+- Note the table above lists PostgreSQL first, Oracle second (playbook order).
 - PostgreSQL **cannot validate against XSD out-of-the-box** — emulate with triggers that XPath-extract and type-cast values.
 - Index XML by indexing a specific path (B-Tree on `xpath(...)::text`, or GIN on `CAST(xpath(...) AS TEXT[])`); queries must use the same path as the index.
 - `xmltable()`/`xpath()` may misbehave with non-ASCII data unless server encoding is UTF-8.

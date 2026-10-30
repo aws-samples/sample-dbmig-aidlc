@@ -2,16 +2,14 @@ object: BOOK_PKG
 schema: DEMO
 type: function
 notes: >
-  Flattened to demo.book_pkg_*. Real listings: book 1 (qty 25, 10.95), 2 (qty 3, 13.95), 3 (qty 10, 6.5),
-  all status 1 but listing_type SYSTEM — so the STORE filter returns 0 for these; a STORE book is
-  probed via the per-book aggregate case b4. get_book_details has only OUT params (no net effect):
-  b7 proves it executes on both engines.
+  Flattened to demo.book_pkg_*. Every listing is SYSTEM or CUSTOMER (none STORE), so the STORE filter
+  returns 0 for all real books; b4/b5 aggregate over every book to catch any non-zero row.
+  get_book_details has only OUT params (no net effect): b7 proves it executes on both engines.
 cases:
   - {id: b1, source_sql: "SELECT DEMO.BOOK_PKG.GET_AVAILABLE_QUANTITY(1) FROM dual", target_sql: "SELECT demo.book_pkg_get_available_quantity(1)"}
   - {id: b2, source_sql: "SELECT DEMO.BOOK_PKG.GET_AVG_PRICE(2) FROM dual", target_sql: "SELECT demo.book_pkg_get_avg_price(2)"}
   - {id: b3, source_sql: "SELECT DEMO.BOOK_PKG.IS_IN_STOCK(3) FROM dual", target_sql: "SELECT demo.book_pkg_is_in_stock(3)"}
   - id: b4
-    description: sum over every book with a STORE listing (exercises the non-zero path if any exist)
     source_sql: "SELECT NVL(SUM(DEMO.BOOK_PKG.GET_AVAILABLE_QUANTITY(id)),0) FROM DEMO.BOOKS"
     target_sql: "SELECT coalesce(sum(demo.book_pkg_get_available_quantity(id)),0) FROM demo.books"
   - id: b5
@@ -21,7 +19,7 @@ cases:
   - id: b7
     type: procedure
     description: OUT-param procedure executes on both engines (no net effect expected)
-    call_source: "DECLARE t VARCHAR2(255); a VARCHAR2(255); q NUMBER; p NUMBER; BEGIN DEMO.BOOK_PKG.GET_BOOK_DETAILS(43, t, a, q, p); END;"
-    call_target: "CALL demo.book_pkg_get_book_details(43, NULL, NULL, NULL, NULL)"
+    call_source: "DECLARE t VARCHAR2(255); a VARCHAR2(255); q NUMBER; p NUMBER; BEGIN DEMO.BOOK_PKG.GET_BOOK_DETAILS(30, t, a, q, p); END;"
+    call_target: "CALL demo.book_pkg_get_book_details(30, NULL, NULL, NULL, NULL)"
     verify:
       - {name: books_count, source_sql: "SELECT COUNT(*) FROM DEMO.BOOKS", target_sql: "SELECT count(*) FROM demo.books"}

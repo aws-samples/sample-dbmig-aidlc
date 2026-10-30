@@ -5,6 +5,8 @@
 
 **Conversion category:** Manual (one-star feature compatibility)
 **SCT automation:** N/A
+
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): SET GLOBAL denied (verified) — parameter-group CLI instead; current families; sp_configure → Aurora mappings with verified defaults; settings migrations usually change.
 **Key difference:** Use cluster and database parameter groups.
 
 ## SQL Server
@@ -65,16 +67,17 @@ Syntax — server-level options set with `SET GLOBAL`:
 SET GLOBAL <option> = <Value>;
 ```
 
-Example — decrease compression level to reduce CPU usage:
+Example — `SET GLOBAL` is **denied** to the Aurora master user (error 1227 for `innodb_compression_level`, verified on 3.13 and 8.4.8); change global values in the parameter group instead:
 
-```sql
-SET GLOBAL innodb_compression_level = 5;
+```bash
+aws rds modify-db-cluster-parameter-group --db-cluster-parameter-group-name app-aurora-mysql84 \
+  --parameters "ParameterName=innodb_lock_wait_timeout,ParameterValue=20,ApplyMethod=immediate"
 ```
 
 **Create a parameter group:**
 1. Navigate to **Parameter group** in the RDS service of the AWS Console.
 2. Choose **Create parameter group** (you can't edit the default — create a custom group).
-3. For **Parameter group family**, choose `aurora-mysql5.7`.
+3. For **Parameter group family**, choose `aurora-mysql8.4` (Aurora MySQL 8.4) or `aurora-mysql8.0` (Aurora MySQL 3).
 4. For **Type**, choose **DB Parameter Group** (or **Cluster Parameter Group** for cluster parameters).
 5. Choose **Create**.
 
@@ -88,7 +91,9 @@ SET GLOBAL innodb_compression_level = 5;
 
 - No automatic conversion: SQL Server `sp_configure` / `RECONFIGURE` settings must be mapped manually to Aurora system variables.
 - Cluster-wide vs per-instance distinction is key: choose cluster parameter groups vs DB parameter groups accordingly.
-- The default parameter group cannot be edited — create a custom parameter group (family `aurora-mysql5.7`) to change values.
+- The default parameter group cannot be edited — create a custom parameter group (family `aurora-mysql8.4` or `aurora-mysql8.0`) to change values.
+- `sp_configure` settings with Aurora equivalents (defaults verified on 3.13 and 8.4.8): `max server memory` ≈ `innodb_buffer_pool_size` (derived from instance size/ACUs); `user connections` ≈ `max_connections` (135 at 4 ACU); `remote query timeout` / `query wait` ≈ `max_execution_time` (ms, SELECT only); `default language` ≈ `lc_time_names`; `max degree of parallelism` ≈ none (Aurora Parallel Query is cost-based); `xp_cmdshell`, `clr enabled`, `Ole Automation Procedures` ≈ none.
+- Server-level settings migrations usually change: `sql_mode` (Aurora default is **empty** — no strict mode; corrected 2026-10-30), `transaction_isolation` (SQL Server's READ COMMITTED vs MySQL REPEATABLE-READ), `lower_case_table_names` (creation-time only), `time_zone` (UTC), `group_concat_max_len`, `log_bin_trust_function_creators`, `performance_schema` (off by default). See `../../../oracle-to-mysql-playbook/references/target-baseline-aurora-mysql.md`.
 - Few SQL Server settings have direct equivalents; notable one is `max server memory` ≈ `innodb_buffer_pool_size`.
 - Many MySQL parameters are viewable but not modifiable in Aurora; no file-system config access.
 - `xp_cmdshell` / OS-shell and CLR/OLE features have no Aurora equivalent.

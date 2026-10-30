@@ -6,14 +6,14 @@ Deterministic pre-scan by `dbmig app-scan` (read-only). **Open only the flagged 
 - frameworks detected: JPA/Hibernate (14 file(s)), Raw JDBC (1 file(s))
 - excluded dirs: vendored-asset×145
 - leftovers (not conversion targets): src/main/java/com/bobsusedbooks/controllers/ReferenceDataController.java.bak, src/main/resources/application.properties.bak, src/main/resources/db/oracle/01_user.sql.bak, src/main/resources/templates/admin/reference-data/index.html.bak
-- **flagged files: 32 of 119**
+- **flagged files: 20 of 119**
 
 | Category | Sites | Files |
 |---|---|---|
 | A. config (datasource/driver/dialect; plaintext secrets) | 8 | 2 |
 | A. connection strings/URLs built in code | 2 | 2 |
-| B. embedded SQL with source-dialect constructs | 9 | 3 |
-| B. other embedded SQL (no construct hit — still review for case/quoting) | 51 | 19 |
+| B. embedded SQL with source-dialect constructs | 10 | 4 |
+| B. other embedded SQL (no construct hit — still review for case/quoting) | 25 | 6 |
 | C1. mapped fields with a REQUIRED type fix | 16 | 8 |
 | C1. type advisories (not blockers; review) | 5 | 4 |
 | C1. mapping issues (missing table/column, identifier case) | 0 | 0 |
@@ -62,6 +62,7 @@ Entities/models: 13 (JPA/Hibernate 13); 128 mapped field(s) checked against **li
 - `src/main/java/com/bobsusedbooks/demo/OracleBookService.java:92` — LISTAGG, MONTHS_BETWEEN, SYSDATE: `SELECT c.id as customer_id, c.name as customer_name, COUNT(DISTINCT o.id) as total_orders, SUM(o.total_amount) as total_spent, AVG(o.total_a`
 - `src/main/java/com/bobsusedbooks/repositories/BookRepository.java:97` — CONTAINS(, SCORE(: `SELECT b.* FROM BOOKS b WHERE CONTAINS(search_text, ?1, 1) > 0 ORDER BY SCORE(1) DESC`
 - `src/main/java/com/bobsusedbooks/repositories/BookRepository.java:100` — CONTAINS(: `SELECT COUNT(*) FROM BOOKS b WHERE CONTAINS(search_text, ?1) > 0`
+- `src/main/java/com/bobsusedbooks/services/BookService.java:181` **(Tier-3 fragment)** — full-text query syntax: fuzzy(: `fuzzy(`
 
 ## D. Stored-routine call sites
 
@@ -82,7 +83,7 @@ Entities/models: 13 (JPA/Hibernate 13); 128 mapped field(s) checked against **li
 - `pom.xml:49` — `<artifactId>postgresql</artifactId>`
 - `pom.xml:55` — `<artifactId>ojdbc17</artifactId>`
 - `src/main/resources/application.properties:2` — `spring.datasource.url=jdbc:oracle:thin:@//<ORACLE_HOST>:1521/ORCL`
-- `src/main/resources/application.properties:4` **(plaintext-secret)** — `spring.datasource.password=<masked>
+- `src/main/resources/application.properties:4` **(plaintext-secret)** — `spring.datasource.password=***`
 - `src/main/resources/application.properties:5` — `spring.datasource.driver-class-name=oracle.jdbc.OracleDriver`
 - `src/main/resources/application.properties:9` — `spring.jpa.hibernate.ddl-auto=validate`
 - `src/main/resources/application.properties:12` — `spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.OracleDialect`
@@ -109,14 +110,8 @@ Entities/models: 13 (JPA/Hibernate 13); 128 mapped field(s) checked against **li
 ## Flagged files (open these; the rest had no hits)
 
 - `pom.xml`
-- `src/main/java/com/bobsusedbooks/config/DataInitializer.java`
 - `src/main/java/com/bobsusedbooks/config/DatabaseInfoConfig.java`
 - `src/main/java/com/bobsusedbooks/config/DatabaseInfoController.java`
-- `src/main/java/com/bobsusedbooks/controllers/AdminAccessController.java`
-- `src/main/java/com/bobsusedbooks/controllers/AdminController.java`
-- `src/main/java/com/bobsusedbooks/controllers/BookAdminController.java`
-- `src/main/java/com/bobsusedbooks/controllers/PasswordResetController.java`
-- `src/main/java/com/bobsusedbooks/controllers/ReportController.java`
 - `src/main/java/com/bobsusedbooks/demo/OracleBookRepository.java`
 - `src/main/java/com/bobsusedbooks/demo/OracleBookService.java`
 - `src/main/java/com/bobsusedbooks/entities/Address.java`
@@ -131,13 +126,7 @@ Entities/models: 13 (JPA/Hibernate 13); 128 mapped field(s) checked against **li
 - `src/main/java/com/bobsusedbooks/repositories/CustomerRepository.java`
 - `src/main/java/com/bobsusedbooks/repositories/OrderRepository.java`
 - `src/main/java/com/bobsusedbooks/repositories/ShoppingCartRepository.java`
-- `src/main/java/com/bobsusedbooks/security/CustomUserDetailsService.java`
 - `src/main/java/com/bobsusedbooks/services/BookService.java`
-- `src/main/java/com/bobsusedbooks/services/CustomerService.java`
-- `src/main/java/com/bobsusedbooks/services/EmailService.java`
-- `src/main/java/com/bobsusedbooks/services/OrderService.java`
-- `src/main/java/com/bobsusedbooks/services/PasswordResetService.java`
-- `src/main/java/com/bobsusedbooks/services/ReferenceDataService.java`
 - `src/main/java/com/bobsusedbooks/utils/LoadCoverImages.java`
 - `src/main/resources/application.properties`
 

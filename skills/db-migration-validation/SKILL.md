@@ -59,8 +59,11 @@ from the tables each object reads, and writes batched prompt bundles to
 `03-validation/test_prompts/` plus `test-manifest.yaml`. **Run it after the code objects are
 converted** — each bundle then includes the *converted target code*, so your `target_sql` /
 `call_target` use the real flattened names and signatures instead of guesses. The spec
-format, its Rules and the test-relevant engine checks are in the shared
-`03-validation/_context-tests.md` — read it once per session. Then, for each `pending` unit,
+format, its Rules, the test-relevant engine checks and the target-version **behavior
+differences** (from the pair's target baseline, verified on the target version: e.g. MySQL
+collation and trailing-space rules, `'a' + 'b' = 0`, `ON DELETE SET DEFAULT` acting as
+`RESTRICT`) are in the shared `03-validation/_context-tests.md` — read it once per session,
+and add a case for each listed difference the object can hit. Then, for each `pending` unit,
 **you generate a test spec**:
 - Read the prompt bundle (source + converted target code + sampled real data; the bundle
   header lists one spec file per object in the batch, plus CAUTION / LOW_COVERAGE notes).

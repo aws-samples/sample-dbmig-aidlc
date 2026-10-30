@@ -6,6 +6,8 @@
 **Conversion category:** N/A (Two-star feature compatibility)
 **SCT automation:** N/A — `SET ROWCOUNT` for DML cannot be converted automatically; SCT can convert `SET ROWCOUNT`→`TOP` patterns automatically when already rewritten.
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): `debug_parallel_query` (verified), fixed the batch-delete loop (verified), corrected `IMPLICIT_TRANSACTIONS`/`XACT_ABORT`/`DATEFIRST` mappings, per-routine `SET`.
+
 **Key difference:** `SET` options are significantly different, except for transaction isolation control.
 
 ## SQL Server
@@ -32,7 +34,7 @@ CREATE PROCEDURE <ProcedureName>
 AS
 BEGIN
   <Some non-critical transaction code>
-  SET TRANSACTION_ISOLATION_LEVEL SERIALIZABLE;
+  SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;   -- the playbook's TRANSACTION_ISOLATION_LEVEL is a typo
   SET XACT_ABORT ON;
   <Some critical transaction code>
 END
@@ -70,7 +72,8 @@ SELECT * FROM pg_settings where context = 'user';
 
 Commonly used session parameters:
 - `client_encoding` — connected client character set.
-- `force_parallel_mode` — forces parallel query for the session.
+- `debug_parallel_query` — forces parallel query for the session (testing only; PG 16 renamed it from `force_parallel_mode`, which no longer exists, verified on 18.6).
+- `statement_timeout`, `transaction_timeout` (PG 17+), `idle_in_transaction_session_timeout` — runtime limits.
 - `lock_timeout` — max duration to wait for a database lock to release.
 - `search_path` — schema search order for non-schema-qualified object names.
 - `transaction_isolation` — current transaction isolation level for the session.
@@ -80,14 +83,20 @@ View variables via the psql command line, Aurora cluster/instance parameters, or
 **Converting `SET ROWCOUNT` for DML:** Code using `SET ROWCOUNT` cannot be converted automatically. Rewrite to `TOP` before running SCT, or change manually afterward. The `TOP`-batched delete maps to a `LIMIT`-based loop:
 
 ```sql
-WHILE row_count() > 0 LOOP
-  DELETE FROM num_test
-  WHERE ctid IN (
-    SELECT ctid
-    FROM num_test
-    LIMIT 10)
-END LOOP;
+-- (the playbook's original example used a non-existent row_count() function; this form is verified on 18.6)
+DO $$
+DECLARE n int;
+BEGIN
+  LOOP
+    DELETE FROM num_test
+     WHERE ctid IN (SELECT ctid FROM num_test WHERE for_delete LIMIT 5000);
+    GET DIAGNOSTICS n = ROW_COUNT;      -- ≈ @@ROWCOUNT
+    EXIT WHEN n = 0;
+    COMMIT;                             -- allowed in DO/procedures (PG 11+), releases locks between batches
+  END LOOP;
+END $$;
 ```
+Prefer a key range (`WHERE id IN (SELECT id … LIMIT 5000)`) over `ctid` when the table has a primary key.
 
 Example — change session date style:
 
@@ -107,11 +116,15 @@ Mapping of common SQL Server session options to Aurora PostgreSQL system variabl
 
 | Category | SQL Server | Aurora PostgreSQL |
 |---|---|---|
-| Date and time | `DATEFIRST` | Use `DOW` in queries |
-| Date and time | `DATEFORMAT` | `DateStyle` |
+| Date and time | `DATEFIRST` | No setting. Use `extract(isodow …)` (Monday = 1, matches `DATEFIRST 1`) or `extract(dow …)` (Sunday = 0); verified |
+| Date and time | `DATEFORMAT` | `DateStyle` (input parsing) — prefer ISO literals and explicit `to_date`/`to_timestamp` |
 | Locking | `LOCK_TIMEOUT` | `lock_timeout` |
-| Transactions | `IMPLICIT_TRANSACTIONS` | `SET TRANSACTION` |
-| Transactions | `TRANSACTION ISOLATION LEVEL` | `BEGIN TRANSACTION ISOLATION LEVEL` |
+| Locking | `DEADLOCK_PRIORITY` | No equivalent; PostgreSQL picks the victim |
+| Transactions | `IMPLICIT_TRANSACTIONS ON` | Client autocommit off (driver/`psql` setting); there is no server switch |
+| Transactions | `TRANSACTION ISOLATION LEVEL` | `SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL …` or `BEGIN ISOLATION LEVEL …` |
+| Transactions | `XACT_ABORT ON` | Always on in effect: any error aborts the current transaction in PostgreSQL |
+| Miscellaneous | `CONCAT_NULL_YIELDS_NULL ON` | Default PostgreSQL `\|\|` behavior; for `OFF` semantics use `concat()` |
+| Miscellaneous | `ANSI_NULLS`, `ANSI_PADDING`, `ANSI_WARNINGS`, `ARITHABORT` | Always standard; drop |
 | Query run | `IDENTITY_INSERT` | See Sequences and Identity |
 | Query run | `LANGUAGE` | `lc_monetary`, `lc_numeric`, or `lc_time` |
 | Query run | `QUOTED_IDENTIFIER` | N/A |
@@ -122,3 +135,4 @@ Mapping of common SQL Server session options to Aurora PostgreSQL system variabl
 
 - Transaction isolation control maps closely; most other `SET` options differ significantly or have no equivalent.
 - `SET ROWCOUNT` for DML must be rewritten to `TOP` (SQL Server) / `LIMIT` (PostgreSQL); not auto-convertible.
+- Settings a procedure needs every time → `ALTER FUNCTION/PROCEDURE … SET param = value` (scoped to the call, like SQL Server's per-module saved settings) or `ALTER ROLE … SET`.

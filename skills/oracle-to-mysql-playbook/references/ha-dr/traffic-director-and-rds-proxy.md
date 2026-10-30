@@ -6,6 +6,8 @@
 **Conversion category:** Manual (two-star feature compatibility; no automation — features may be replaced by Amazon RDS Proxy)
 **SCT automation:** N/A (no automation)
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): 8.4/auth check, session-pinning list for converted code, AWS driver wrappers and custom endpoints as alternatives.
+
 ## Oracle
 
 Starting with Oracle 18c, **Oracle Connection Manager (CMAN)** can run in **Traffic Director mode** — a fast, reliable load-balancing solution. Enabling it provides:
@@ -36,3 +38,6 @@ See [Amazon RDS Proxy](chap-oracle-aurora-mysql.tools.rdsproxy.html) and [Using 
 - RDS Proxy covers connection pooling, failover handling, and improved resilience; it does **not** replicate every CMAN feature (e.g., Oracle-specific firewall/tunneling/tenant-isolation capabilities). Evaluate which Traffic Director features are actually relied upon.
 - RDS Proxy is most valuable for applications that open many short-lived connections or are sensitive to failover connection storms (e.g., serverless/Lambda fleets).
 - IAM authentication and Secrets Manager integration are common RDS Proxy add-ons not present in the Oracle equivalent.
+- Check that RDS Proxy supports the target version (Aurora MySQL 8.4) and that clients authenticate with `caching_sha2_password` (the 8.4 default) through the proxy.
+- Session state pins connections and removes pooling benefit: `SET` statements, user variables (used to emulate package state), temporary tables, `GET_LOCK`, prepared statements, multi-statement text. Review converted code for these before relying on the proxy.
+- Alternatives for failover-aware routing without a proxy: the AWS Advanced JDBC / Python / Go wrappers (topology-aware, fast failover) and Aurora custom endpoints.

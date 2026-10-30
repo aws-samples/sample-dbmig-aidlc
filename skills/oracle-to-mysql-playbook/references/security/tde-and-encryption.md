@@ -6,6 +6,8 @@
 **Conversion category:** Manual
 **SCT automation:** N/A
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): DES_ENCRYPT removed (verified), default aes-128-ecb ignores IVs (verified) — use aes-256-cbc with a random IV, AWS Encryption SDK alternative, default_table_encryption absent on Aurora, encrypt-via-snapshot-copy; fixed the example (BINARY(32) and IV 1 broke decryption; corrected version round-trips, verified); FIPS mode is ON (verified).
+
 Both Oracle TDE and Aurora MySQL encryption provide data-at-rest protection. See [Encrypting Amazon RDS resources](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Overview.Encryption.html).
 
 ## Oracle
@@ -96,33 +98,40 @@ Amazon RDS/Aurora encrypts data at rest using AES-256 via AWS Key Management Ser
 
 **Create a KMS key (console):** Key Management Service → Customer managed keys → Create key → Symmetric / KMS key material → set alias → assign admin and usage permissions → Finish; then use the key's ARN as the master encryption key.
 
-**FIPS mode:** RDS for MySQL 8 supports FIPS mode when compiled with OpenSSL and a FIPS Object Module is available at runtime.
+**FIPS mode:** `ssl_fips_mode` reports `ON` on Aurora MySQL 3.13 and 8.4.8 (verified); there is nothing to compile or enable. *(Corrected: the playbook described community RDS for MySQL FIPS build requirements.)*
 
-**Table/schema encryption defaults (MySQL 8):**
+**Table/schema encryption defaults (community MySQL 8 / RDS for MySQL — not Aurora):**
 - `default_table_encryption` sets the default for newly created schemas and general tablespaces.
 - `DEFAULT ENCRYPTION` clause sets a schema's encryption default; tables inherit the schema/tablespace default.
 - `table_encryption_privilege_check` enforces defaults; `TABLE_ENCRYPTION_ADMIN` privilege permits overriding them.
 
 **SSE-S3:** Server-side encryption with S3-managed keys uses AES-256. After enabling on a bucket, include the `x-amz-server-side-encryption` header in API calls (or use `aws s3 --sse`).
 
-**Column encryption functions** (require the key as a string — protect it, e.g. hash on the client). Supports AES and DES: `AES_ENCRYPT`, `AES_DECRYPT`, `DES_ENCRYPT`, `DES_DECRYPT`.
+**Column encryption functions** (require the key as a string — protect it, e.g. hash on the client): `AES_ENCRYPT`, `AES_DECRYPT`. **`DES_ENCRYPT`/`DES_DECRYPT` were removed in MySQL 8.0** (error 1305 on 3.13 and 8.4, verified). The default `block_encryption_mode` is `aes-128-ecb` (verified), which ignores the IV — set `SET SESSION block_encryption_mode = 'aes-256-cbc'` (or in the parameter group) and pass a random IV (`RANDOM_BYTES(16)`) stored with the ciphertext.
 
 ```sql
--- Syntax
-[A|D]ES_ENCRYPT(<string to encrypt>, <key string> [, <initialization vector>])
-[A|D]ES_DECRYPT(<encrypted string>, <key string> [, <initialization vector>])
+-- Syntax (AES only; DES_* no longer exist)
+AES_ENCRYPT(<string to encrypt>, <key string> [, <initialization vector>])
+AES_DECRYPT(<encrypted string>, <key string> [, <initialization vector>])
 ```
+
+*(Corrected example: the playbook stored ciphertext in `BINARY(32)`, which zero-pads the
+16-byte ciphertext so `AES_DECRYPT` returns NULL, and passed IV `1`, which CBC mode rejects.
+The version below round-trips on 3.13 and 8.4.8, verified.)*
 
 ```sql
 CREATE TABLE Employees (
-    EmployeeID INT NOT NULL PRIMARY KEY,
-    SSN_Encrypted BINARY(32) NOT NULL);
+    EmployeeID    INT NOT NULL PRIMARY KEY,
+    SSN_IV        BINARY(16) NOT NULL,
+    SSN_Encrypted VARBINARY(64) NOT NULL);
 
-INSERT INTO Employees (EmployeeID, SSN_Encrypted)
-VALUES (1, AES_ENCRYPT('1112223333', UNHEX(SHA2('REPLACE_WITH_STRONG_PASSWORD',512)), 1));
+SET SESSION block_encryption_mode = 'aes-256-cbc';
+SET @iv = RANDOM_BYTES(16);
+INSERT INTO Employees (EmployeeID, SSN_IV, SSN_Encrypted)
+VALUES (1, @iv, AES_ENCRYPT('1112223333', UNHEX(SHA2('REPLACE_WITH_STRONG_PASSWORD',512)), @iv));
 
-SELECT EmployeeID, SSN_Encrypted,
-    AES_DECRYPT(SSN_Encrypted, UNHEX(SHA2('REPLACE_WITH_STRONG_PASSWORD', 512)), EmployeeID) AS SSN
+SELECT EmployeeID,
+    CAST(AES_DECRYPT(SSN_Encrypted, UNHEX(SHA2('REPLACE_WITH_STRONG_PASSWORD',512)), SSN_IV) AS CHAR) AS SSN
 FROM Employees;
 ```
 
@@ -130,6 +139,8 @@ FROM Employees;
 
 - Oracle TDE (tablespace/column, wallet/keystore, master key) maps to Aurora/RDS at-rest encryption via AWS KMS — fully managed, transparent, AES-256. There is no Oracle-style keystore/wallet to migrate; encryption is an instance-creation setting.
 - Aurora MySQL at-rest encryption can only be enabled at instance creation time — plan this before migration; you cannot toggle it on an existing instance.
-- Oracle column-level `ENCRYPT`/`DECRYPT` DDL has no direct equivalent. For application-level column encryption, use MySQL `AES_ENCRYPT`/`AES_DECRYPT` (or DES) functions and store ciphertext in a `BINARY`/`VARBINARY` column.
-- Use the optional initialization vector to defend against whole-value replacement attacks (commonly an immutable per-row key such as the PK). Prefer SHA2 over SHA1/MD5 for deriving keys.
+- Oracle column-level `ENCRYPT`/`DECRYPT` DDL has no direct equivalent. For application-level column encryption, use MySQL `AES_ENCRYPT`/`AES_DECRYPT` and store ciphertext in a `VARBINARY` column (round trip verified on both versions). Better: encrypt in the application with the AWS Encryption SDK and KMS so the key never reaches the database or its logs.
+- `default_table_encryption` and `table_encryption_privilege_check` **do not exist on Aurora MySQL** (error 1193 on 3.13 and 8.4, verified), so the "Table/schema encryption defaults" above apply to community MySQL / RDS for MySQL only. Aurora encrypts the whole cluster volume with KMS; drop `ENCRYPTION='Y'` table options from converted DDL.
+- An unencrypted Aurora cluster cannot be encrypted in place; restore an encrypted copy from a snapshot (copy the snapshot with a KMS key).
+- Use a random 16-byte IV per value (`RANDOM_BYTES(16)`) stored next to the ciphertext, with a CBC/CFB/OFB `block_encryption_mode`; a PK or constant is not a valid IV. Prefer SHA2 over SHA1/MD5 for deriving keys.
 - Keys passed to MySQL encryption functions travel in plaintext unless the connection uses SSL/TLS; IAM database authentication encrypts connections with SSL by default.

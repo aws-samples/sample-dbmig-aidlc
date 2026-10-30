@@ -174,5 +174,9 @@ collation (no `LIKE` support before PostgreSQL 18); (c) keep case-sensitive and 
   `SearchPath=dbo` while the extension sits in `public` **silently** gets the built-in
   case-sensitive `text ~~ text`. Install with `CREATE EXTENSION citext SCHEMA <app schema>` (or
   include `public` in the path) and test with the app's own connection settings.
+- **Write the type schema-qualified in the DDL (`dbo.citext`).** The apply session's `search_path` is
+  usually `"$user", public`, so after `CREATE EXTENSION citext SCHEMA dbo` an unqualified `citext`
+  column fails with `type "citext" does not exist` (found on a fresh Aurora PostgreSQL 18.6 target;
+  an earlier run passed only because `citext` was already installed).
 - `citext = text_parameter` stays case-sensitive (the text-typed parameter wins); only `LIKE`,
   and `=` between two citext values, ignore case. Flag equality lookups on those columns.

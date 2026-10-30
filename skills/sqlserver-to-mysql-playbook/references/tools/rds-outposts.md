@@ -5,6 +5,8 @@
 
 **Conversion category:** N/A (tooling)
 **SCT automation:** N/A
+
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Still not available for Aurora; check RDS for MySQL version support on Outposts.
 **Note:** This topic is related to Amazon RDS and is **not** supported with Amazon Aurora.
 
 ## SQL Server
@@ -21,3 +23,4 @@ Amazon RDS on Outposts supports the MySQL (and PostgreSQL) engines, with additio
 - **Backups:** Automatic backups and manual snapshots are stored in the parent AWS Region; supports automatic backup to a Region.
 - **Management:** Manage both cloud and on-premises RDS databases with the same Console, APIs, and CLI.
 - **Supported engines:** Microsoft SQL Server, MySQL, PostgreSQL (more coming).
+- Still Aurora-unsupported (2026-10); check which RDS for MySQL major versions (8.0 / 8.4) RDS on Outposts offers before choosing it.

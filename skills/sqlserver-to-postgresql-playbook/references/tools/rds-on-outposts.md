@@ -6,6 +6,8 @@
 **Conversion category:** N/A (tooling)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): still Aurora-unsupported; check PG 18 availability on Outposts.
+
 > **Note:** This topic relates to Amazon RDS and is **not supported with Amazon Aurora**.
 
 ## SQL Server
@@ -21,3 +23,4 @@
 - **Backups:** Automatic backups and manual snapshots are stored in the AWS Region (automatic backup to Region).
 - Supported engines: Microsoft SQL Server, MySQL, PostgreSQL (more coming).
 - See: AWS Outposts Family, Amazon RDS on Outposts, and "Create Amazon RDS DB Instances on Outposts."
+- Check the RDS on Outposts supported-version list before planning a PostgreSQL 18 target there; Outposts version support can trail the Region.

@@ -23,14 +23,22 @@ substitute that pair for `<pair>`:
 - Engine definition + datatype map: `engines/<pair>/`
 
 The prompt bundles `dbmig` writes carry only the object-specific part; the pair's context
-(customer-specific rules, datatype map, engine checks, relevant playbook topic index) is
+(customer-specific rules, datatype map, engine checks, the **target-version baseline**
+(verified defaults and traps for the target version, configured by `conversion.target_baseline`
+in `engine.yaml`), the pair's **quick tips**, and the relevant playbook topic index) is
 written **once per run** to a shared file that each bundle references:
 `02-construction/_context-schema.md` (tables) and `02-construction/_context-code.md`
 (stored code). **Read the shared context file once per session before converting** (and
 again after a context reset/compaction) — the bundles are not self-contained. Each bundle
 also lists the **constructs detected** in its source (e.g. `PIPELINED`, `CONNECT BY`,
-`IDENTITY`) so you apply the matching guidance; open the pair's playbook topic files only
-when you need more detail.
+`IDENTITY`) with target-specific guidance and, where one exists, the playbook topic file to
+open (`— see skills/<pair>-playbook/references/...`). Open that file when the hint and the
+shared context are not enough, and **cite it in the conversion log**. Where the baseline and
+an older playbook passage disagree, the baseline (validated on the target version) wins;
+customer-specific rules still win over both. If the shared context starts the baseline with a
+**CAUTION — target version … is not one this baseline was verified on**, do not use the
+later-version defaults it names (for example PostgreSQL 18 `VIRTUAL` generated columns or
+`uuidv7()` on a 17.x target); use the older form in the same row.
 
 ### Working at scale (hundreds or thousands of objects)
 - **Batched prompts.** Small tables, small code objects and small test objects share one
@@ -90,7 +98,11 @@ For each `pending` unit in the manifest:
    (`02-construction/ddl/<schema>/<table>.sql`). Return only SQL (fenced or plain).
 4. Set that unit's `status` to `converted` in `manifest.yaml`.
 5. Record notable decisions / risky constructs as SQL comments and in a short
-   `02-construction/conversion-log.md`, citing the playbook reference used (traceability).
+   `02-construction/conversion-log.md`. **For every detected construct you converted, cite
+   the playbook file path** named in its hint (or the one you used), e.g.
+   `ORDERS: MERGE → ON DUPLICATE KEY UPDATE (skills/oracle-to-mysql-playbook/references/sql-plsql/merge-statement.md)`.
+   `./dbmig status` reports how many distinct playbook topics the log cites, and warns when
+   it cites none, so the use of the playbook is visible to reviewers.
 
 ### 3. Apply (dbmig applies to the target — gated)
 ```bash

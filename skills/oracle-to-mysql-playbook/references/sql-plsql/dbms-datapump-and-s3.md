@@ -6,6 +6,8 @@
 **Conversion category:** Manual (★ feature compatibility, no automation)
 **SCT automation:** N/A — no equivalent tool.
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): S3 integration verified on both versions (roles, parameters, FORMAT CSV HEADER; no PARQUET/COMPRESSION), snapshot export/clones for backup-style Data Pump jobs, MySQL Shell dump utilities.
+
 ## Oracle
 
 `DBMS_DATAPUMP` runs Oracle Data Pump within the database to transfer data objects between databases or export to OS files. Subprograms: `ADD_FILE`, `ATTACH`, `DATA_FILTER`, `DETACH`, `GET_DUMPFILE_INFO`, `GET_STATUS`, `LOG_ENTRY`, `METADATA_FILTER`, `METADATA_REMAP`, `METADATA_TRANSFORM`, `OPEN`, `SET_PARALLEL`, `SET_PARAMETER`, `START_JOB`, `STOP_JOB`, `WAIT_FOR_JOB`.
@@ -75,3 +77,7 @@ Combine with metadata tables and events to orchestrate operations. See "Oracle E
 
 - Requires configuring the Aurora MySQL cluster with an IAM role granting S3 access.
 - For full database/schema migration, prefer AWS DMS + AWS SCT rather than reimplementing Data Pump.
+- `DBMS_DATAPUMP` jobs used for **backups or environment copies** map to Aurora snapshots, fast clones and **snapshot export to S3** (Parquet), not to SQL code.
+- Logical exports of whole schemas: MySQL Shell `util.dumpSchemas()` / `util.loadDump()` (parallel, chunked) replace `expdp`/`impdp`; `mysqldump` still works but is single-threaded.
+- Verified on Aurora MySQL 3.13 and 8.4.8: `SELECT … INTO OUTFILE S3 … FORMAT CSV HEADER` and `LOAD DATA FROM S3` parse on both and fail only because no IAM role is associated (errors name the missing `aurora_select_into_s3_role` / `aurora_load_from_s3_role` / `aws_default_s3_role` parameter). Grant `AWS_SELECT_S3_ACCESS` / `AWS_LOAD_S3_ACCESS` (both roles exist on 3 and 8.4) to the database user and activate it (`SET DEFAULT ROLE ALL TO user`, since `activate_all_roles_on_login` is OFF).
+- `FORMAT PARQUET` and a `COMPRESSION` clause are **not** accepted by `SELECT … INTO OUTFILE S3` (syntax errors, verified); for Parquet exports use an Aurora snapshot export to S3 or a zero-ETL integration. `mysql.aurora_s3_load_history` exists on both versions (verified).

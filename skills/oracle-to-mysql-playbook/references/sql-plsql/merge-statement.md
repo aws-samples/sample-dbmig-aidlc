@@ -6,6 +6,8 @@
 **Conversion category:** Manual (★★★ feature compatibility, no automation) — workaround available
 **SCT automation:** Action code "Merge" — Aurora MySQL doesn't support `MERGE`.
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Still no MERGE on 3 / 8.4 (verified); added row-alias syntax (VALUES() deprecated), a verified conversion of the Oracle example, unique-key and NOT IN pitfalls, LEFT JOIN delete, affected-row counts, gap-lock deadlocks.
+
 ## Oracle
 
 `MERGE` (a.k.a. UPSERT) conditionally performs `INSERT`/`UPDATE`/`DELETE` on a target based on a join with a source. It is deterministic: a row processed once cannot be processed again by the same statement.
@@ -31,7 +33,8 @@ WHEN NOT MATCHED THEN
 Aurora MySQL has no `MERGE`. Use `REPLACE` or `INSERT … ON DUPLICATE KEY UPDATE` — both rely on existing PRIMARY KEY / UNIQUE constraints (no custom MATCH predicate).
 
 * **`REPLACE`** — INSERT, but on a PK/UNIQUE violation it DELETEs the existing row then INSERTs. MySQL extension, not ANSI.
-* **`INSERT … ON DUPLICATE KEY UPDATE`** — performs an in-place UPDATE instead of raising a duplicate-key error. MySQL extension, not ANSI.
+* **`INSERT … ON DUPLICATE KEY UPDATE`** — performs an in-place UPDATE instead of raising a duplicate-key error. MySQL extension, not ANSI. Reference the proposed row with a **row alias** (`VALUES (…) AS new … UPDATE col2 = new.col2`, MySQL 8.0.19+, verified); the `VALUES(col)` function in this clause is deprecated since 8.0.20.
+* Aurora MySQL 3 and 8.4 still have **no `MERGE`** (verified).
 
 ```sql
 -- REPLACE syntax
@@ -89,4 +92,27 @@ Neither workaround is a full `MERGE` replacement:
 | `WHEN MATCHED THEN DELETE` | `DELETE FROM Target WHERE Key IN (SELECT Key FROM Source)` |
 | `WHEN NOT MATCHED THEN INSERT` | `REPLACE` or `INSERT … ON DUPLICATE KEY UPDATE` |
 
-- For complex MERGE logic, break into discrete `INSERT`/`UPDATE`/`DELETE` statements.
+- For complex MERGE logic, break into discrete `INSERT`/`UPDATE`/`DELETE` statements, in one transaction.
+
+### Converting the Oracle example (verified on Aurora MySQL 3.13 and 8.4.8)
+
+```sql
+START TRANSACTION;
+-- WHEN MATCHED THEN UPDATE … / WHEN NOT MATCHED THEN INSERT … WHERE salary < 10000
+INSERT INTO emp_bonus (employee_id, bonus_year, salary, bonus)
+SELECT e.employee_id, YEAR(NOW()), e.salary, e.salary * 0.5
+FROM employees e
+WHERE e.salary < 10000
+   OR EXISTS (SELECT 1 FROM emp_bonus b WHERE b.employee_id = e.employee_id)
+ON DUPLICATE KEY UPDATE bonus = VALUES(salary) * 0.5;      -- or a row alias with INSERT … VALUES
+-- … DELETE WHERE (salary >= 10000)  (only rows that were matched/updated)
+DELETE b FROM emp_bonus b JOIN employees e ON e.employee_id = b.employee_id
+WHERE b.salary >= 10000;
+COMMIT;
+```
+
+- The `ON` predicate of Oracle `MERGE` must match a **PRIMARY KEY or UNIQUE** key on the target for `ON DUPLICATE KEY UPDATE`. If it doesn't (Oracle allows any join predicate), use a multi-table `UPDATE t JOIN s ON …` followed by `INSERT … SELECT … WHERE NOT EXISTS`.
+- `ON DUPLICATE KEY UPDATE` reacts to **any** unique key on the target, not only the one you meant; a table with several unique keys can update the wrong row.
+- "Delete target rows not in source" → `DELETE t FROM target t LEFT JOIN source s ON s.key = t.key WHERE s.key IS NULL` (verified); prefer it to `NOT IN (subquery)`, which returns nothing if the subquery has a NULL.
+- Affected-row counts differ: `ON DUPLICATE KEY UPDATE` reports 1 per insert and 2 per update (0 if unchanged), so code that checks `SQL%ROWCOUNT` must be adjusted.
+- `INSERT … ON DUPLICATE KEY UPDATE` takes next-key/gap locks under `REPEATABLE READ`; concurrent upserts into the same key range can deadlock. Retry on error 1213.

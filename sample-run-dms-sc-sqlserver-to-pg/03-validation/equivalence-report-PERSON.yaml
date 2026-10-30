@@ -1,0 +1,42 @@
+schema: PERSON
+mode: silent
+summary:
+  cases: 3
+  passed: 3
+  failed: 0
+  skipped: 1
+  low_coverage_objects: 0
+low_coverage: []
+results:
+- object: PERSON.vStateProvinceCountryRegion
+  type: function
+  case: c1
+  status: pass
+  coverage: OK
+  detail:
+    source: '181'
+    target: '181'
+- object: PERSON.vStateProvinceCountryRegion
+  type: function
+  case: c2
+  status: pass
+  coverage: OK
+  detail:
+    source_rows: 181
+    target_rows: 181
+    source_first: (5, 'AS ', True, 'American Samoa', 1, 'AS', 'American Samoa')
+    target_first: (5, 'AS ', Decimal('1'), 'American Samoa', 1, 'AS', 'American Samoa')
+- object: PERSON.AddressType
+  type: procedure
+  case: c1
+  status: pass
+  coverage: OK
+  detail:
+    defaulted_rows:
+      source_delta: '1.0'
+      target_delta: '1.0'
+      match: true
+    rows:
+      source_delta: '1.0'
+      target_delta: '1.0'
+      match: true

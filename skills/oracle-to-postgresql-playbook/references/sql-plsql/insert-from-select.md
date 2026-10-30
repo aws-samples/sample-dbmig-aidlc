@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (Four-star feature compatibility, four-star automation; minor rewrites for Oracle-only clauses)
 **SCT automation:** Four-star automation level; SCT action code index N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): `LOG ERRORS` alternatives beyond `ON CONFLICT`, `INSERT ALL` via data-modifying CTEs (verified), `RETURNING`.
+
 ## Oracle
 
 `INSERT FROM SELECT` inserts multiple rows into a table from another table. Column ordering and data types must match between target and source.
@@ -98,6 +100,13 @@ The `INSERT INTO (SELECT ...) VALUES (...)` subquery form is NOT supported in Po
 ## Conversion notes
 
 - Basic explicit/implicit `INSERT … SELECT` migrates directly.
-- Rewrite Oracle's `LOG ERRORS INTO … REJECT LIMIT` (and `DBMS_ERRLOG`) using `ON CONFLICT … DO NOTHING` / `DO UPDATE`.
+- Rewrite Oracle's `LOG ERRORS INTO … REJECT LIMIT` (and `DBMS_ERRLOG`) using `ON CONFLICT … DO NOTHING` / `DO UPDATE`. That only covers **unique/exclusion violations**. For other row errors (check, FK, type conversion), either pre-filter the source with the same predicates, or loop over rows in PL/pgSQL with a `BEGIN … EXCEPTION WHEN others THEN INSERT INTO errlog … END` block per row. The per-row block is slow because each one is a subtransaction, so use it only for small or exceptional batches. For file loads, PG 17/18 `COPY … (ON_ERROR ignore, REJECT_LIMIT n)` covers type-conversion errors.
 - The `INSERT INTO (subquery) VALUES (...)` form must be rewritten as a normal `INSERT INTO table VALUES`.
-- Oracle multi-table conditional inserts (`INSERT ALL`/`FIRST`) have no direct PG equivalent; split into multiple statements or use CTEs.
+- Oracle multi-table conditional inserts (`INSERT ALL`/`FIRST`) have no direct PG equivalent. Use **data-modifying CTEs** so the source is read once in one statement (verified):
+  ```sql
+  WITH src AS (SELECT * FROM staging),
+       a   AS (INSERT INTO t_small SELECT * FROM src WHERE amount <= 1000 RETURNING 1)
+  INSERT INTO t_large SELECT * FROM src WHERE amount > 1000;
+  ```
+  For `INSERT FIRST`, make the `WHERE` conditions mutually exclusive (`NOT` of the earlier conditions).
+- `RETURNING` on `INSERT … SELECT` replaces Oracle `RETURNING … BULK COLLECT INTO`.

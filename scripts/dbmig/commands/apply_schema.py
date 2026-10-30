@@ -141,7 +141,16 @@ def run(args) -> int:
                            "explicit, user-approved design decision and set "
                            "source_fk_count in the manifest)")
                 continue
-        pre_sql, post_sql = ddl_split.partition_ddl(full)
+        if code:
+            # Code units are applied whole. Deferring is a table-unit concept: a code
+            # unit for a TRIGGER (e.g. an imported DMS SC trigger, or a reconverted
+            # one) is its function PLUS the CREATE TRIGGER, and --post-data does not
+            # run code units — splitting here silently dropped the CREATE TRIGGER
+            # while reporting the unit as applied. (Triggers that must not fire during
+            # a bulk load are handled by capture-target-objects / pre-load-drop.)
+            pre_sql, post_sql = full, ""
+        else:
+            pre_sql, post_sql = ddl_split.partition_ddl(full)
         sql = post_sql if post else pre_sql
         if not sql.strip():
             if post:

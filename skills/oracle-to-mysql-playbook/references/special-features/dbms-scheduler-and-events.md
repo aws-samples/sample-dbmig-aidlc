@@ -6,6 +6,8 @@
 **Conversion category:** Manual (three-star feature compatibility) — different paradigm and syntax.
 **SCT automation:** N/A
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): event_scheduler is ON by default on Aurora 3 / 8.4 (verified, corrected); native lambda_async instead of the removed procedure; EventBridge Scheduler; writer-only, time zone, overlap and completion behavior.
+
 ## Oracle
 
 The `DBMS_SCHEDULER` package provides scheduling functions callable from PL/SQL. Two main objects: a **program** (what to run) and a **schedule** (when to run). Jobs can run a database program unit (procedure) or an external executable (shell script). Three job types: time-based, event-based, and dependency (chained) jobs.
@@ -116,7 +118,7 @@ Additional objects: `JOB CLASS` (group jobs with shared attributes/priority) and
 
 ## MySQL
 
-Aurora MySQL uses `EVENT` objects to run scheduled events (one-time or recurring/cycled). An event is a time-based trigger that runs SQL or calls a procedure. The `event_scheduler` parameter must be `ON` (not the default). Event errors are written to the error log; to emulate `dba_scheduler_job_log`, set the error log output to `TABLE`.
+Aurora MySQL uses `EVENT` objects to run scheduled events (one-time or recurring/cycled). An event is a time-based trigger that runs SQL or calls a procedure. The `event_scheduler` parameter must be `ON` — on Aurora MySQL 3 and 8.4 it **is ON by default** (verified on 3.13 and 8.4.8; the original playbook said otherwise). Event errors are written to the MySQL error log (export it to CloudWatch Logs); the error log cannot be written to a table, so to emulate `dba_scheduler_job_log` have each event's procedure write its own start/end/error rows to a job-log table.
 
 Check the scheduler is on:
 
@@ -150,10 +152,16 @@ CREATE EVENT stats_schedule
 - **Stored-procedure jobs** → straightforward `CREATE EVENT ... DO CALL proc()`.
 - **External executable jobs** → no OS execution in Aurora; invoke an AWS Lambda function instead:
   ```sql
-  CALL mysql.lambda_async(
-    'arn:aws:lambda:us-west-2:123456789012:function:oe.my_saved_program1',
-    '{"input1":"value"}');
+  -- native function on Aurora MySQL 3 / 8.4 (the mysql.lambda_async procedure no longer exists — verified)
+  SELECT lambda_async('arn:aws:lambda:us-west-2:123456789012:function:my_saved_program1',
+                      '{"input1":"value"}');
   ```
+  Or schedule the job outside the database with **Amazon EventBridge Scheduler** → Lambda / Step Functions / ECS, which also gives retries, run history and chaining.
 - **Event-based jobs** → `CREATE EVENT` triggers only on time intervals (minimum 1 second). For real event conditions: use DML triggers (for DML events) or poll with an `EVENT` that runs every X seconds and checks whether the event occurred.
 - **Chained/dependency jobs** → no native chains; create several `EVENTS` and coordinate them via a control table holding the last-run status to decide when to run the next step.
 - Aurora MySQL has no native `JOB CLASS`/`WINDOW` resource-prioritization concepts.
+- Verified on both versions: `CREATE EVENT … ON SCHEDULE EVERY 1 DAY STARTS NOW() + INTERVAL 1 HOUR DO …` creates an `ENABLED` event visible in `information_schema.events`.
+- Events run only on the **writer** instance. They keep their definition after a failover and run on the new writer.
+- Schedules use the event's time zone (the session `time_zone` at creation, UTC on Aurora by default); Oracle `repeat_interval` calendar strings (`FREQ=WEEKLY;BYDAY=MON`) have no parser — express them as `EVERY 1 WEEK STARTS '2026-11-02 02:00:00'` or check the day inside the procedure.
+- An event body runs with its `DEFINER`'s privileges; long-running events overlap if one run outlasts the interval. Guard with `GET_LOCK('job_x', 0)` at the start of the procedure.
+- `ON COMPLETION NOT PRESERVE` (the default) drops one-time events after they run; use `ON COMPLETION PRESERVE` to keep history.

@@ -35,58 +35,6 @@ frameworks:
   - src/main/java/com/bobsusedbooks/demo/OracleBookRepository.java
 sites:
   sql:
-  - file: src/main/java/com/bobsusedbooks/config/DataInitializer.java
-    line: 31
-    constructs: []
-    sql: Database pre-initialized with schema and sample data.
-  - file: src/main/java/com/bobsusedbooks/controllers/AdminAccessController.java
-    line: 14
-    constructs: []
-    sql: Please login with admin credentials to access the admin portal
-  - file: src/main/java/com/bobsusedbooks/controllers/AdminController.java
-    line: 97
-    constructs: []
-    sql: 'Failed to update order status:'
-  - file: src/main/java/com/bobsusedbooks/controllers/AdminController.java
-    line: 135
-    constructs: []
-    sql: 'Failed to update order status:'
-  - file: src/main/java/com/bobsusedbooks/controllers/AdminController.java
-    line: 181
-    constructs: []
-    sql: 'Failed to update customer:'
-  - file: src/main/java/com/bobsusedbooks/controllers/AdminController.java
-    line: 356
-    constructs: []
-    sql: 'Failed to delete genre:'
-  - file: src/main/java/com/bobsusedbooks/controllers/AdminController.java
-    line: 400
-    constructs: []
-    sql: 'Failed to delete publisher:'
-  - file: src/main/java/com/bobsusedbooks/controllers/AdminController.java
-    line: 444
-    constructs: []
-    sql: 'Failed to delete book type:'
-  - file: src/main/java/com/bobsusedbooks/controllers/AdminController.java
-    line: 488
-    constructs: []
-    sql: 'Failed to delete condition:'
-  - file: src/main/java/com/bobsusedbooks/controllers/BookAdminController.java
-    line: 31
-    constructs: []
-    sql: 'Failed to delete book:'
-  - file: src/main/java/com/bobsusedbooks/controllers/PasswordResetController.java
-    line: 37
-    constructs: []
-    sql: No account found with that email address
-  - file: src/main/java/com/bobsusedbooks/controllers/PasswordResetController.java
-    line: 104
-    constructs: []
-    sql: Password has been reset successfully. Please log in with your new password.
-  - file: src/main/java/com/bobsusedbooks/controllers/ReportController.java
-    line: 133
-    constructs: []
-    sql: 'Failed to update stock:'
   - file: src/main/java/com/bobsusedbooks/demo/OracleBookRepository.java
     line: 36
     constructs:
@@ -260,58 +208,12 @@ sites:
     constructs: []
     sql: DELETE FROM ShoppingCartItem sci WHERE sci.customerId = :customerId AND sci.isWishlistItem
       = :isWishlistItem
-  - file: src/main/java/com/bobsusedbooks/security/CustomUserDetailsService.java
-    line: 36
-    constructs: []
-    sql: 'User not found with username or email:'
   - file: src/main/java/com/bobsusedbooks/services/BookService.java
-    line: 231
-    constructs: []
-    sql: 'Book not found with id:'
-  - file: src/main/java/com/bobsusedbooks/services/CustomerService.java
-    line: 70
-    constructs: []
-    sql: 'Customer not found with id:'
-  - file: src/main/java/com/bobsusedbooks/services/EmailService.java
-    line: 25
-    constructs: []
-    sql: 'Sending offer status update email to:'
-  - file: src/main/java/com/bobsusedbooks/services/OrderService.java
-    line: 127
-    constructs: []
-    sql: 'Order not found with id:'
-  - file: src/main/java/com/bobsusedbooks/services/OrderService.java
-    line: 140
-    constructs: []
-    sql: 'Customer not found with id:'
-  - file: src/main/java/com/bobsusedbooks/services/OrderService.java
-    line: 248
-    constructs: []
-    sql: 'Order not found with id:'
-  - file: src/main/java/com/bobsusedbooks/services/OrderService.java
-    line: 286
-    constructs: []
-    sql: 'Order not found with id:'
-  - file: src/main/java/com/bobsusedbooks/services/PasswordResetService.java
-    line: 32
-    constructs: []
-    sql: 'No user found with email:'
-  - file: src/main/java/com/bobsusedbooks/services/ReferenceDataService.java
-    line: 82
-    constructs: []
-    sql: 'Genre not found with id:'
-  - file: src/main/java/com/bobsusedbooks/services/ReferenceDataService.java
-    line: 119
-    constructs: []
-    sql: 'Publisher not found with id:'
-  - file: src/main/java/com/bobsusedbooks/services/ReferenceDataService.java
-    line: 156
-    constructs: []
-    sql: 'BookType not found with id:'
-  - file: src/main/java/com/bobsusedbooks/services/ReferenceDataService.java
-    line: 193
-    constructs: []
-    sql: 'Condition not found with id:'
+    line: 181
+    fragment: true
+    constructs:
+    - 'full-text query syntax: fuzzy('
+    sql: fuzzy(
   - file: src/main/java/com/bobsusedbooks/utils/LoadCoverImages.java
     line: 59
     constructs: []
@@ -383,7 +285,7 @@ sites:
   - file: src/main/resources/application.properties
     line: 4
     kind: plaintext-secret
-    text: spring.datasource.password=<masked>
+    text: spring.datasource.password=***
   - file: src/main/resources/application.properties
     line: 5
     text: spring.datasource.driver-class-name=oracle.jdbc.OracleDriver

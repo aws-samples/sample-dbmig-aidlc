@@ -5,6 +5,8 @@
 > Complements the AWS playbook, which covers UDT **declarations** but not their
 > **use inside PL/SQL**.
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): Aurora `collection` extension for associative arrays (verified, including the key-order hazard), `FOREACH`, PG 18 `array_sort`/`array_reverse`, corrected the `EXISTS(i)` mapping.
+
 **Conversion category:** **Manual** — this is where the genuinely hard work is. The
 type *declaration* is mechanical (see
 [`../tables-indexes/user-defined-types.md`](../tables-indexes/user-defined-types.md));
@@ -26,7 +28,7 @@ outright until they were restructured.
 | `TYPE tab IS TABLE OF <object_type>` | **no type** — the *function* returns `SETOF <object_type>` | see §2 |
 | `TYPE arr IS TABLE OF <scalar>` | `CREATE DOMAIN arr AS <scalar>[]` | see §3 |
 | `TYPE arr IS VARRAY(n) OF <scalar>` | `CREATE DOMAIN arr AS <scalar>[]` | the bound `n` is not enforced |
-| `TYPE t IS TABLE OF x INDEX BY PLS_INTEGER` | no equivalent | associative array — see §6 |
+| `TYPE t IS TABLE OF x INDEX BY PLS_INTEGER` / `INDEX BY VARCHAR2` | Aurora `collection` extension, or restructure | associative array — see §6 |
 | `SYS_REFCURSOR` | `refcursor` | see §7 |
 
 Skip `MEMBER` / `STATIC` / `CONSTRUCTOR` / `MAP` / `ORDER` method declarations —
@@ -146,7 +148,7 @@ Mapping rules:
 | `coll.EXTEND` / `coll.EXTEND(n)` | not needed — drop |
 | `coll.TRIM` | not needed — drop |
 | `coll.DELETE` | `coll := '{}'` |
-| `coll.EXISTS(i)` | `coll[i] IS NOT NULL` |
+| `coll.EXISTS(i)` | `i BETWEEN array_lower(coll,1) AND array_upper(coll,1)` (`coll[i] IS NOT NULL` is wrong if an element is legitimately NULL) |
 | `coll.EXTEND; coll(coll.LAST) := v` | `coll := array_append(coll, v)` |
 | `x MEMBER OF coll` | `x = ANY(coll)` |
 | `x NOT MEMBER OF coll` | `NOT (x = ANY(coll))` |
@@ -159,6 +161,10 @@ but `cardinality(NULL)` is **NULL** in PostgreSQL and the loop misbehaves. Alway
 FOR i IN 1..COALESCE(cardinality(coll), 0) LOOP
 ```
 
+When the index is not needed, `FOREACH x IN ARRAY coll LOOP … END LOOP;` is simpler. It raises an error on a NULL array, so guard with `IF coll IS NOT NULL`.
+
+PG 18 adds `array_sort(arr)` and `array_reverse(arr)` (verified), which replace hand-written sort loops over collections.
+
 ---
 
 ## 6. Associative arrays (`INDEX BY`) have no equivalent
@@ -167,8 +173,28 @@ FOR i IN 1..COALESCE(cardinality(coll), 0) LOOP
 map**. PostgreSQL arrays are dense and integer-indexed.
 
 - Integer-keyed and used sequentially → an array is fine.
-- Genuinely sparse, or string-keyed → restructure: a `jsonb` value, a temporary relation,
-  or (usually best) the query the map was caching.
+- **Aurora PostgreSQL ships the `collection` extension (1.1.1 on Aurora 18, verified)**, an
+  Oracle-style associative array type with text keys:
+  ```sql
+  CREATE EXTENSION collection;
+  DO $$
+  DECLARE c collection; v text;
+  BEGIN
+    c['k1'] := 'a'::text;          -- subscript assignment by key
+    c['k2'] := 'b'::text;
+    v := c['k2'];                   -- lookup
+    IF exist(c, 'k1') THEN ... END IF;   -- ≈ c.EXISTS('k1')
+    -- also: count(c), first_key(c)/last_key(c), next_key(c,k)/prev_key(c,k) (≈ FIRST/LAST/NEXT/PRIOR),
+    --       delete(c,k), sort(c), keys_to_table(c), values_to_table(c)
+  END $$;
+  ```
+  **Iteration-order hazard:** Oracle iterates `INDEX BY VARCHAR2` maps in **sorted key
+  order**. `collection` keeps **insertion order** (verified: after adding `'b'` then `'a'`,
+  `first_key` returns `'b'`). Call `sort(c)` before a FIRST/NEXT loop when the Oracle code
+  depends on key order. The extension is Aurora-only, so the converted code will not run on
+  community PostgreSQL. Record that as a portability decision.
+- Genuinely sparse, or string-keyed, and portability matters → restructure: a `jsonb` value
+  (`v := m ->> 'k1'`), a temporary relation, or (usually best) the query the map was caching.
 
 Do not pretend an array is equivalent to a sparse map — lookups by a missing key behave
 differently and silently.

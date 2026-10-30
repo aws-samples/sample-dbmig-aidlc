@@ -1,0 +1,1 @@
+CREATE DOMAIN adventureworks_dbo.accountnumber AS VARCHAR(30) NULL;

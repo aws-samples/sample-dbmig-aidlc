@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (three-star compatibility — syntax and option differences, similar functionality; there are no users in PostgreSQL, only roles)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): Windows auth → Kerberos/AD + `pg_ad_mapping` (corrected N/A), fixed the add-member and lock-user rows, SCRAM/MD5 deprecation, `rds_superuser`, application-role pattern.
+
 ## SQL Server
 
 SQL Server has two layers of security principals: **logins** at the server level and **users** at the database level. Logins map to users in one or more databases. Server-level permissions (e.g., database creator, system administrator, security administrator) are not mapped to particular databases.
@@ -48,7 +50,7 @@ where option can be:
   | REPLICATION | NOREPLICATION
   | BYPASSRLS | NOBYPASSRLS
   | CONNECTION LIMIT connlimit
-  | [ ENCRYPTED | UNENCRYPTED ] PASSWORD 'password'
+  | [ ENCRYPTED ] PASSWORD 'password'      -- UNENCRYPTED removed in PG 10; stored as SCRAM-SHA-256 by default
   | VALID UNTIL 'timestamp'
   | IN ROLE role_name [, ...]
   | IN GROUP role_name [, ...]
@@ -71,10 +73,14 @@ GRANT SELECT, INSERT, DELETE on hr.employees to hr_role;
 
 - **No login/user distinction in PostgreSQL.** SQL Server's two-tier model (server login + database user) collapses into a single cluster-wide role. A role with `LOGIN` is the equivalent of a SQL Server login; `CREATE USER` = `CREATE ROLE ... LOGIN`.
 - Roles are cluster-wide and valid in all databases, unlike SQL Server users which are scoped per database.
-- **No Windows Authentication equivalent** (listed as N/A). Re-model external authentication (e.g., use IAM database authentication or password auth).
+- *(corrected)* **Windows Authentication → Kerberos** with AWS Directory Service for Microsoft Active Directory (or a self-managed AD trust). Join the cluster to the directory and `GRANT rds_ad TO "user@CORP.EXAMPLE.COM"`. The **`pg_ad_mapping`** extension (preload required, available on Aurora 18) maps AD security groups to PostgreSQL roles, so Windows group logins keep working. **IAM database authentication** (`GRANT rds_iam TO u`) is the alternative for AWS-native applications.
+- Password policy (`CHECK_POLICY`, `CHECK_EXPIRATION`) → `VALID UNTIL` per role; complexity and lockout belong in the identity provider. MD5 passwords are deprecated in PostgreSQL 18 (`md5_password_warnings`); keep SCRAM-SHA-256.
+- The Aurora master user is a member of `rds_superuser`, not a superuser (closest to `sysadmin`, with restrictions).
 - Passwords must be encrypted (PostgreSQL 10+ dropped `UNENCRYPTED PASSWORD`).
 - The `dbo` schema and other built-in SQL Server schemas typically don't need to be migrated.
-- Use role membership and `GRANT`/`REVOKE` to replace SQL Server built-in roles; there is no direct mapping for `db_owner`, `db_datareader`, etc.
+- Use role membership and `GRANT`/`REVOKE` to replace SQL Server built-in roles; see the fixed-role mapping in `data-control-language.md`.
+- SQL Server contained database users and per-database users with the same login name in different databases → a single cluster-wide role, plus `GRANT CONNECT ON DATABASE` / `REVOKE CONNECT … FROM PUBLIC` per database.
+- PG 16+ `GRANT role TO user WITH INHERIT FALSE, SET TRUE` gives an application-role-like pattern (`sp_setapprole` → `SET ROLE app_role`).
 
 ### Task comparison
 
@@ -84,7 +90,7 @@ GRANT SELECT, INSERT, DELETE on hr.employees to hr_role;
 | Create a user and password | `CREATE USER <User Name> WITH PASSWORD = <PassWord>;` | `CREATE USER <User Name> WITH PASSWORD '<PassWord>';` |
 | Create a role | `CREATE ROLE <Role Name>` | `CREATE ROLE <Role Name>` |
 | Change a user's password | `ALTER LOGIN <SQL Login> WITH PASSWORD = <PassWord>;` | `ALTER USER <SQL Login> WITH PASSWORD '<PassWord>';` |
-| External authentication | Windows Authentication | N/A |
-| Add a user to a role | `ALTER ROLE <Role Name> ADD MEMBER <User Name>` | `ALTER ROLE <Role Name> SET <property and value>` |
-| Lock a user | `ALTER LOGIN <Login Name> DISABLE` | `REVOKE CONNECT ON DATABASE <database_name> from <Role Name>;` |
+| External authentication | Windows Authentication | Kerberos via AWS Managed Microsoft AD (`rds_ad`, `pg_ad_mapping`) or IAM authentication (`rds_iam`) |
+| Add a user to a role | `ALTER ROLE <Role Name> ADD MEMBER <User Name>` | `GRANT <Role Name> TO <User Name>;` *(corrected: `ALTER ROLE … SET` changes a setting, not membership)* |
+| Lock a user | `ALTER LOGIN <Login Name> DISABLE` | `ALTER ROLE <Role Name> NOLOGIN;` (or `REVOKE CONNECT ON DATABASE <db> FROM <Role Name>;` for one database) |
 | Grant `SELECT` on a schema | `GRANT SELECT ON SCHEMA::<Schema Name> to <User Name>` | `GRANT SELECT ON ALL TABLES IN SCHEMA <Schema Name> TO <User Name>;` |

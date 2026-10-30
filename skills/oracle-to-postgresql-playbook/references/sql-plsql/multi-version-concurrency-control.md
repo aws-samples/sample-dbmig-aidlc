@@ -6,6 +6,8 @@
 **Conversion category:** Automatic (Five-star feature compatibility; concurrency model is conceptually equivalent, though syntax for explicit locks/transactions differs)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): session/role-level isolation (corrected), autocommit is client-side, `lock_timeout` for `WAIT n`, `pg_blocking_pids`, VACUUM/bloat versus undo.
+
 ## Oracle
 
 Two primary lock types: exclusive and share locks. High-level semantics:
@@ -70,7 +72,7 @@ PostgreSQL maintains consistency using MVCC. Like Oracle:
 
 Unlike Oracle, **PostgreSQL uses auto-commit by default**. To get Oracle-like (non-auto-commit) behavior:
 - Use `START TRANSACTION` (or `BEGIN TRANSACTION`) then `COMMIT`/`ROLLBACK`, or
-- Set `AUTOCOMMIT` off at session level: `\set AUTOCOMMIT off`
+- Turn autocommit off in the client: `\set AUTOCOMMIT off` in `psql`, `setAutoCommit(false)` in JDBC, `autocommit = False` in psycopg. Autocommit is a client/driver setting; there is no server parameter for it.
 
 With explicit transactions, `LOCK TABLE` and `SELECT … FOR UPDATE` are supported.
 
@@ -158,5 +160,9 @@ WHERE NOT waiting.GRANTED AND waiting.pid <> block.pid;
 
 - Concurrency philosophy matches (MVCC, no lock escalation, readers/writers don't block each other) — no redesign needed.
 - The biggest behavioral difference: **PostgreSQL defaults to auto-commit**. Oracle defaults to an open transaction. Explicit locking statements (`LOCK TABLE`, `SELECT … FOR UPDATE`) must be wrapped in `START TRANSACTION` in PostgreSQL.
-- PostgreSQL has no session-level isolation; isolation is set per-transaction.
+- Isolation can be set per transaction (`BEGIN ISOLATION LEVEL REPEATABLE READ`), per session (`SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL …`, verified to parse on 18.6), or as a default per role/database (`default_transaction_isolation`). Oracle `ALTER SESSION SET ISOLATION_LEVEL = SERIALIZABLE` → the session form.
+- Oracle `SELECT … FOR UPDATE WAIT n` → `SET LOCAL lock_timeout = 'n s'` before the `SELECT … FOR UPDATE`. `NOWAIT` and `SKIP LOCKED` map directly (verified).
+- Simpler blocker lookup than the `pg_locks` self-join above: `SELECT pid, pg_blocking_pids(pid), wait_event_type, query FROM pg_stat_activity WHERE cardinality(pg_blocking_pids(pid)) > 0;`
+- **Undo vs. dead tuples:** Oracle keeps old row versions in undo. PostgreSQL keeps them in the table until **VACUUM** removes them. Long-running transactions (including idle-in-transaction sessions and forgotten replication slots) prevent cleanup and cause table bloat, the PostgreSQL counterpart of `ORA-01555` risk. Set `idle_in_transaction_session_timeout` and monitor `pg_stat_activity.backend_xmin` age.
+- Oracle's `SELECT … FOR UPDATE` locks are recorded on the row itself in both engines. PostgreSQL has no lock escalation, but very large `FOR UPDATE` scans write to every locked tuple, so keep lock sets small.
 - Use `pg_locks` + `pg_stat_activity` instead of Oracle's `v$lock`/`v$locked_object`/`v$session_blockers`.

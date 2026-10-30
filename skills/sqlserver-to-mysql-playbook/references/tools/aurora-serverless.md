@@ -1,4 +1,4 @@
-# Amazon Aurora Serverless v1 Overview
+# Amazon Aurora Serverless Overview (v2; v1 retired)
 
 > Source: AWS SQL Server→Aurora MySQL Migration Playbook
 > URL: https://docs.aws.amazon.com/dms/latest/sql-server-to-aurora-mysql-migration-playbook/chap-sql-server-aurora-mysql.tools.auroraserverless.html
@@ -6,25 +6,20 @@
 **Conversion category:** N/A (tooling)
 **SCT automation:** N/A — target deployment/capacity option.
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Rewritten for Aurora Serverless v2 (v1 reached end of life 2025-03-31); facts verified on the validation clusters.
+
 ## SQL Server
 N/A on the source side. Presented as a target deployment model to consider when migrating off SQL Server.
 
 ## MySQL
-Amazon Aurora Serverless is an on-demand, autoscaling configuration for Amazon Aurora (MySQL-compatible and PostgreSQL-compatible). The Aurora MySQL target can be deployed as Serverless v1 or v2 instead of a provisioned cluster.
+
+**Aurora Serverless v1 reached end of life on 2025-03-31.** Use **Aurora Serverless v2**, an instance class (`db.serverless`) for Aurora MySQL 3 and 8.4; both validation clusters for this review were Serverless v2. The filename is kept so links resolve; the Oracle→MySQL playbook page `../../../oracle-to-mysql-playbook/references/tools/aurora-serverless-v1.md` has the full description.
 
 ## Conversion notes
-### Aurora Serverless v1
-- **On-demand autoscaling:** Scales compute capacity up/down based on application needs; automatically starts, scales, and shuts down when not in use.
-- **Best for:** Infrequent, intermittent, or unpredictable workloads.
-- **Advantages:** Simpler than provisioned; scalable with no disruption to client connections; cost-effective (per-second billing for consumed resources); highly available storage (six-way replication, fault-tolerant distributed storage).
-- **Encryption:** The cluster volume is always encrypted; you can choose the key but can't turn encryption off.
-- **Use cases:** Infrequently used apps (e.g., low-volume blog); new apps with unknown sizing; variable workloads (HR, budgeting, operational reporting); unpredictable workloads with sudden spikes; dev/test databases (auto shutdown nights/weekends); multi-tenant applications.
-- **Scaling behavior:** Storage shared between nodes; can scale up/down in seconds for most workloads. Autoscaling thresholds: ~1.5 min to scale up, ~5 min to scale down (metrics must stay over/under limits for those durations). Cooldown: 5 min after scale-up, 15 min after scale-down. Service must find a "scaling point" (long-running transactions delay this). Scaling is transparent — existing connections and session state transfer to new nodes. Pausing/resuming adds higher first-connection latency (~25 seconds).
-
-### Aurora Serverless v2
-- Architected from the ground up for instantly scalable serverless clusters with security/isolation for multitenant environments; low overhead, fast response, scales to large processing demand.
-- **Capacity range:** Defined as min/max **Aurora Capacity Units (ACUs)**. Each ACU = 2 GiB RAM + associated vCPU + networking.
-- **Scaling:** Unlike v1 (which doubles ACUs at thresholds), v2 increases ACUs **incrementally** in the precise increments needed for best performance per resources consumed.
-
-### How to provision (v2)
-- AWS Management Console → **Amazon RDS** → **Create database** → under **Engine options / Engine versions**, choose **Show versions that support Serverless v2** → choose capacity settings for your use case.
+- **Capacity:** min 0 or 0.5 ACU to max 256 ACU per instance (1 ACU ≈ 2 GiB memory + CPU + network); scales in fine-grained steps within seconds while connections stay open.
+- **Auto-pause:** `MinCapacity=0` pauses an idle instance (storage-only cost); the first connection after a pause waits for the resume.
+- **Mixed clusters:** provisioned writer + serverless readers or the reverse; readers in promotion tier 0–1 scale with the writer.
+- **Same features** as provisioned Aurora MySQL 3 / 8.4: Multi-AZ, Global Database, RDS Proxy, Data API, Backtrack.
+- **Capacity-derived settings:** `max_connections` (135 at a 4 ACU maximum, verified) and buffer pool size follow capacity; `performance_schema` is off by default (verified).
+- **Sizing from SQL Server:** derive `MaxCapacity` from the source's peak CPU/memory (Perfmon, `sys.dm_os_*`) and `MinCapacity` from the steady baseline; compare cost against provisioned instances for steady heavy load.
+- The v1 notes (ACU doubling, 1.5/5-minute thresholds, 5/15-minute cooldowns, ~25 s resume) no longer apply.

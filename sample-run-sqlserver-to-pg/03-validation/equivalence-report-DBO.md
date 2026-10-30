@@ -1,6 +1,6 @@
 # Equivalence Test Report — DBO
 
-Mode: `silent`  |  Cases: 68  Passed: 68  Failed: 0  Skipped: 0
+Mode: `silent`  |  Cases: 69  Passed: 69  Failed: 0  Skipped: 0
 
 **LOW_COVERAGE** — every table these objects read was empty in the source, so the tests exercised only the empty / default path. A pass here is honest but shallow; re-test with representative data before cutover:
 
@@ -8,9 +8,9 @@ Mode: `silent`  |  Cases: 68  Passed: 68  Failed: 0  Skipped: 0
 
 | Object | Type | Case | Status | Coverage | Detail |
 |---|---|---|---|---|---|
-| DBO.ufnCalculateCustomerLifetimeValue | function | c1 | pass | OK | {'source': '105.36', 'target': '105.36'} |
-| DBO.ufnCalculateCustomerLifetimeValue | function | c2 | pass | OK | {'source': '90.34', 'target': '90.34'} |
-| DBO.ufnCalculateCustomerLifetimeValue | function | c3 | pass | OK | {'source': '2095.66', 'target': '2095.66'} |
+| DBO.ufnCalculateCustomerLifetimeValue | function | c1 | pass | OK | {'source': '103.49', 'target': '103.49'} |
+| DBO.ufnCalculateCustomerLifetimeValue | function | c2 | pass | OK | {'source': '88.7', 'target': '88.70'} |
+| DBO.ufnCalculateCustomerLifetimeValue | function | c3 | pass | OK | {'source': '2053.32', 'target': '2053.32'} |
 | DBO.ufnCalculateCustomerLifetimeValue | function | c4 | pass | OK | {'source': None, 'target': None} |
 | DBO.ufnGetAccountingEndDate | function | c1 | pass | n/a | {'source': '2004-06-30 23:59:59.997000', 'target': '2004-06-30 23:59:59.997000'} |
 | DBO.ufnGetAccountingStartDate | function | c1 | pass | n/a | {'source': '2003-07-01 00:00:00', 'target': '2003-07-01 00:00:00'} |
@@ -33,7 +33,7 @@ Mode: `silent`  |  Cases: 68  Passed: 68  Failed: 0  Skipped: 0
 | DBO.VwCustomerShopping | function | v3 | pass | OK | {'source': 'Hi, Bob! Your order #2 for $75.50 will be shipped shortly. Thank you!', 'target': 'Hi, Bob! Your order #2 for $75.50 will be shipped shortly. Thank … |
 | DBO.VwCustomerShopping | function | v4 | pass | OK | {'source': 'Bob Marley', 'target': 'Bob Marley'} |
 | DBO.VwOpenCoupons | function | v1 | pass | OK | {'source': '0', 'target': '0'} |
-| DBO.VwOpenCoupons | function | v2 | pass | OK | {'source': '26056', 'target': '26056'} |
+| DBO.VwOpenCoupons | function | v2 | pass | OK | {'source': '26924', 'target': '26924'} |
 | DBO.VwRegionalSales | function | v1 | pass | OK | {'source': '10', 'target': '10'} |
 | DBO.VwRegionalSales | function | v2 | pass | OK | {'source': '42194.34', 'target': '42194.34'} |
 | DBO.VwRegionalSales | function | v3 | pass | OK | {'source': '3648', 'target': '3648.00'} |
@@ -52,6 +52,7 @@ Mode: `silent`  |  Cases: 68  Passed: 68  Failed: 0  Skipped: 0
 | DBO.uspGetBillOfMaterials | function | r2q | pass | OK | {'source': '0', 'target': '0'} |
 | DBO.uspGetBillOfMaterials | function | r3 | pass | OK | {'source': '2', 'target': '2'} |
 | DBO.uspGetBillOfMaterials | function | r3q | pass | OK | {'source': '3', 'target': '3.00'} |
+| DBO.uspGetBillOfMaterials | function | r4 | pass | OK | {'source_rows': 3, 'target_rows': 3, 'source_first': "(497, 939, 'ML Road Pedal', Decimal('1'), Decimal('27.568'), Decimal('62.09'), 1, 2)", 'target_first': "(4… |
 | DBO.uspGetManagerAuthors | function | r1 | pass | OK | {'source': '0', 'target': '0'} |
 | DBO.uspGetManagerAuthors | function | r2 | pass | OK | {'source': '0', 'target': '0'} |
 | DBO.uspGetManagerAuthors | function | r3 | pass | OK | {'source': '0', 'target': '0'} |
@@ -59,7 +60,7 @@ Mode: `silent`  |  Cases: 68  Passed: 68  Failed: 0  Skipped: 0
 | DBO.uspGetProductData | function | r1 | pass | OK | {'source': '50669716', 'target': '50669716'} |
 | DBO.uspGetTopRegion | function | r1 | pass | OK | {'source': '0', 'target': '0'} |
 | DBO.uspGetTopRegion | function | r2 | pass | OK | {'source': '0', 'target': '0'} |
-| DBO.uspGetTopRegion | function | r3 | pass | OK | {'source': '4', 'target': '4'} |
+| DBO.uspGetTopRegion | function | r3 | pass | OK | {'source': '3', 'target': '3'} |
 | DBO.uspGetWhereUsedProductID | function | r1 | pass | OK | {'source': '0', 'target': '0'} |
 | DBO.uspGetWhereUsedProductID | function | r1q | pass | OK | {'source': '0', 'target': '0'} |
 | DBO.uspGetWhereUsedProductID | function | r2 | pass | OK | {'source': '2', 'target': '2'} |

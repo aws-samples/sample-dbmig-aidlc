@@ -6,6 +6,8 @@
 **Conversion category:** Automatic (Five-star compatibility, five-star automation)
 **SCT automation:** N/A. No key differences (but returned data types may differ and require application changes).
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): `PERCENTILE_CONT … OVER` not allowed (verified) and its rewrite, `GROUPING_ID`, `NEXT VALUE FOR`, PG-only frame features, return types.
+
 ## SQL Server
 
 Window functions use an `OVER` clause to define the window/frame. Supported:
@@ -99,4 +101,10 @@ FROM OrderItems;
 ## Conversion notes
 - Syntax is highly compatible; most window functions migrate unchanged.
 - Returned data types may differ between SQL Server and PostgreSQL (e.g., numeric formatting), which can require application changes — examine each function by type and verify output.
-- SQL Server-only functions without direct PostgreSQL window equivalents: `CHECKSUM_AGG`, `GROUPING_ID`, `PERCENTILE_CONT`, `PERCENTILE_DISC`, `NEXT_VALUE_FOR`. PostgreSQL adds `nth_value`.
+- SQL Server functions without a direct PostgreSQL *window* form:
+  - `PERCENTILE_CONT`/`PERCENTILE_DISC` **exist** as ordered-set aggregates (`percentile_cont(0.5) WITHIN GROUP (ORDER BY x)`), but PostgreSQL does **not** allow them with `OVER (…)` (verified: `OVER is not supported for ordered-set aggregate`). Rewrite `PERCENTILE_CONT(…) WITHIN GROUP (…) OVER (PARTITION BY d)` as a `GROUP BY d` subquery joined back, or `LATERAL`.
+  - `GROUPING_ID` → `GROUPING(a, b, …)` (same bitmask).
+  - `NEXT VALUE FOR seq` → `nextval('seq')`.
+  - `CHECKSUM_AGG` → no equivalent.
+- PostgreSQL adds `nth_value`, `GROUPS` frames, `EXCLUDE` frame options, `FILTER (WHERE …)` on aggregates, and `any_value` (PG 16).
+- `COUNT`/`RANK`/`ROW_NUMBER` return `bigint` (SQL Server `int`); `AVG(int)` returns `numeric`.

@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (★★★★ feature compatibility, ★★★★ automation)
 **SCT automation:** N/A — MySQL doesn't support `ERROR LOG` and subquery (DML_table_expression) options.
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Verified ON DUPLICATE KEY UPDATE referencing source columns; INSERT IGNORE side effects; priority modifiers are no-ops on InnoDB.
+
 ## Oracle
 
 `INSERT FROM SELECT` inserts multiple rows from another table. Column order and datatypes must match between target and source.
@@ -76,5 +78,7 @@ VALUES (120, 'Kenny', 10000, 90);
 ## Conversion notes
 - Basic explicit/implicit `INSERT ... SELECT` migrates unchanged.
 - Oracle subquery-as-insert-target is unsupported — rewrite as a plain `INSERT INTO table`.
-- Replace Oracle `LOG ERRORS`/`DBMS_ERRLOG` error logging with `ON DUPLICATE KEY UPDATE` (or `INSERT IGNORE`) to handle constraint violations.
+- Replace Oracle `LOG ERRORS`/`DBMS_ERRLOG` error logging with `ON DUPLICATE KEY UPDATE` (or `INSERT IGNORE`) to handle constraint violations. `INSERT IGNORE` silently drops the failing rows **and** downgrades other errors (bad dates, truncation, NULL into NOT NULL) to warnings that store adjusted values; nothing is logged. If the Oracle code reads the error-log table, insert the failing rows into an error table yourself (pre-check with `NOT EXISTS`/validation predicates).
+- In `INSERT … SELECT … ON DUPLICATE KEY UPDATE`, the `UPDATE` clause can reference the source table's columns (verified on 3.13 and 8.4: `salary = employees.salary`), as in the example above.
+- `LOW_PRIORITY`/`HIGH_PRIORITY` have no effect on InnoDB; drop them.
 - Oracle multi-table `conditional_insert_clause` (`ALL`/`FIRST`/`ELSE`) is unsupported — rewrite as separate statements.

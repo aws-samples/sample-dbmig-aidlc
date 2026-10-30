@@ -6,6 +6,8 @@
 **Conversion category:** N/A (three-star feature compatibility)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): `amcheck` for DBCC CHECKDB (verified), `REINDEX CONCURRENTLY` (verified), correct shrink semantics, `pg_cron` scheduling, autovacuum replaces most plans.
+
 Key difference: Backups use Amazon RDS services; table maintenance uses SQL commands.
 
 ## SQL Server
@@ -66,7 +68,7 @@ Examples:
 - **Create a manual snapshot (console):** RDS → Databases → choose your Aurora PostgreSQL instance → Instance actions → **Take snapshot**.
 - **Restore a snapshot (console):** RDS → Snapshots → choose the snapshot → Actions → **Restore snapshot** (creates a new instance) → complete the wizard → **Restore DB Instance**.
 
-For all other maintenance tasks, use a third-party or custom application scheduler.
+For all other maintenance tasks, schedule SQL with **`pg_cron`** (available on Aurora 18; see `sql-server-agent.md`). Use AWS Backup for backup schedules beyond the automated-backup window.
 
 **Rebuild / reorganize tables** — Aurora PostgreSQL supports `VACUUM`, `ANALYZE`, and `REINDEX` (similar to SQL Server's index REORGANIZE):
 
@@ -80,23 +82,24 @@ Convert deprecated DBCC commands:
 
 | Deprecated DBCC command | Aurora PostgreSQL equivalent |
 |---|---|
-| `DBCC DBREINDEX` | `REINDEX INDEX` or `REINDEX TABLE` |
-| `DBCC INDEXDEFRAG` | `VACUUM table_name` or `VACUUM table_name column_name` |
+| `DBCC DBREINDEX` | `REINDEX INDEX` or `REINDEX TABLE` (add `CONCURRENTLY` to avoid blocking writes, verified) |
+| `DBCC INDEXDEFRAG` / `ALTER INDEX … REORGANIZE` | `REINDEX INDEX CONCURRENTLY` (VACUUM does not defragment indexes) |
 
 ### Summary
 
 | Task | SQL Server | Aurora PostgreSQL |
 |---|---|---|
 | Rebuild or reorganize indexes | `ALTER INDEX` or `ALTER TABLE` | `REINDEX INDEX` or `REINDEX TABLE` |
-| Decrease data file size (remove empty pages) | `DBCC SHRINKDATABASE` / `DBCC SHRINKFILE` | `VACUUM` |
+| Decrease data file size (remove empty pages) | `DBCC SHRINKDATABASE` / `DBCC SHRINKFILE` | `VACUUM` only makes space reusable; `VACUUM FULL` (exclusive lock) or `pg_repack` (online, available on Aurora 18) returns it. The Aurora cluster volume shrinks automatically when space is freed |
 | Update statistics | `UPDATE STATISTICS` or `sp_updatestats` | `ANALYZE` |
-| Database consistency checks | `DBCC CHECKDB` / `DBCC CHECKTABLE` | N/A |
+| Database consistency checks | `DBCC CHECKDB` / `DBCC CHECKTABLE` | **`amcheck`** (1.5 on Aurora 18): `bt_index_check(idx)` / `bt_index_parent_check(idx)` for B-tree indexes and `verify_heapam(table)` for heap pages. On Aurora 18.6 the one-argument `bt_index_*` forms are executable by the master user; the other signatures (`bt_index_check(idx, true)`, `verify_heapam`) return `permission denied` until the master user grants itself `EXECUTE` (`GRANT EXECUTE ON FUNCTION verify_heapam(regclass,boolean,boolean,text,bigint,bigint) TO <master>`). After that grant they ran successfully (verified). Aurora storage also self-repairs corrupt segments |
 | Back up database and transaction log | `BACKUP DATABASE` / `BACKUP LOG` | Automatically (e.g., via AWS CLI / RDS snapshots) |
-| Run Agent jobs for custom actions | `sp_start_job` / scheduled | N/A |
+| Run Agent jobs for custom actions | `sp_start_job` / scheduled | `pg_cron` jobs, or EventBridge Scheduler + Lambda |
 
 ## Conversion notes
 
 - AWS service replacement: Amazon RDS automated snapshots + point-in-time restore replace `BACKUP DATABASE`/`BACKUP LOG` maintenance tasks.
 - Table maintenance maps to SQL commands: `VACUUM` (reclaim space / shrink), `ANALYZE` (statistics), `REINDEX` (rebuild indexes).
-- No equivalent for database consistency checks (`DBCC CHECKDB`) or in-engine Agent job scheduling — use external/custom schedulers (or scheduled Lambda).
+- Consistency checks → `amcheck`; in-engine scheduling → `pg_cron`. Both are available on Aurora PostgreSQL 18 (the original "no equivalent" note is outdated).
+- Most index/statistics maintenance plans become unnecessary because **autovacuum** handles dead tuples and statistics continuously. Tune it per large table (`autovacuum_vacuum_scale_factor`, PG 18 `autovacuum_vacuum_max_threshold`) instead of scheduling nightly jobs.
 - Snapshots are instance-level, not per-database.

@@ -1,0 +1,200 @@
+project: aw-dms-sc-20261030
+schema: DBO
+phase: construction-code
+origin: dms_sc
+generated_at: '2026-10-30T09:39:14Z'
+provider: dms_sc
+model: AURORA_POSTGRESQL
+unit_count: 7
+units:
+- name: uspsearchcandidateresumes
+  object_type: PROCEDURE
+  schema: DBO
+  prompt_file: ''
+  output_file: code/adventureworks_dbo/procedure_uspsearchcandidateresumes__57792d2a.sql
+  status: needs_human
+  origin: dms_sc
+  disposition: manual
+  source_id: Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.dbo.Procedures.uspSearchCandidateResumes
+  target_name: uspsearchcandidateresumes
+  target_type: PROCEDURE
+  has_genai: false
+  dms_apply_status: SUCCESS
+  action_items:
+  - code: '7644'
+    severity: CRITICAL
+    topic: EXECUTE
+    message: PostgreSQL doesn't support the EXECUTE AS CALLER clause. Convert your
+      source code manually.
+    action: Convert your source code manually.
+    source: inline
+  - code: '7811'
+    severity: CRITICAL
+    topic: BUILT-IN SQL FUNCTIONS
+    message: PostgreSQL doesn't support the SERVERPROPERTY(NVARCHAR) function. DMS
+      SC skips this unsupported function in the converted code. Create a user-defined
+      function to replace the unsupported function.
+    action: Create a user-defined function to replace the unsupported function.
+    source: inline
+  - code: '9996'
+    severity: CRITICAL
+    topic: Converter
+    message: Transformer error occurred in innerJoinTableSource. Please submit report
+      to developers.
+    action: Please submit report to developers.
+    source: inline
+  - code: '9997'
+    severity: INFO
+    topic: Resolver Error
+    message: Unable to resolve objects
+    action: Verify the object name and conversion scope, grant the source database
+      user access if needed, and reconvert. Review runtime-built or unsupported references
+      manually.
+    source: messageActions
+  needs_manual_conversion: true
+- name: uspprinterror
+  object_type: PROCEDURE
+  schema: DBO
+  prompt_file: ''
+  output_file: code/adventureworks_dbo/procedure_uspprinterror__7afea95c.sql
+  status: applied
+  origin: dms_sc
+  disposition: accept
+  source_id: Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.dbo.Procedures.uspPrintError
+  target_name: uspprinterror
+  target_type: PROCEDURE
+  has_genai: false
+  dms_apply_status: SUCCESS
+  action_items: []
+- name: uspgetemployeemanagers
+  object_type: PROCEDURE
+  schema: DBO
+  prompt_file: ''
+  output_file: code/adventureworks_dbo/procedure_uspgetemployeemanagers__6511df64.sql
+  status: needs_human
+  origin: dms_sc
+  disposition: manual
+  source_id: Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.dbo.Procedures.uspGetEmployeeManagers
+  target_name: uspgetemployeemanagers
+  target_type: PROCEDURE
+  has_genai: false
+  dms_apply_status: SUCCESS
+  action_items:
+  - code: '9996'
+    severity: CRITICAL
+    topic: Converter
+    message: Transformer error occurred in statement. Please submit report to developers.
+    action: Please submit report to developers.
+    source: inline
+  - code: '7708'
+    severity: CRITICAL
+    topic: DATATYPES
+    message: DMS SC can't convert the usage of an unsupported data type
+    action: Convert your source code manually.
+    source: messageActions
+  - code: '7938'
+    severity: INFO
+    topic: DML
+    message: DMS SC can't convert OPTION clauses
+    action: Convert your source code manually.
+    source: messageActions
+  needs_manual_conversion: true
+- name: uspgetbillofmaterials
+  object_type: PROCEDURE
+  schema: DBO
+  prompt_file: ''
+  output_file: code/adventureworks_dbo/procedure_uspgetbillofmaterials__e5f40f49.sql
+  status: needs_human
+  origin: dms_sc
+  disposition: manual
+  source_id: Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.dbo.Procedures.uspGetBillOfMaterials
+  target_name: uspgetbillofmaterials
+  target_type: PROCEDURE
+  has_genai: false
+  dms_apply_status: SUCCESS
+  action_items:
+  - code: '7938'
+    severity: INFO
+    topic: DML
+    message: DMS SC can't convert OPTION clauses
+    action: Convert your source code manually.
+    source: messageActions
+  needs_manual_conversion: true
+- name: uspgetwhereusedproductid
+  object_type: PROCEDURE
+  schema: DBO
+  prompt_file: ''
+  output_file: code/adventureworks_dbo/procedure_uspgetwhereusedproductid__b1500bb1.sql
+  status: needs_human
+  origin: dms_sc
+  disposition: manual
+  source_id: Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.dbo.Procedures.uspGetWhereUsedProductID
+  target_name: uspgetwhereusedproductid
+  target_type: PROCEDURE
+  has_genai: false
+  dms_apply_status: SUCCESS
+  action_items:
+  - code: '7938'
+    severity: INFO
+    topic: DML
+    message: DMS SC can't convert OPTION clauses
+    action: Convert your source code manually.
+    source: messageActions
+  needs_manual_conversion: true
+- name: uspgetmanageremployees
+  object_type: PROCEDURE
+  schema: DBO
+  prompt_file: ''
+  output_file: code/adventureworks_dbo/procedure_uspgetmanageremployees__e807c0a4.sql
+  status: needs_human
+  origin: dms_sc
+  disposition: manual
+  source_id: Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.dbo.Procedures.uspGetManagerEmployees
+  target_name: uspgetmanageremployees
+  target_type: PROCEDURE
+  has_genai: false
+  dms_apply_status: SUCCESS
+  action_items:
+  - code: '9996'
+    severity: CRITICAL
+    topic: Converter
+    message: Transformer error occurred in statement. Please submit report to developers.
+    action: Please submit report to developers.
+    source: inline
+  - code: '7708'
+    severity: CRITICAL
+    topic: DATATYPES
+    message: DMS SC can't convert the usage of an unsupported data type
+    action: Convert your source code manually.
+    source: messageActions
+  - code: '7938'
+    severity: INFO
+    topic: DML
+    message: DMS SC can't convert OPTION clauses
+    action: Convert your source code manually.
+    source: messageActions
+  needs_manual_conversion: true
+- name: usplogerror
+  object_type: PROCEDURE
+  schema: DBO
+  prompt_file: ''
+  output_file: code/adventureworks_dbo/procedure_usplogerror__d3186d8a.sql
+  status: applied
+  origin: dms_sc
+  disposition: manual
+  source_id: Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.dbo.Procedures.uspLogError
+  target_name: usplogerror
+  target_type: PROCEDURE
+  has_genai: false
+  dms_apply_status: SUCCESS
+  action_items:
+  - code: '7811'
+    severity: CRITICAL
+    topic: BUILT-IN SQL FUNCTIONS
+    message: PostgreSQL doesn't support the XACT_STATE() function. DMS SC skips this
+      unsupported function in the converted code. Create a user-defined function to
+      replace the unsupported function.
+    action: Create a user-defined function to replace the unsupported function.
+    source: inline
+  needs_manual_conversion: true
+  reconverted: true

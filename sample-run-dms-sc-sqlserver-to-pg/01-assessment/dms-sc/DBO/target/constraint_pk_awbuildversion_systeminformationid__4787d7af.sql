@@ -1,0 +1,2 @@
+ALTER TABLE adventureworks_dbo.awbuildversion
+ADD CONSTRAINT pk_awbuildversion_systeminformationid_1406628054 PRIMARY KEY (systeminformationid);

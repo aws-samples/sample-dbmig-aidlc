@@ -1,0 +1,55 @@
+object: uspUpdateEmployeePersonalInfo
+schema: HUMANRESOURCES
+type: procedure
+notes: >
+  MANUAL reconversion (EXECUTE AS CALLER dropped). Also covers the VERIFY constraints
+  CK_Employee_Gender and CK_Employee_MaritalStatus (7795): the source CHECK uses
+  upper(Gender) IN ('M','F'); DMS SC wrote lower(upper(gender)) = lower('M'). Lowercase
+  input must be accepted on both; an invalid value must be rejected and logged on both.
+  Real employee 4 (M / S, NationalIDNumber 112457891, born 1974-12-23).
+cases:
+- id: c1
+  description: lowercase gender and marital status are accepted (case-insensitive CHECK)
+  call_source: >
+    EXEC HumanResources.uspUpdateEmployeePersonalInfo @BusinessEntityID = 4,
+         @NationalIDNumber = N'112457891', @BirthDate = '1974-12-23', @MaritalStatus = N'm', @Gender = N'f'
+  call_target: >
+    CALL adventureworks_humanresources.uspupdateemployeepersonalinfo(4, '112457891', '1974-12-23', 'm', 'f')
+  verify:
+  - name: gender
+    source_sql: SELECT Gender FROM HumanResources.Employee WHERE BusinessEntityID = 4
+    target_sql: SELECT gender FROM adventureworks_humanresources.employee WHERE businessentityid = 4
+  - name: maritalstatus
+    source_sql: SELECT MaritalStatus FROM HumanResources.Employee WHERE BusinessEntityID = 4
+    target_sql: SELECT maritalstatus FROM adventureworks_humanresources.employee WHERE businessentityid = 4
+  - name: errorlog_rows
+    source_sql: SELECT COUNT(*) FROM dbo.ErrorLog
+    target_sql: SELECT count(*) FROM adventureworks_dbo.errorlog
+- id: c2
+  description: invalid gender 'X' violates CK_Employee_Gender -> row unchanged, one ErrorLog row
+  call_source: >
+    EXEC HumanResources.uspUpdateEmployeePersonalInfo @BusinessEntityID = 4,
+         @NationalIDNumber = N'112457891', @BirthDate = '1974-12-23', @MaritalStatus = N'S', @Gender = N'X'
+  call_target: >
+    CALL adventureworks_humanresources.uspupdateemployeepersonalinfo(4, '112457891', '1974-12-23', 'S', 'X')
+  verify:
+  - name: gender
+    source_sql: SELECT Gender FROM HumanResources.Employee WHERE BusinessEntityID = 4
+    target_sql: SELECT gender FROM adventureworks_humanresources.employee WHERE businessentityid = 4
+  - name: errorlog_rows
+    source_sql: SELECT COUNT(*) FROM dbo.ErrorLog
+    target_sql: SELECT count(*) FROM adventureworks_dbo.errorlog
+- id: c3
+  description: invalid marital status 'X' violates CK_Employee_MaritalStatus -> rejected and logged
+  call_source: >
+    EXEC HumanResources.uspUpdateEmployeePersonalInfo @BusinessEntityID = 4,
+         @NationalIDNumber = N'112457891', @BirthDate = '1974-12-23', @MaritalStatus = N'X', @Gender = N'M'
+  call_target: >
+    CALL adventureworks_humanresources.uspupdateemployeepersonalinfo(4, '112457891', '1974-12-23', 'X', 'M')
+  verify:
+  - name: maritalstatus
+    source_sql: SELECT MaritalStatus FROM HumanResources.Employee WHERE BusinessEntityID = 4
+    target_sql: SELECT maritalstatus FROM adventureworks_humanresources.employee WHERE businessentityid = 4
+  - name: errorlog_rows
+    source_sql: SELECT COUNT(*) FROM dbo.ErrorLog
+    target_sql: SELECT count(*) FROM adventureworks_dbo.errorlog

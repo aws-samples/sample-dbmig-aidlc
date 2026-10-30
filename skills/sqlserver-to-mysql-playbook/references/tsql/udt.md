@@ -6,6 +6,8 @@
 **Conversion category:** Manual (Three star feature compatibility)
 **SCT automation:** Three star automation level
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): UDTs and TVPs still unsupported on 3 / 8.4; JSON parameter + JSON_TABLE as the preferred TVP replacement (toolkit convention), CHECK for scalar UDT rules.
+
 ## SQL Server
 
 User-defined types encapsulate custom data types and add NULL constraints; all based on existing system types. SQL Server also supports table-valued UDTs for passing a set of values to a stored procedure, and CLR-associated types. Memory-optimized types (2014+) support memory-optimized tables.
@@ -55,7 +57,7 @@ EXECUTE [InsertOrderItems] @OrderItems = @OrderItems;
 
 ## MySQL
 
-Aurora MySQL 5.7 does **not** support user-defined types or table-valued parameters (no indication of support in version 8). Memory-optimized engines are also unsupported.
+Aurora MySQL (5.7, 3 and 8.4) does **not** support user-defined types (`CREATE TYPE`) or table-valued parameters. Memory-optimized engines are also unsupported.
 
 ### Examples
 
@@ -104,7 +106,18 @@ CALL LoopItems();
 ## Conversion notes
 
 - Scalar UDT → replace the type name with its base type plus optional NULL/NOT NULL constraints.
-- Table-valued UDT parameter → workarounds: temporary tables to hold data; or pass CSV/XML/JSON string parameters and parse them in the procedure; or for small sets, call the procedure row-by-row with standard parameters.
+- Table-valued UDT parameter → preferred on Aurora MySQL 3 / 8.4: a **`JSON` parameter** expanded set-based with `JSON_TABLE` (toolkit convention; `engines/sqlserver-to-mysql/checks/non-portable-constructs.md`), for example:
+  ```sql
+  CREATE PROCEDURE InsertOrderItems(IN p_items JSON)
+  INSERT INTO OrderItems (OrderID, Item, Quantity)
+  SELECT j.OrderID, j.Item, j.Quantity
+  FROM JSON_TABLE(p_items, '$[*]' COLUMNS (
+         OrderID INT PATH '$.OrderID', Item VARCHAR(20) PATH '$.Item', Quantity SMALLINT PATH '$.Quantity')) j;
+  -- CALL InsertOrderItems('[{"OrderID":1,"Item":"M8 Bolt","Quantity":100}]');
+  ```
+  Alternatives: a temporary table filled by the caller (session-scoped), or row-by-row calls. The cursor loop shown above is the 5.7-era workaround.
+- Scalar UDTs with rules/defaults → base type plus `CHECK` constraint (enforced on 3 / 8.4) and `DEFAULT`; there is no domain object, so repeat the definition on each column.
+- CLR UDTs (`hierarchyid`, `geography`) → toolkit map (`varchar(255)` / `geometry`) and a redesign.
 - Memory-optimized tables → convert to disk-based tables.
 
 | SQL Server | Aurora MySQL | Comments |

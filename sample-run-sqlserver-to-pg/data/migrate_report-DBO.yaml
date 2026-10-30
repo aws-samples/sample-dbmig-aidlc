@@ -52,6 +52,10 @@ tables:
     copied: 10
     status: ok
     error: null
+  ProductSales:
+    copied: 15
+    status: ok
+    error: null
   Person:
     copied: 930
     status: ok
@@ -60,20 +64,16 @@ tables:
     copied: 504
     status: ok
     error: null
-  ProductSales:
-    copied: 15
-    status: ok
-    error: null
   ReferenceData:
     copied: 24
     status: ok
     error: null
-  ShoppingCart:
-    copied: 0
-    status: ok
-    error: null
   Shopping:
     copied: 95
+    status: ok
+    error: null
+  ShoppingCart:
+    copied: 0
     status: ok
     error: null
   ShoppingCartItem:
@@ -146,6 +146,11 @@ units:
   copied: 10
   status: ok
   error: null
+- table: ProductSales
+  shard: null
+  copied: 15
+  status: ok
+  error: null
 - table: Person
   shard: null
   copied: 930
@@ -156,24 +161,19 @@ units:
   copied: 504
   status: ok
   error: null
-- table: ProductSales
-  shard: null
-  copied: 15
-  status: ok
-  error: null
 - table: ReferenceData
   shard: null
   copied: 24
   status: ok
   error: null
-- table: ShoppingCart
-  shard: null
-  copied: 0
-  status: ok
-  error: null
 - table: Shopping
   shard: null
   copied: 95
+  status: ok
+  error: null
+- table: ShoppingCart
+  shard: null
+  copied: 0
   status: ok
   error: null
 - table: ShoppingCartItem

@@ -1,2 +1,0 @@
-ALTER TABLE humanresources.employeepayhistory
-ADD CONSTRAINT pk_employeepayhistory_businessentityid_ratechangedate_1710629137 PRIMARY KEY (businessentityid, ratechangedate);

@@ -1,0 +1,3 @@
+CREATE INDEX ix_jobcandidate_ix_jobcandidate_businessentityid
+ON adventureworks_humanresources.jobcandidate
+USING BTREE (businessentityid ASC);

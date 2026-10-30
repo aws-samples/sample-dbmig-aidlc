@@ -6,6 +6,8 @@
 **Conversion category:** Manual (three-star feature compatibility) — MySQL has no LogMiner; a workaround exists (mysqlbinlog).
 **SCT automation:** N/A
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): log_output default is FILE on Aurora 3 / 8.4 (verified, corrected); binlog off by default, retention unset, 8.4 statement names, DECODE-ROWS, CDC tools, CloudWatch log export types — verified.
+
 ## Oracle
 
 Oracle Log Miner queries online and archived redo logs through a SQL interface, allowing historical analysis of past DML.
@@ -60,7 +62,7 @@ Logging-control parameters (database parameter group):
 - `slow_query_log` (0/1), `general_log` (0/1)
 - `long_query_time` (seconds; default 10; min 0; microsecond resolution only with `log_output=FILE`)
 - `log_queries_not_using_indexes` (0/1)
-- `log_output` — `TABLE` (writes to `mysql.general_log` / `mysql.slow_log`, default), `FILE` (filesystem, rotated hourly), or `NONE`.
+- `log_output` — `TABLE` (writes to `mysql.general_log` / `mysql.slow_log`), `FILE` (default on Aurora MySQL 3 and 8.4, verified; required for CloudWatch Logs export), or `NONE`.
 
 Check current logging:
 
@@ -80,5 +82,10 @@ Logs can also be published to Amazon CloudWatch Logs for real-time analysis, ala
 
 - Replace Log Miner DML reconstruction (`SQL_REDO`/`SQL_UNDO` from `V$LOGMNR_CONTENTS`) with **mysqlbinlog** reading the binary log.
 - Ensure the binary log is enabled and set `binlog retention hours` long enough to download logs before RDS purges them; monitor storage usage.
+- On Aurora MySQL 3 / 8.4 binary logging is **off by default** (`log_bin` = 0, `binlog_format` = `ROW`, verified) and `binlog retention hours` is unset (`mysql.rds_show_configuration()`, verified). Turn it on with `binlog_format` in the DB cluster parameter group (reboot) only when needed: it adds write overhead on Aurora.
+- On Aurora MySQL 8.4 the replication statements use the new names (`SHOW BINARY LOG STATUS`, `SHOW REPLICA STATUS`); `SHOW MASTER STATUS` is a syntax error (verified). Use a `mysqlbinlog` client from MySQL 8.4 against 8.4.
+- `mysqlbinlog --verbose --base64-output=DECODE-ROWS` shows row images as pseudo-SQL — the closest to `SQL_REDO`; there is no `SQL_UNDO` (build it from the before-images, or use Backtrack / PITR to undo).
+- For continuous change capture, use AWS DMS or Debezium on the binary log rather than parsing it yourself.
+- Slow and general logs, audit (Advanced Auditing, `server_audit_logging`) and error logs can be exported to CloudWatch Logs (export types `audit`, `error`, `general`, `slowquery`, `iam-db-auth-error`, `instance` on both versions, verified).
 - Use `log_output=TABLE` to query general/slow logs as tables (closest to Oracle's SQL-interface querying); use CloudWatch Logs for monitoring/alerting.
 - The binlog format is event/statement based, not a SQL `V$` view — analysis tooling differs.

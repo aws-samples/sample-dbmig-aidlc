@@ -94,6 +94,9 @@ class ImportResult:
     objects: List[DmsScObject] = field(default_factory=list)
     # action items that could not be attached to a parsed object (schema/column level)
     unmatched_action_items: Dict[str, List[ActionItem]] = field(default_factory=dict)
+    # target nodes ignored because a NEWER conversion of the same source object exists
+    # (a project re-converted after e.g. a schema-rename rule keeps both trees in t-*/)
+    superseded_targets: List[str] = field(default_factory=list)
 
     def schemas(self) -> List[str]:
         seen = []

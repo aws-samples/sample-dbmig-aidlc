@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (four-star compatibility — storage-level encryption managed by Amazon RDS)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): encrypted targets by default, TLS defaults (`rds.force_ssl=1`), coverage of backups/clones.
+
 ## SQL Server
 
 Transparent Data Encryption (TDE) protects data at rest in case an attacker obtains the physical media containing the database files. It requires no application changes and is transparent to users — the storage engine encrypts/decrypts data on the fly. Data is not encrypted in memory or on the network. TDE can be turned on/off per database.
@@ -57,3 +59,6 @@ Limitations of RDS encrypted instances:
 - Plan key management up front: choose AWS-managed default key vs customer-managed KMS key (CMK) based on your control/rotation requirements.
 - To migrate an existing unencrypted instance to encrypted, use the snapshot → encrypted-copy → restore workflow.
 - No SQL Server certificate/key migration is needed — drop the TDE DDL and configure RDS encryption + KMS instead.
+- Always create Aurora PostgreSQL 18 migration targets with `--storage-encrypted` (and a customer-managed KMS key when the customer controls rotation or cross-account sharing).
+- Data in transit: Aurora PostgreSQL 18 defaults to `rds.force_ssl = 1` and `ssl_min_protocol_version = TLSv1.2`. SQL Server "Force Encryption" maps directly; clients should use `sslmode=verify-full` with the RDS CA bundle.
+- Backups, snapshots, replicas, clones and Global Database secondaries of an encrypted cluster are encrypted too (with Region-specific keys for cross-Region copies).

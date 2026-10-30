@@ -68,6 +68,24 @@ classified:
 - **MANUAL** — CRITICAL/HIGH or an explicit "convert manually" instruction → must be
   reconverted.
 
+**Look up the action-item codes before presenting.** Many DMS SC / SCT action items were
+written for older target versions and no longer apply on the current target (for MySQL:
+CTEs, window functions, `CHECK`, `LATERAL`, expression defaults are native on 3 / 8.4; some
+"supported" items are silent traps, such as `ON DELETE SET DEFAULT`). For the codes in the
+triage, read the pair's verified status table and code notes:
+
+| Pair | Action-code reference |
+|---|---|
+| Oracle → PostgreSQL | `skills/oracle-to-postgresql-playbook/references/tools/sct-action-code-index.md` |
+| SQL Server → PostgreSQL | `skills/sqlserver-to-postgresql-playbook/references/tools/sct-action-code-index.md` |
+| Oracle → MySQL | `skills/oracle-to-mysql-playbook/references/tools/sct-action-code-index.md` |
+| SQL Server → MySQL | `skills/sqlserver-to-mysql-playbook/references/tools/action-code.md` |
+
+Also read the target baseline (`target-baseline-*.md`, see the pair's playbook `SKILL.md`):
+DMS SC generates for Aurora MySQL 8.0.32 only, so an Aurora MySQL 8.4 target needs the 8.4
+breaks checked. Note in the triage which items the reference marks as obsolete or as traps;
+the disposition is still the user's call.
+
 **Present the triage and stop.** Summarize ACCEPT/VERIFY/MANUAL counts and the awareness
 items (especially objects DMS SC failed to apply). The `migration-report.md` Inception
 section is written for the human. Wait for approval.
@@ -100,6 +118,18 @@ DDL; the DMS SC partial output is a hint), then apply:
 
 ACCEPT and VERIFY objects are **not** reconverted.
 
+MANUAL *storage* objects (for example a table whose computed column DMS SC could not
+convert, 7708 on a column) are also listed in the code manifest: write the fix as DDL
+(usually `ALTER TABLE …`) into the unit's output file, set it `converted`, and apply it
+with `--code`. Action items on a **column** count for its table, so such a table triages
+MANUAL, not ACCEPT. Re-running `import-dms-sc` keeps any unit whose file you edited or that
+was already applied; only untouched DMS SC output is refreshed.
+
+Read DMS SC output that "applied" before trusting it. Seen in practice: a procedure whose
+only DML statement was commented out (a silent no-op), a computed column left as a plain,
+always-NULL column, and an error logger that referenced an undeclared variable and never
+logged. Row counts still match in all three cases; only equivalence tests catch them.
+
 ## Step 5 — Prepare the already-applied target for the data load (Validation)  →  GATE
 
 Because the schema already exists, capture and drop the load-hostile secondary objects
@@ -115,6 +145,14 @@ kept.
 
 Treat `pre-load-drop`/`post-load-restore` as gated: dry-run first (omit `--apply`), confirm,
 then apply.
+
+`migrate-data`, `compare` and `reset-identity` load into the DMS SC target schema recorded
+by the import (e.g. `adventureworks_person`); pass `--target-schema` to override.
+
+Triggers are dropped for the load, so anything a trigger computes on INSERT is **not**
+computed for loaded rows. DMS SC emulates computed columns with triggers (7679). Reconvert
+those to `GENERATED ALWAYS AS (…) STORED` columns, or re-run the computation after the load,
+and re-run `capture-target-objects` after any change to the target's secondary objects.
 
 ## Step 6 — Validate & prove (Validation)  →  GATE
 

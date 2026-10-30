@@ -1,0 +1,1 @@
+CREATE DOMAIN adventureworks_dbo.flag AS NUMERIC(1,0) NOT NULL;

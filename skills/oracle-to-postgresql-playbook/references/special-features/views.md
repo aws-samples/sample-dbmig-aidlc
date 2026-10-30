@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (Four-star feature compatibility, four-star automation)
 **SCT automation:** SCT action code index: Views.
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): PG 15 `security_invoker`, PG 17 `MERGE` on views (verified), `CREATE OR REPLACE` column rules (verified), `WITH READ ONLY` mapping.
+
 ## Oracle
 
 A view stores a named SQL query in the data dictionary; it holds no data (a virtual/logical table over one or more physical tables).
@@ -67,6 +69,9 @@ AS query
 - **DML on views:** simple views are **automatically updatable** (no `INSTEAD OF` trigger required, unlike Oracle complex views). A view can mix updatable and read-only columns; a column is updatable if it references an updatable base-table column.
 - Views with `INSTEAD INSERT` triggers can be used with `COPY`: `COPY view FROM source;`
 - PG 13+: rename view columns with `ALTER VIEW [ IF EXISTS ] name RENAME [ COLUMN ] column_name TO new_column_name` (before 13, had to use `ALTER TABLE`).
+- PG 15+: `WITH (security_invoker = true)` makes the view check base-table privileges as the **caller** instead of the view owner (Oracle views always use definer rights, which is also the PostgreSQL default).
+- PG 17+: `MERGE` works on (auto-updatable or trigger-updatable) views (verified on 18.6).
+- `CREATE OR REPLACE VIEW` can **add** columns at the end but cannot drop or reorder them (verified: `cannot drop columns from view`).
 
 Examples:
 ```sql
@@ -89,4 +94,5 @@ UPDATE VW_DEP SET LOCATION_ID=1600;
 - Key difference: PostgreSQL **simple views are automatically updatable**, whereas Oracle requires `INSTEAD OF` triggers for DML on complex views. PostgreSQL complex views still need `INSTEAD OF` triggers for DML.
 - Re-creating a view in PostgreSQL requires identical column structure; otherwise `DROP VIEW` first.
 - Oracle `FORCE`, `VISIBLE/INVISIBLE` column options have no direct PostgreSQL equivalent.
-- View column rename requires PG 13+ for `ALTER VIEW ... RENAME COLUMN`.
+- Oracle `WITH READ ONLY` → no clause. Grant only `SELECT` on the view (and revoke DML), or add an `INSTEAD OF` trigger that raises an error, because simple PostgreSQL views are updatable by default.
+- `WITH CHECK OPTION` maps directly (`LOCAL`/`CASCADED`, verified).

@@ -6,6 +6,8 @@
 **Conversion category:** Blocked (One star feature compatibility — feature not supported; requires workaround)
 **SCT automation:** No automation
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Recursive CTEs (native on 3 / 8.4) for multi-hop and SHORTEST_PATH, cycle handling, edge-constraint mapping.
+
 ## SQL Server
 
 SQL Server (2017+) offers graph database capabilities to model many-to-many relationships, integrated into T-SQL. A graph is a collection of nodes (entities) and edges (relationships); both can have properties. Distinguishing features: edges are first-class entities with attributes; a single edge can connect multiple nodes; easy pattern matching, multi-hop navigation, transitive closure, and polymorphic queries.
@@ -35,5 +37,6 @@ Currently, MySQL/Aurora MySQL does **not** provide native graph database feature
 
 - No native equivalent in Aurora MySQL — migration requires implementing a workaround.
 - Re-model node/edge tables as standard relational tables with junction/association tables for many-to-many relationships.
-- Replace `MATCH` pattern-matching / multi-hop navigation with relational joins or recursive queries at the application layer.
+- Replace `MATCH` pattern-matching with relational joins; multi-hop navigation / `SHORTEST_PATH` with **`WITH RECURSIVE`** CTEs in the database (native on Aurora MySQL 3 / 8.4, verified — see `../ansi-sql/cte.md`). Carry a path column (`CAST(id AS CHAR(1000))`) and stop cycles with `FIND_IN_SET` (verified pattern); raise `cte_max_recursion_depth` for deep graphs.
+- Node/edge tables: `$node_id`/`$edge_id` → the node primary key; edge constraints → foreign keys on the edge table (`ON DELETE CASCADE`), unless the edge table is partitioned (no FKs on partitioned tables).
 - For genuine graph workloads, consider a purpose-built graph database (e.g. Amazon Neptune) instead of forcing the model into Aurora MySQL.

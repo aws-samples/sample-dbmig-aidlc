@@ -1,2 +1,0 @@
-ALTER TABLE person.countryregion
-ADD CONSTRAINT pk_countryregion_countryregioncode_1518628453 PRIMARY KEY (countryregioncode);

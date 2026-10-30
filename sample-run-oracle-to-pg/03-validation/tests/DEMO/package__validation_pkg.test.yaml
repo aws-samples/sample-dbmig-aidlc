@@ -1,49 +1,25 @@
 object: VALIDATION_PKG
 schema: DEMO
 type: function
-notes: pure functions; real emails/ISBNs from CUSTOMERS/BOOKS plus edge cases (hyphens stripped by the 'g' regexp_replace, NULL, bounds).
+notes: >
+  Pure functions. Real emails/ISBNs from CUSTOMERS/BOOKS plus edge cases: hyphenated ISBN (REGEXP_REPLACE
+  must replace ALL matches -> 'g' flag), empty string ('' is NULL in Oracle; baseline Behavior differences),
+  NULL, invalid email, price boundaries.
 cases:
-  - id: v1
-    type: function
-    source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_EMAIL('john.doe@example.com') FROM dual"
-    target_sql: "SELECT demo.validation_pkg_is_valid_email('john.doe@example.com')"
-  - id: v2
-    type: function
-    source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_EMAIL('not-an-email') FROM dual"
-    target_sql: "SELECT demo.validation_pkg_is_valid_email('not-an-email')"
-  - id: v3
-    type: function
-    source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_ISBN('9780385534635') FROM dual"
-    target_sql: "SELECT demo.validation_pkg_is_valid_isbn('9780385534635')"
+  - {id: v1, source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_EMAIL('john.doe@example.com') FROM dual", target_sql: "SELECT demo.validation_pkg_is_valid_email('john.doe@example.com')"}
+  - {id: v2, source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_EMAIL('not-an-email') FROM dual", target_sql: "SELECT demo.validation_pkg_is_valid_email('not-an-email')"}
+  - {id: v3, description: empty string, source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_EMAIL('') FROM dual", target_sql: "SELECT demo.validation_pkg_is_valid_email('')"}
   - id: v4
-    type: function
-    source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_ISBN('978-0-525-62078-5') FROM dual"
-    target_sql: "SELECT demo.validation_pkg_is_valid_isbn('978-0-525-62078-5')"
-  - id: v5
-    type: function
-    source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_ISBN('abc') FROM dual"
-    target_sql: "SELECT demo.validation_pkg_is_valid_isbn('abc')"
-  - id: v6
-    type: function
-    source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_ISBN(NULL) FROM dual"
-    target_sql: "SELECT demo.validation_pkg_is_valid_isbn(NULL)"
-  - id: v7
-    type: function
-    source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_PRICE(10.95) FROM dual"
-    target_sql: "SELECT demo.validation_pkg_is_valid_price(10.95)"
+    description: every customer email
+    source_sql: "SELECT SUM(DEMO.VALIDATION_PKG.IS_VALID_EMAIL(email)) FROM DEMO.CUSTOMERS"
+    target_sql: "SELECT sum(demo.validation_pkg_is_valid_email(email)) FROM demo.customers"
+  - {id: v5, description: 13-digit ISBN, source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_ISBN('9780307408846') FROM dual", target_sql: "SELECT demo.validation_pkg_is_valid_isbn('9780307408846')"}
+  - {id: v6, description: hyphenated ISBN (all matches replaced), source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_ISBN('978-0-307-40884-6') FROM dual", target_sql: "SELECT demo.validation_pkg_is_valid_isbn('978-0-307-40884-6')"}
+  - {id: v7, description: empty string, source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_ISBN('') FROM dual", target_sql: "SELECT demo.validation_pkg_is_valid_isbn('')"}
   - id: v8
-    type: function
-    source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_PRICE(10000) FROM dual"
-    target_sql: "SELECT demo.validation_pkg_is_valid_price(10000)"
-  - id: v9
-    type: function
-    source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_PRICE(0) FROM dual"
-    target_sql: "SELECT demo.validation_pkg_is_valid_price(0)"
-  - id: v10
-    type: function
-    source_sql: "SELECT NVL(SUM(DEMO.VALIDATION_PKG.IS_VALID_EMAIL(email)),0) FROM DEMO.CUSTOMERS"
-    target_sql: "SELECT coalesce(sum(demo.validation_pkg_is_valid_email(email)),0) FROM demo.customers"
-  - id: v11
-    type: function
-    source_sql: "SELECT NVL(SUM(DEMO.VALIDATION_PKG.IS_VALID_ISBN(isbn)),0) FROM DEMO.BOOKS"
-    target_sql: "SELECT coalesce(sum(demo.validation_pkg_is_valid_isbn(isbn)),0) FROM demo.books"
+    description: every book ISBN
+    source_sql: "SELECT SUM(DEMO.VALIDATION_PKG.IS_VALID_ISBN(isbn)) FROM DEMO.BOOKS"
+    target_sql: "SELECT sum(demo.validation_pkg_is_valid_isbn(isbn)) FROM demo.books"
+  - {id: v9, source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_PRICE(10.95) FROM dual", target_sql: "SELECT demo.validation_pkg_is_valid_price(10.95)"}
+  - {id: v10, description: boundary 10000, source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_PRICE(10000) FROM dual", target_sql: "SELECT demo.validation_pkg_is_valid_price(10000)"}
+  - {id: v11, description: NULL, source_sql: "SELECT DEMO.VALIDATION_PKG.IS_VALID_PRICE(NULL) FROM dual", target_sql: "SELECT demo.validation_pkg_is_valid_price(NULL)"}

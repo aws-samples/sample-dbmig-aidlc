@@ -6,6 +6,8 @@
 **Conversion category:** N/A (infrastructure / managed-service topic)
 **SCT automation:** N/A — storage-level backup is managed by Amazon RDS
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): current instance class, AWS Backup, fast clones for COPY_ONLY-style safety copies, Backtrack is MySQL-only, `pg_dump` 18 options.
+
 ## SQL Server
 
 A *backup* is both the process of copying data and the resulting data set used for safekeeping and disaster recovery. SQL Server copies data and transaction logs to media (tapes, network shares, cloud storage, local files). Backups operate at the database or filegroup level — **table backups are not supported**.
@@ -150,7 +152,7 @@ aws rds restore-db-cluster-to-point-in-time \
 # Add an instance to the new/restored cluster
 aws rds create-db-instance --region us-east-1 --db-subnet-group default \
   --engine aurora-postgresql --db-cluster-identifier clustername-restore \
-  --db-instance-identifier newinstancenodeA --db-instance-class db.r4.large
+  --db-instance-identifier newinstancenodeA --db-instance-class db.r8g.large
 ```
 
 ## Conversion notes
@@ -163,3 +165,7 @@ aws rds create-db-instance --region us-east-1 --db-subnet-group default \
 - **Terminology mismatch:** a SQL Server *database snapshot* ≈ Aurora *database cloning*; an Aurora *database snapshot* ≈ a SQL Server `COPY_ONLY` backup.
 - **Point-in-time restore** maps to `restore-db-cluster-to-point-in-time` (always restores to a *new* cluster — you then add an instance), not an in-place `RESTORE … WITH STOPAT`.
 - **Aurora HA/backup specifics:** continuous incremental backup with no performance hit, 1–35 day PITR window, cross-Region/cross-account snapshot sharing, and copy-on-write cloning. Automated backups cannot be disabled and are deleted with the instance unless a final manual snapshot is taken.
+- Use **AWS Backup** for retention beyond 35 days, scheduled snapshots and cross-account/Region copies (replaces SQL Agent backup jobs and maintenance-plan backup tasks).
+- A SQL Server `COPY_ONLY` backup taken before a risky change → an Aurora **fast clone** (`restore-db-cluster-to-point-in-time --restore-type copy-on-write --use-latest-restorable-time`), ready in minutes.
+- In-place rewind (Aurora **Backtrack**) is **Aurora MySQL only**; Aurora PostgreSQL always restores to a new cluster.
+- Logical backups of single tables or schemas: `pg_dump` 18 (`-Fd -j N`, `-Z zstd`, `--filter`). Server-side file `COPY` is not available on Aurora.

@@ -6,6 +6,8 @@
 **Conversion category:** Manual (three-star feature compatibility — storage-level backup managed by Amazon RDS)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): ALTER INSTANCE DISABLE INNODB REDO_LOG not available on Aurora (verified error 1227 on both); AWS Backup, snapshot export, fast clone for VALIDATE/DUPLICATE, current instance class.
+
 ## Oracle
 
 Oracle Recovery Manager (RMAN) is the primary backup and recovery tool, with its own scripting syntax for full or incremental backups. It supports online backups when the database runs in Archived Log Mode.
@@ -90,7 +92,7 @@ Snapshots are the primary backup mechanism for Aurora — fast, nonintrusive, no
 - **Automated backups** — always enabled; no performance impact.
 - **Manual backups** — create anytime; restore creates a **new instance**; up to 100 manual snapshots per database.
 
-Note: In RDS for MySQL 8.0.21+, redo logging can be toggled with `ALTER INSTANCE {ENABLE|DISABLE} INNODB REDO_LOG` (intended to speed bulk loads into a new instance; uses the `INNODB_REDO_LOG_ENABLE` privilege and `Innodb_redo_log_enabled` status variable).
+Note: `ALTER INSTANCE DISABLE INNODB REDO_LOG` (an RDS for MySQL 8.0.21+ bulk-load option) is **not available on Aurora**: the master user lacks `INNODB_REDO_LOG_ENABLE` (error 1227, verified on 3.13 and 8.4.8), and Aurora's storage layer depends on the redo stream.
 
 ### Summary mapping
 
@@ -120,7 +122,7 @@ aws rds create-db-instance
   --engine aurora-mysql
   --db-cluster-identifier clustername-restore
   --db-instance-identifier newinstance-nodeA
-  --db-instance-class db.r4.large
+  --db-instance-class db.r7g.large      # r4 classes are retired
 ```
 
 Point-in-time restore:
@@ -139,10 +141,14 @@ mysqldump --column-statistics=0 DATABASE_TO_RESTORE -h RESTORED_INSTANCE_ENDPOIN
 mysql DB_NAME -h MYSQL_INSTANCE_ENDPOINT -P 3306 -u USER_NAME -p < /local_path/backup-file.sql
 ```
 
-(On RDS for MySQL 8.0, set `--column-statistics=0` when running mysqldump from binaries.)
+(`--column-statistics=0` is only needed when an 8.x client dumps a 5.7 server; MySQL Shell `util.dumpSchemas()`/`util.loadDump()` is faster for large databases.)
 
 ## Conversion notes
 - No automated conversion — RMAN scripts are replaced by RDS-managed snapshots, automated backups, and point-in-time restore.
 - Incremental backups (differential/cumulative), explicit archive-log backup/cleanup, and `CROSSCHECK`/`DELETE EXPIRED` have **no Aurora equivalent** — Aurora's continuous backup to the storage layer makes them unnecessary.
 - Restores always produce a **new cluster/instance**; there is no in-place `RESTORE`/`RECOVER`. Object-level (single PDB/database) recovery requires restoring a new cluster and copying the data back via mysqldump/mysql.
 - Existing automated RMAN shell scripts map most naturally to AWS CLI `rds` commands for migration.
+- Retention is 1–35 days for automated backups; use **AWS Backup** plans for longer retention, cross-Region and cross-account copies (≈ RMAN backup to tape/secondary site).
+- **Snapshot export to S3** (Parquet) gives a portable copy for analytics or long-term archive.
+- RMAN `VALIDATE`/`DUPLICATE` → restore or **fast-clone** the cluster and run checks there; clones are copy-on-write and take minutes.
+- Test restores regularly: restore time grows with database size, unlike Backtrack.

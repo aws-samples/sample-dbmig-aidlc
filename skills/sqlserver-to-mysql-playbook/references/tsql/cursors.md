@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (Three star feature compatibility)
 **SCT automation:** Three star automation level
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Verified SELECT INTO / NOT FOUND trap, error 1325, variable-bound cursor parameters, SCROLL rejected; CURRENT OF and dynamic-cursor workarounds.
+
 ## SQL Server
 
 Cursors provide row-by-row sequential access to a result set as an alternative to set-based operations. Capabilities: position at specific rows (absolute/relative offsets), retrieve a row or block, modify data at cursor position, isolate concurrent modifications. Usable in scripts, stored procedures, and triggers.
@@ -136,6 +138,15 @@ CALL LoopItems();
 - Move ad-hoc batch cursors into a stored procedure or function.
 - No `DEALLOCATE` — `CLOSE` deallocates (or auto-close at end of block).
 - Replace `@@FETCH_STATUS` loop control with a `CONTINUE HANDLER FOR NOT FOUND` setting a done flag.
+
+Verified on Aurora MySQL 3.13 and 8.4.8:
+- **Trap:** a `SELECT … INTO` that finds no rows raises the same NOT FOUND condition as an exhausted cursor, so inside the loop it sets `done` and ends the loop early (a 3-row cursor processed 1 row). Wrap such lookups in `BEGIN DECLARE CONTINUE HANDLER FOR NOT FOUND BEGIN END; SELECT … INTO …; END;` (then all 3 rows were processed).
+- Opening an already open cursor fails with error 1325 (track open state yourself instead of `CURSOR_STATUS()`).
+- Cursor parameters: reference routine parameters or local variables in the cursor's `SELECT`; they are bound at `OPEN` (verified). A cursor cannot be declared over a `PREPARE`d statement — for dynamic cursor SQL, `PREPARE` an `INSERT INTO temp_table SELECT …` and declare the cursor on the temporary table.
+- `SCROLL` and option keywords (`FAST_FORWARD`, `STATIC`, …) are syntax errors (verified for `SCROLL`); remove them.
+- `UPDATE … WHERE CURRENT OF c` → update by the primary key fetched from the cursor.
+- `CURSOR` output parameters / `sp_cursor*` → return a result set from the procedure (a final `SELECT`).
+- Most T-SQL cursor loops are row-by-row versions of set operations; replace them with `INSERT … SELECT` or multi-table `UPDATE … JOIN` when possible.
 
 | Feature | SQL Server | Aurora MySQL | Comments |
 |---|---|---|---|

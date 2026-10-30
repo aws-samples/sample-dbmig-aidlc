@@ -14,7 +14,13 @@
 Shared code context for this run: `migrations/<project>/02-construction/_context-code.md`. Read it once per session if you have not already — it holds the customer-specific rules (highest precedence), datatype map, engine checks and playbook index this task relies on. Do not skip it.
 
 === TASK ===
-Convert the following SQL Server stored code object to PostgreSQL (procedural SQL — e.g. PL/pgSQL). Return only valid PostgreSQL, ready to execute. Packages/modules have no direct equivalent: map each routine to its own function/procedure. Note any construct that needs human review in a SQL comment. Qualify every created object with the target schema `dbo` (derived from the source schema — do NOT use the connection's database/catalog name for qualification). Each object below is independent: convert each one and save it to its own output file (listed in the header).
+Convert the following SQL Server stored code object to PostgreSQL (PL/pgSQL). Return only valid PostgreSQL, ready to execute. Packages/modules have no direct equivalent: map each routine to its own function/procedure. Note any construct that needs human review in a SQL comment. Qualify every created object with the target schema `dbo` (derived from the source schema — do NOT use the connection's database/catalog name for qualification). Each object below is independent: convert each one and save it to its own output file (listed in the header).
+
+=== CONSTRUCTS DETECTED IN THIS PROMPT'S SOURCE (apply the matching guidance; open the named playbook file when the context is not enough, and cite it in the conversion log) ===
+- date functions → interval arithmetic / date_part; DATEDIFF counts boundaries (current_date - d::date for DAY) — see `skills/sqlserver-to-postgresql-playbook/references/tsql/date-time-functions.md`
+- CONVERT/FORMAT(MESSAGE) → CAST / to_char / format() (style codes and NULL rendering differ) — see `skills/sqlserver-to-postgresql-playbook/references/tsql/cast-and-convert.md`
+- string functions → repeat/lpad, octet_length, length (LEN ignores trailing spaces), strpos, overlay — see `skills/sqlserver-to-postgresql-playbook/references/tsql/string-functions.md`
+- SCHEMABINDING / SET NOCOUNT / EXECUTE AS → drop (no equivalent needed) — see `skills/sqlserver-to-postgresql-playbook/references/tsql/stored-procedures.md`
 
 --- SOURCE (FUNCTION) — dbo.ufnCalculateCustomerLifetimeValue ---
 CREATE   FUNCTION [dbo].[ufnCalculateCustomerLifetimeValue]

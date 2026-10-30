@@ -90,10 +90,11 @@ END reporting_pkg;
 
 --- CONVERTED TARGET CODE (PostgreSQL) — use these exact routine names and signatures in target_sql / call_target ---
 -- Package REPORTING_PKG (spec + body) flattened to <package>_<subprogram>.
--- PIPELINED book_sales_tab -> RETURNS TABLE. Column types match the query's ACTUAL types
--- (b.id bigint, b.title varchar(255), SUM(bigint) numeric, SUM(numeric) numeric) — a mismatch
--- only fails at execution. NOTE: ORDER BY total_sold DESC has no tie-breaker in the source;
--- tied rows may be returned in a different order on each engine (compare as a set).
+-- PIPELINED book_sales_tab -> RETURNS TABLE + RETURN QUERY (sql-plsql/user-defined-functions.md).
+-- Declared column types match the query's ACTUAL types (b.id bigint, b.title varchar,
+-- SUM(bigint) numeric, SUM(numeric) numeric); a mismatch would only fail at execution.
+-- FETCH FIRST n ROWS ONLY -> LIMIT. NOTE: ORDER BY total_sold DESC has no tie-breaker in the
+-- source, so tied rows may come back in a different order on each engine (compare as a set).
 CREATE OR REPLACE FUNCTION demo.reporting_pkg_get_top_books(p_limit numeric DEFAULT 10)
 RETURNS TABLE (book_id bigint, title varchar, total_sold numeric, revenue numeric)
 LANGUAGE plpgsql STABLE AS $$
@@ -111,10 +112,13 @@ BEGIN
     LIMIT p_limit;
 END $$;
 
--- OUT params; TRUNC(created_on) (DATE at midnight) -> date_trunc('day', ...) as timestamp(0).
+-- OUT params; TRUNC(created_on) -> date_trunc('day', ...) returned as timestamp(0) (Oracle DATE).
 CREATE OR REPLACE PROCEDURE demo.reporting_pkg_get_customer_stats(
-    p_customer_id numeric, OUT p_total_orders numeric, OUT p_total_spent numeric,
-    OUT p_avg_order numeric, OUT p_last_order_date timestamp(0))
+    p_customer_id numeric,
+    OUT p_total_orders numeric,
+    OUT p_total_spent numeric,
+    OUT p_avg_order numeric,
+    OUT p_last_order_date timestamp(0))
 LANGUAGE plpgsql AS $$
 BEGIN
     SELECT count(*), coalesce(sum(total_amount), 0), coalesce(avg(total_amount), 0),
@@ -166,14 +170,15 @@ END validation_pkg;
 
 --- CONVERTED TARGET CODE (PostgreSQL) — use these exact routine names and signatures in target_sql / call_target ---
 -- Package VALIDATION_PKG (spec + body) flattened to <package>_<subprogram>.
+-- REGEXP_LIKE -> ~ (regexp_like() is also native since PG 15). REGEXP_REPLACE replaces ALL matches
+-- in Oracle; PostgreSQL needs the 'g' flag (checks/non-portable-constructs.md).
+-- Oracle LENGTH('') is NULL; PostgreSQL length('') is 0. Both give 0 here (NULL IN (...) -> ELSE 0).
 CREATE OR REPLACE FUNCTION demo.validation_pkg_is_valid_email(p_email varchar)
 RETURNS numeric LANGUAGE plpgsql IMMUTABLE AS $$
 BEGIN
     RETURN CASE WHEN p_email ~ '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$' THEN 1 ELSE 0 END;
 END $$;
 
--- REGEXP_REPLACE replaces ALL matches in Oracle -> 'g' flag. Oracle '' is NULL, so an input that
--- strips to '' has LENGTH NULL there; in PG length('') = 0 — both fall to ELSE 0.
 CREATE OR REPLACE FUNCTION demo.validation_pkg_is_valid_isbn(p_isbn varchar)
 RETURNS numeric LANGUAGE plpgsql IMMUTABLE AS $$
 BEGIN
@@ -208,17 +213,20 @@ BEGIN
 END;
 
 --- CONVERTED TARGET CODE (PostgreSQL) — use these exact routine names and signatures in target_sql / call_target ---
--- COMMIT removed: caller owns the transaction (PostgreSQL idiom; keeps the rollback test harness valid).
--- Oracle DELETE FROM (subquery) -> direct DELETE. SYSDATE - n (days) -> localtimestamp(0) - n days.
+-- DEMO.ARCHIVE_OLD_ORDERS. SYSDATE - n -> localtimestamp(0) - n days. DELETE FROM (subquery)
+-- -> direct DELETE (checks/non-portable-constructs.md). DBMS_OUTPUT.PUT_LINE -> RAISE NOTICE;
+-- SQL%ROWCOUNT -> GET DIAGNOSTICS. COMMIT removed: the caller owns the transaction
+-- (sql-plsql/transaction-model.md), which also keeps the procedure testable in a rolled-back txn.
 CREATE OR REPLACE PROCEDURE demo.archive_old_orders(p_days_old numeric DEFAULT 365)
 LANGUAGE plpgsql AS $$
 DECLARE
-    v_cutoff_date timestamp(6);
+    v_cutoff_date demo.orders.created_on%TYPE;
     v_count bigint;
 BEGIN
     v_cutoff_date := localtimestamp(0) - p_days_old * interval '1 day';
     DELETE FROM demo.orders
-    WHERE created_on < v_cutoff_date AND status IN ('DELIVERED', 'CANCELLED');
+    WHERE created_on < v_cutoff_date
+      AND status IN ('DELIVERED', 'CANCELLED');
     GET DIAGNOSTICS v_count = ROW_COUNT;
     RAISE NOTICE 'Orders eligible for archiving: %', v_count;
 END $$;
@@ -234,12 +242,13 @@ BEGIN
 END;
 
 --- CONVERTED TARGET CODE (PostgreSQL) — use these exact routine names and signatures in target_sql / call_target ---
--- COMMIT removed: caller owns the transaction.
+-- DEMO.CLEAR_SHOPPING_CART. COMMIT removed (caller owns the transaction).
 CREATE OR REPLACE PROCEDURE demo.clear_shopping_cart(p_customer_id numeric)
 LANGUAGE plpgsql AS $$
 BEGIN
     DELETE FROM demo.shopping_cart_items
-    WHERE customer_id = p_customer_id AND is_wishlist_item = 0;
+    WHERE customer_id = p_customer_id
+      AND is_wishlist_item = 0;
 END $$;
 
 ### PROCEDURE DEMO.GENERATE_SALES_REPORT — write a **procedure**-shape spec
@@ -262,17 +271,21 @@ BEGIN
 END;
 
 --- CONVERTED TARGET CODE (PostgreSQL) — use these exact routine names and signatures in target_sql / call_target ---
--- OUT parameters: PostgreSQL 14+ procedure OUT params; call as
---   CALL demo.generate_sales_report(start, end, NULL, NULL, NULL);
+-- DEMO.GENERATE_SALES_REPORT. OUT parameters via CREATE PROCEDURE (PG 14+, baseline: Conversion
+-- defaults). DATE parameters -> timestamp(0).
 CREATE OR REPLACE PROCEDURE demo.generate_sales_report(
-    p_start_date timestamp(0), p_end_date timestamp(0),
-    OUT p_total_orders numeric, OUT p_total_revenue numeric, OUT p_avg_order_value numeric)
+    p_start_date timestamp(0),
+    p_end_date timestamp(0),
+    OUT p_total_orders numeric,
+    OUT p_total_revenue numeric,
+    OUT p_avg_order_value numeric)
 LANGUAGE plpgsql AS $$
 BEGIN
     SELECT count(*), coalesce(sum(total_amount), 0), coalesce(avg(total_amount), 0)
     INTO p_total_orders, p_total_revenue, p_avg_order_value
     FROM demo.orders
-    WHERE created_on BETWEEN p_start_date AND p_end_date AND status NOT IN ('CANCELLED');
+    WHERE created_on BETWEEN p_start_date AND p_end_date
+      AND status NOT IN ('CANCELLED');
 END $$;
 
 ### PROCEDURE DEMO.PROCESS_CUSTOMER_OFFER — write a **procedure**-shape spec
@@ -308,21 +321,25 @@ BEGIN
 END;
 
 --- CONVERTED TARGET CODE (PostgreSQL) — use these exact routine names and signatures in target_sql / call_target ---
--- COMMIT removed: caller owns the transaction.
--- RAISE_APPLICATION_ERROR(-20002) -> RAISE EXCEPTION ... ERRCODE 'U0002' (framework maps ORA-200nn -> U00nn).
+-- DEMO.PROCESS_CUSTOMER_OFFER. RAISE_APPLICATION_ERROR(-20002) -> RAISE EXCEPTION ... ERRCODE 'U0002'
+-- (mapping -200nn -> 'U00nn', used consistently). SYSTIMESTAMP into a TIMESTAMP column ->
+-- localtimestamp. COMMIT removed (caller owns the transaction).
 CREATE OR REPLACE PROCEDURE demo.process_customer_offer(
-    p_listing_id numeric, p_action varchar, p_admin_id numeric, p_notes varchar DEFAULT NULL)
+    p_listing_id numeric,
+    p_action varchar,
+    p_admin_id numeric,
+    p_notes varchar DEFAULT NULL)
 LANGUAGE plpgsql AS $$
 BEGIN
     IF p_action = 'APPROVE' THEN
         UPDATE demo.listings
-        SET status = 1, listing_type = 'STORE', processed_at = current_timestamp,
-            processed_by = p_admin_id, admin_notes = p_notes, updated_on = current_timestamp
+        SET status = 1, listing_type = 'STORE', processed_at = localtimestamp,
+            processed_by = p_admin_id, admin_notes = p_notes, updated_on = localtimestamp
         WHERE id = p_listing_id;
     ELSIF p_action = 'REJECT' THEN
         UPDATE demo.listings
-        SET status = 2, processed_at = current_timestamp,
-            processed_by = p_admin_id, admin_notes = p_notes, updated_on = current_timestamp
+        SET status = 2, processed_at = localtimestamp,
+            processed_by = p_admin_id, admin_notes = p_notes, updated_on = localtimestamp
         WHERE id = p_listing_id;
     ELSE
         RAISE EXCEPTION 'Invalid action. Use APPROVE or REJECT' USING ERRCODE = 'U0002';
@@ -331,10 +348,10 @@ END $$;
 
 --- SAMPLED REAL DATA (use these actual values) ---
 ### BOOKS  (columns: ID, TITLE, AUTHOR, ISBN, DESCRIPTION, PUBLISH_DATE, YEAR, CREATED_ON, UPDATED_ON, CREATED_BY, GENRE_ID, PUBLISHER_ID, BOOK_TYPE_ID, SEARCH_TEXT)
-  43 | The Night Circus | Erin Morgenstern | 9780385534635 | The circus arrives without warning, appearing at night and open only from sunset… |  |  | 2026-09-28 02:05:26.136606 |  | system | 6 | 5 | 1 | the night circus erin morgenstern 9780385534635
-  44 | Mexican Gothic | Silvia Moreno-Garcia | 9780525620785 | When socialite Noemí receives a frantic letter from her newly-wed cousin begging… |  |  | 2026-09-28 02:05:26.143074 |  | system | 6 | 6 | 2 | mexican gothic silvia moreno-garcia 9780525620785
-  45 | A Darker Shade of Magic | V.E. Schwab | 9780765387561 | Kell is one of the last Antari—magicians with the rare ability to travel between… |  |  | 2026-09-28 02:05:26.149371 |  | system | 6 | 7 | 1 | a darker shade of magic v.e. schwab 9780765387561
+  30 | The Devil in the White City | Erik Larson | 9780307408846 | This gripping non-fiction narrative intertwines two remarkable stories set again… |  |  | 2026-10-30 01:53:56.839131 |  | system | 3 | 2 | 1 | the devil in the white city erik larson 9780307408846
+  31 | The Nightingale | Kristin Hannah | 9780312577223 | Set in France during World War II, this powerful novel follows two sisters—one r… |  |  | 2026-10-30 01:53:56.846624 |  | system | 4 | 3 | 1 | the nightingale kristin hannah 9780312577223
+  32 | A Gentleman in Moscow | Amor Towles | 9780670026197 | In 1922, Count Alexander Rostov is sentenced by a Bolshevik tribunal to house ar… |  |  | 2026-10-30 01:53:56.852888 |  | system | 4 | 4 | 2 | a gentleman in moscow amor towles 9780670026197
 ### LISTINGS  (columns: ID, BOOK_ID, SELLER_ID, PRICE, QUANTITY, CONDITION_ID, STATUS, LISTING_TYPE, ADMIN_NOTES, PROCESSED_AT, PROCESSED_BY, IS_FEATURED, IS_BESTSELLER, IS_NEW_ARRIVAL, CREATED_ON, UPDATED_ON)
-  1 | 1 | 1 | 10.95 | 25 | 2 | 1 | SYSTEM |  |  |  | 1 | 0 | 1 | 2026-09-28 02:05:26.204692 | 
-  2 | 2 | 1 | 13.95 | 3 | 3 | 1 | SYSTEM |  |  |  | 0 | 1 | 0 | 2026-09-28 02:05:26.208513 | 
-  3 | 3 | 1 | 6.5 | 10 | 1 | 1 | SYSTEM |  |  |  | 1 | 1 | 0 | 2026-09-28 02:05:26.212295 | 
+  1 | 1 | 1 | 10.95 | 25 | 2 | 1 | SYSTEM |  |  |  | 1 | 0 | 1 | 2026-10-30 01:53:57.004066 | 
+  2 | 2 | 1 | 13.95 | 3 | 3 | 1 | SYSTEM |  |  |  | 0 | 1 | 0 | 2026-10-30 01:53:57.008985 | 
+  3 | 3 | 1 | 6.5 | 10 | 1 | 1 | SYSTEM |  |  |  | 1 | 1 | 0 | 2026-10-30 01:53:57.013576 | 

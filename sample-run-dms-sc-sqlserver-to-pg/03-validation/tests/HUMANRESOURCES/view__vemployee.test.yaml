@@ -1,0 +1,31 @@
+object: vEmployee
+schema: HUMANRESOURCES
+type: function
+notes: >
+  VERIFY (7795 case sensitivity). DMS SC rewrote the CountryRegion join as
+  LOWER(cr.countryregioncode) = LOWER(sp.countryregioncode) to mimic the source's
+  case-insensitive collation. All 290 employees are compared row by row (the xml column
+  AdditionalContactInfo is left out; it is NULL for every employee). Plus a case for
+  a single real employee (BusinessEntityID 4).
+cases:
+- id: c1
+  description: row count
+  source_sql: SELECT COUNT(*) FROM HumanResources.vEmployee
+  target_sql: SELECT count(*) FROM adventureworks_humanresources.vemployee
+- id: c2
+  description: every row and column (except the xml column)
+  compare: resultset
+  source_sql: >
+    SELECT BusinessEntityID, Title, FirstName, MiddleName, LastName, Suffix, JobTitle,
+           PhoneNumber, PhoneNumberType, EmailAddress, EmailPromotion, AddressLine1,
+           AddressLine2, City, StateProvinceName, PostalCode, CountryRegionName
+    FROM HumanResources.vEmployee
+  target_sql: >
+    SELECT businessentityid, title, firstname, middlename, lastname, suffix, jobtitle,
+           phonenumber, phonenumbertype, emailaddress, emailpromotion, addressline1,
+           addressline2, city, stateprovincename, postalcode, countryregionname
+    FROM adventureworks_humanresources.vemployee
+- id: c3
+  description: one real employee's country (exercises the LOWER() join)
+  source_sql: SELECT CountryRegionName FROM HumanResources.vEmployee WHERE BusinessEntityID = 4
+  target_sql: SELECT countryregionname FROM adventureworks_humanresources.vemployee WHERE businessentityid = 4

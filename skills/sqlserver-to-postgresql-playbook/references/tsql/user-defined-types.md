@@ -6,6 +6,8 @@
 **Conversion category:** Automatic (four-star feature compatibility, four-star automation)
 **SCT automation:** Four-star automation level; N/A action code
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): Scalar alias UDT→CREATE DOMAIN (verified NOT NULL/CHECK enforcement and the outer-join NULL caveat); removed Oracle 'CREATE OR REPLACE TYPE … AS OBJECT' syntax (fails on PG); CLR UDTs→ltree/PostGIS; TVP types→composite arrays/jsonb.
+
 ## SQL Server
 
 User-defined types encapsulate custom data types and can add NULL constraints. All UDTs are based on existing system data types, improving readability. SQL Server also supports table-valued UDTs (to pass a set to a stored procedure) and CLR-associated types (and memory-optimized types since 2014). Custom rules bound to types are deprecated.
@@ -103,7 +105,7 @@ INSERT INTO EMPLOYEES VALUES(1, ROW('111-222-333'));
 SELECT a.EMP_ID, (a.EMP_PHONE).PHONE_NUM FROM EMPLOYEES a;
 -- 1  111-222-333
 
-CREATE OR REPLACE TYPE EMP_ADDRESS AS OBJECT (
+CREATE TYPE EMP_ADDRESS AS (   -- the original showed Oracle's CREATE OR REPLACE TYPE … AS OBJECT, a syntax error in PostgreSQL
   STATE VARCHAR(2), CITY VARCHAR(20), STREET VARCHAR(20), ZIP_CODE NUMERIC);
 
 CREATE TABLE EMPLOYEES (
@@ -116,9 +118,30 @@ SELECT a.EMP_NAME, (a.EMP_ADDRESS).STATE, (a.EMP_ADDRESS).CITY,
   (a.EMP_ADDRESS).STREET, (a.EMP_ADDRESS).ZIP_CODE FROM EMPLOYEES a;
 ```
 
+## SQL Server alias types → domains (verified on Aurora PostgreSQL 18.6)
+
+```sql
+-- CREATE TYPE ZipCode FROM CHAR(5) NOT NULL
+CREATE DOMAIN zipcode AS char(5) NOT NULL;
+
+CREATE TABLE userlocations (userid int PRIMARY KEY, zipcode zipcode);
+INSERT INTO userlocations VALUES (1, '94324');   -- ok
+INSERT INTO userlocations VALUES (2, NULL);      -- ERROR 23502: domain zipcode does not allow null values
+
+-- deprecated sp_bindrule rules → a domain CHECK
+CREATE DOMAIN zipcode5 AS varchar(5) CHECK (VALUE ~ '^[0-9]{5}$');
+```
+
+- A domain `NOT NULL` is weaker than a column `NOT NULL`: an outer join can still produce NULLs of the domain type (verified). For columns that must never be NULL, also put `NOT NULL` on the column.
+- Domains are enforced on every assignment, including function parameters and PL/pgSQL variables of the domain type, which SQL Server alias types do not do for `NOT NULL`.
+- `ALTER DOMAIN … ADD CONSTRAINT … NOT VALID` lets you add a rule without rechecking existing rows; validate later with `ALTER DOMAIN … VALIDATE CONSTRAINT`.
+- Character base types follow the toolkit datatype map (`engines/sqlserver-to-postgresql/datatype-map.yaml`); `nchar`/`nvarchar` alias types become `char`/`varchar` domains.
+- CLR UDTs (`hierarchyid`, `geometry`, `geography`, custom assemblies) are not alias types: `hierarchyid` → `ltree` (toolkit convention), spatial → PostGIS `geometry`/`geography`, custom CLR types → composite type or `jsonb` plus functions (see `common-language-runtime.md`).
+- Memory-optimized table types have no equivalent; use a regular composite-type array or a temporary table.
+
 ## Conversion notes
 - Both engines use `CREATE TYPE`; conversion is largely automatic.
-- SQL Server scalar UDT (`FROM <base type> NOT NULL`) → PostgreSQL composite/domain type. Use `CREATE DOMAIN` to carry NULL/CHECK constraints on a base type (closest equivalent).
-- Table-valued types: SQL Server `AS TABLE` UDTs map to PostgreSQL composite types/arrays; table-valued parameters passed to procedures must be re-designed (e.g., pass arrays of composites or use temp tables).
+- SQL Server scalar UDT (`FROM <base type> NOT NULL`) → PostgreSQL **`CREATE DOMAIN`** (not a composite type: a one-field composite changes how values are written and read).
+- Table-valued types: SQL Server `AS TABLE` UDTs map to PostgreSQL composite types; table-valued parameters become `composite[]` (unpack with `unnest`) or `jsonb` (`jsonb_populate_recordset`), both verified in `stored-procedures.md`. Composite types cannot carry the TVP's `PRIMARY KEY`/`CHECK`; enforce them in the procedure or on the target table.
 - Access composite attributes with `(column).attribute` syntax and construct with `ROW(...)`.
 - PostgreSQL adds enum, range, and array types not present as UDTs in SQL Server.

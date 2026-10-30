@@ -19,3 +19,5 @@ Reference material for migrating B-tree indexes from SQL Server to Aurora MySQL.
   indexable).
 - Limits differ: max non-clustered indexes 999 → 64; max columns per index 32 → 16; max
   key size 900 bytes → up to 3072 bytes (16 KB page).
+
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): indexes on VIRTUAL generated columns, functional/invisible/descending indexes verified; no filtered or INCLUDE indexes.

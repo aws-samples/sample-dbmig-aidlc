@@ -6,6 +6,8 @@
 **Conversion category:** Manual (two-star feature compatibility)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): QPM as the plan-guide equivalent (verified), `pg_hint_plan` 1.8 with a SQL Server → hint mapping (verified), drop-hints default, `NOLOCK` handling, statement-scoped settings.
+
 SQL Server hints force overrides of the query processor's automatic choices for DML/DQL statements. PostgreSQL does not support database hints in queries; it offers only a very limited set of influence via session-level Query Planning Parameters.
 
 ## SQL Server
@@ -95,7 +97,27 @@ WHERE T1.Date BETWEEN DATEADD(DAY, -7, GETDATE()) AND GETDATE()
 
 ## PostgreSQL
 
-PostgreSQL does not support in-query database hints and you cannot influence plan generation from within SQL. Instead, session parameters (Query Planning Parameters) influence the optimizer at the session level.
+Core PostgreSQL does not support in-query hints. On **Aurora PostgreSQL 18** there are three tools, in order of preference:
+
+1. **Remove the hint and fix the cause** (statistics, indexes, query shape). Most SQL Server hints compensate for SQL Server optimizer behavior and are not needed.
+2. **Aurora Query Plan Management (QPM, `apg_plan_mgmt`)**, the equivalent of **plan guides / `USE PLAN` / Query Store plan forcing**. It captures plans and enforces approved ones **without changing query text**. Enable with `rds.enable_plan_management = 1` in the cluster parameter group, then `CREATE EXTENSION apg_plan_mgmt;` (verified on 18.6).
+3. **`pg_hint_plan`** (1.8.0 on Aurora 18; add to `shared_preload_libraries`, then `CREATE EXTENSION pg_hint_plan`). Comment hints at the **start** of the statement, verified on 18.6:
+   ```sql
+   /*+ IndexScan(t1 ix_t1_date) NestLoop(t1 t2) Leading((t1 t2)) Set(max_parallel_workers_per_gather 0) */
+   SELECT * FROM mytable1 t1 JOIN mytable2 t2 ON t1.col1 = t2.col1 WHERE t1.date >= now() - interval '7 days';
+   ```
+   | SQL Server | `pg_hint_plan` |
+   |---|---|
+   | `WITH (INDEX = ix)` / `FORCESEEK` | `IndexScan(t ix)` |
+   | `WITH (FORCESCAN)` | `SeqScan(t)` |
+   | `INNER LOOP/HASH/MERGE JOIN` | `NestLoop(a b)` / `HashJoin(a b)` / `MergeJoin(a b)` |
+   | `OPTION (FORCE ORDER)` | `Leading((a b c))` |
+   | `OPTION (MAXDOP n)` | `Parallel(t n)` or `Set(max_parallel_workers_per_gather n)` |
+   | `OPTION (RECOMPILE)` | no hint; `SET plan_cache_mode = force_custom_plan` for the session/function |
+   | `OPTION (OPTIMIZE FOR …)` | no equivalent; QPM to pin a plan |
+   | `NOLOCK`, `TABLOCKX`, `HOLDLOCK` | not optimizer hints: drop `NOLOCK` (MVCC readers never block); use `LOCK TABLE` / `SELECT … FOR UPDATE` or `SERIALIZABLE` for the locking intent |
+
+Session parameters (Query Planning Parameters) can also influence the optimizer at the session level:
 
 Force indexes instead of full table scans (disable sequential scans):
 
@@ -122,5 +144,7 @@ SET ENABLE_NESTLOOP to FALSE;
 - SQL Server JOIN hints (`LOOP`/`HASH`/`MERGE`) → PostgreSQL has no per-query equivalent; nearest approximation is session toggles like `ENABLE_NESTLOOP`, `ENABLE_HASHJOIN`, `ENABLE_MERGEJOIN`.
 - SQL Server `INDEX=`/`FORCESEEK` (force index use) → PostgreSQL has no index hint; influence indirectly with `SET ENABLE_SEQSCAN=FALSE` or by tuning `RANDOM_PAGE_COST`/`SEQ_PAGE_COST`.
 - SQL Server `MAXDOP`, `OPTIMIZE FOR`, `RECOMPILE`, `FORCE ORDER`, `USE PLAN` → no direct PostgreSQL equivalents.
-- SQL Server plan guides (apply hints without changing query text) → PostgreSQL has no native equivalent. On Aurora PostgreSQL, Query Plan Management (QPM) can enforce/manage plans for managed statements; the optional `pg_hint_plan` extension provides hint-style control but is not part of the playbook's standard approach.
-- PostgreSQL session parameters reset at session end and affect the whole session, not a single statement — review their scope before relying on them in application code.
+- SQL Server plan guides (apply hints without changing query text) → **Aurora QPM** (approved plans per statement). `pg_hint_plan` also has a `hint_plan.hints` table that attaches hints to normalized query text without changing the application, which is a closer analog to SQL plan guides.
+- **Default conversion: drop hints** and record each one in the conversion log. Re-add only those that a performance test proves necessary, preferably as QPM-approved plans.
+- `NOLOCK` / `READUNCOMMITTED` table hints can always be dropped safely: PostgreSQL readers never block writers and never see uncommitted data.
+- PostgreSQL session parameters reset at session end and affect the whole session, not a single statement — review their scope before relying on them in application code. Prefer `SET LOCAL` inside a transaction, `ALTER FUNCTION … SET …` for one routine, or a `pg_hint_plan` `Set(...)` hint for one statement.

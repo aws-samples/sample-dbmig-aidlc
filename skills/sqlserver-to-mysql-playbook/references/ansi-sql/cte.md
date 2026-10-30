@@ -6,7 +6,9 @@
 **Conversion category:** Manual (Two star feature compatibility)
 **SCT automation:** No automation
 
-**Key differences:** Rewrite non-recursive CTE to use views and derived tables. Redesign recursive CTE code. (Applies to Aurora MySQL 5.7; RDS for MySQL 8 supports CTEs.)
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): CTEs are native on 3 / 8.4 (verified); RECURSIVE keyword, anchor column widths (1406), MAXRECURSION → cte_max_recursion_depth (3636), no updatable CTEs (1288) — all verified; 5.7 workarounds moved to a legacy section.
+
+**Key differences:** On Aurora MySQL 3 / 8.4, `WITH` and `WITH RECURSIVE` are native (verified); add the `RECURSIVE` keyword, widen anchor columns, and replace `MAXRECURSION` with `cte_max_recursion_depth`. *(Corrected: the playbook's derived-table/loop rewrite applied to Aurora MySQL 5.7 only.)* The conversion category above is the playbook's 5.7 rating; on 3 / 8.4 most CTE code is Assisted.
 
 ## SQL Server
 
@@ -69,8 +71,28 @@ FROM EmpHierarchyCTE;
 ```
 
 ## MySQL
+**Aurora MySQL 3 and 8.4 support non-recursive and recursive CTEs** (`WITH`, `WITH RECURSIVE`, verified on 3.13.0 and 8.4.8). Most SQL Server CTEs convert with syntax changes only:
 
-Aurora MySQL 5.7 does NOT support CTEs. (RDS for MySQL 8 supports both recursive and non-recursive CTEs, including `LIMIT`/`OFFSET` in recursive parts as of 8.0.19.)
+```sql
+-- SQL Server: WITH Org AS (… UNION ALL …) SELECT … OPTION (MAXRECURSION 500)
+WITH RECURSIVE org (employee, manager, lvl, path) AS (
+  SELECT employee, direct_manager, 0, CAST(employee AS CHAR(1000))
+  FROM employees WHERE direct_manager IS NULL
+  UNION ALL
+  SELECT e.employee, e.direct_manager, o.lvl + 1, CONCAT(o.path, '/', e.employee)
+  FROM employees e JOIN org o ON e.direct_manager = o.employee)
+SELECT * FROM org ORDER BY path;
+```
+
+Differences from SQL Server (verified):
+- MySQL requires the **`RECURSIVE`** keyword for a self-referencing CTE.
+- **Column types come from the anchor member**: a growing string column fails with *Data too long* (error 1406) unless the anchor casts it wide (`CAST(… AS CHAR(1000))`); that error needs `STRICT_TRANS_TABLES`. Under Aurora's default (empty) `sql_mode` there is no error and no warning: the string is silently truncated to the anchor width (`'a-x-x-x'` comes back as `'a'`, verified on 3.13.0 and 8.4.8).
+- `OPTION (MAXRECURSION n)` → `SET SESSION cte_max_recursion_depth = n` (default 1000; error 3636 when exceeded). `MAXRECURSION 0` (unlimited) → a large value plus a level guard.
+- A CTE **cannot be the target** of `UPDATE`/`DELETE` (error 1288); SQL Server's `WITH c AS (…) UPDATE c SET …` → `UPDATE t JOIN c ON … SET t.col = …` (multi-table update with a CTE works, verified).
+- No `SEARCH`/`CYCLE` clauses; stop cycles with a path check (`FIND_IN_SET`).
+
+### Legacy: Aurora MySQL 5.7 workarounds
+Only needed on Aurora MySQL 2 (5.7, past standard support):
 
 ### Replacing non-recursive CTEs with a derived table
 ```sql
@@ -125,9 +147,7 @@ END;
 
 | SQL Server | Aurora MySQL | Comments |
 |---|---|---|
-| Non-recursive CTE | Derived table | Derived table definition subquery must be repeated for multiple instances. |
-| Recursive CTE | Loop inside a stored procedure or function | |
-
-- Aurora MySQL 5.7 has no CTE support — RDS for MySQL 8 does.
-- Non-recursive CTEs → views or derived tables (subquery in `FROM`).
-- Recursive CTEs → loops; archive original code for potential reuse under MySQL 8.
+| Non-recursive CTE | `WITH` (native) | 5.7 only: derived table |
+| Recursive CTE | `WITH RECURSIVE` (native) | widen growing anchor columns; `cte_max_recursion_depth` |
+| Updatable CTE | not supported | multi-table `UPDATE … JOIN cte` |
+- Convert CTEs natively on Aurora MySQL 3 / 8.4; the derived-table and loop workarounds are legacy.

@@ -1,8 +1,9 @@
 -- Package REPORTING_PKG (spec + body) flattened to <package>_<subprogram>.
--- PIPELINED book_sales_tab -> RETURNS TABLE. Column types match the query's ACTUAL types
--- (b.id bigint, b.title varchar(255), SUM(bigint) numeric, SUM(numeric) numeric) — a mismatch
--- only fails at execution. NOTE: ORDER BY total_sold DESC has no tie-breaker in the source;
--- tied rows may be returned in a different order on each engine (compare as a set).
+-- PIPELINED book_sales_tab -> RETURNS TABLE + RETURN QUERY (sql-plsql/user-defined-functions.md).
+-- Declared column types match the query's ACTUAL types (b.id bigint, b.title varchar,
+-- SUM(bigint) numeric, SUM(numeric) numeric); a mismatch would only fail at execution.
+-- FETCH FIRST n ROWS ONLY -> LIMIT. NOTE: ORDER BY total_sold DESC has no tie-breaker in the
+-- source, so tied rows may come back in a different order on each engine (compare as a set).
 CREATE OR REPLACE FUNCTION demo.reporting_pkg_get_top_books(p_limit numeric DEFAULT 10)
 RETURNS TABLE (book_id bigint, title varchar, total_sold numeric, revenue numeric)
 LANGUAGE plpgsql STABLE AS $$
@@ -20,10 +21,13 @@ BEGIN
     LIMIT p_limit;
 END $$;
 
--- OUT params; TRUNC(created_on) (DATE at midnight) -> date_trunc('day', ...) as timestamp(0).
+-- OUT params; TRUNC(created_on) -> date_trunc('day', ...) returned as timestamp(0) (Oracle DATE).
 CREATE OR REPLACE PROCEDURE demo.reporting_pkg_get_customer_stats(
-    p_customer_id numeric, OUT p_total_orders numeric, OUT p_total_spent numeric,
-    OUT p_avg_order numeric, OUT p_last_order_date timestamp(0))
+    p_customer_id numeric,
+    OUT p_total_orders numeric,
+    OUT p_total_spent numeric,
+    OUT p_avg_order numeric,
+    OUT p_last_order_date timestamp(0))
 LANGUAGE plpgsql AS $$
 BEGIN
     SELECT count(*), coalesce(sum(total_amount), 0), coalesce(avg(total_amount), 0),

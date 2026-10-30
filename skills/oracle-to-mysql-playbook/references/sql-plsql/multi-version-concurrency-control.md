@@ -6,6 +6,8 @@
 **Conversion category:** Automatic (★★★★★ feature compatibility)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Fixed the LOCK TABLES example (it used Oracle syntax; LOCK TABLES commits the open transaction), modern lock views, NOWAIT/SKIP LOCKED, WAIT n mapping, 8.4 LOW_PRIORITY removal and no LOCK in procedures, gap locks and deadlock retry — verified on both versions.
+
 ## Oracle
 
 Two primary lock types: exclusive and share. Semantics: writers never block readers; readers never block writers; locks are not escalated from row to page/table; users can issue `LOCK TABLE`. Four lock categories: DML, DDL, explicit/manual, system.
@@ -68,10 +70,10 @@ Row-level intention locks: **IS** (intention shared), **IX** (intention exclusiv
 LOCK TABLES tbl_name [[AS] alias] lock_type [, ...]
   lock_type: READ [LOCAL] | [LOW_PRIORITY] WRITE
 
--- LOCK TABLE (must be inside transaction)
+-- LOCK TABLES (note: LOCK TABLES commits any open transaction; it does not join it)
 -- Session 1
-START TRANSACTION;
-LOCK TABLE EMPLOYEES IN EXCLUSIVE MODE;
+SET autocommit = 0;
+LOCK TABLES EMPLOYEES WRITE;          -- the original showed Oracle's IN EXCLUSIVE MODE syntax
 -- Session 2 (waits)
 UPDATE EMPLOYEES SET SALARY=SALARY+1000 WHERE EMPLOYEE_ID=114;
 
@@ -87,12 +89,17 @@ UPDATE EMPLOYEES SET SALARY=SALARY+1000 WHERE EMPLOYEE_ID=114;
 
 | Description | Oracle | MySQL |
 |---|---|---|
-| Lock dictionary views | `v$lock; v$locked_object; v$session_blockers;` | `SHOW OPEN TABLES WHERE in_use = 1;` |
+| Lock dictionary views | `v$lock; v$locked_object; v$session_blockers;` | `performance_schema.data_locks` / `data_lock_waits`, `sys.innodb_lock_waits`, `information_schema.innodb_trx` (row locks; verified present on 3.13 and 8.4 — `performance_schema` must be ON to populate `data_locks`); `SHOW OPEN TABLES WHERE in_use = 1` for table locks |
 | Lock a table | `BEGIN; LOCK TABLE employees IN SHARE ROW EXCLUSIVE MODE;` | `LOCK TABLE employees READ` |
 | Explicit locking | `SELECT * FROM employees WHERE employee_id=102 FOR UPDATE;` | same |
 | Explicit locking options | `SELECT ... FOR UPDATE` | `SELECT ... FOR UPDATE` |
 
 - MVCC concept maps cleanly: both avoid reader/writer blocking and avoid lock escalation.
 - Biggest behavioral change: MySQL **auto-commits by default** — wrap multi-statement logic in `START TRANSACTION`/`COMMIT` or set `AUTOCOMMIT=OFF`.
-- `SELECT ... FOR UPDATE` must run inside an explicit transaction in MySQL.
+- `SELECT ... FOR UPDATE` must run inside an explicit transaction in MySQL; under autocommit the lock is released when the statement ends.
+- `FOR UPDATE NOWAIT` / `SKIP LOCKED` and `FOR SHARE` are available on Aurora MySQL 3 / 8.4 (verified). Oracle `FOR UPDATE WAIT n` → `SET SESSION innodb_lock_wait_timeout = n` before the statement (default 50 s, verified).
+- `LOCK TABLES … LOW_PRIORITY WRITE` is a syntax error on Aurora MySQL 8.4 (verified); 3.x ignores it.
+- `LOCK TABLES` is not allowed in stored procedures (error 1314, verified); Oracle procedures that `LOCK TABLE` need `SELECT … FOR UPDATE` on the rows instead, or `GET_LOCK()` named locks.
+- **Gap locks:** under the default `REPEATABLE READ`, range scans with `FOR UPDATE` and `UPDATE/DELETE … WHERE` lock gaps and block concurrent inserts — Oracle has no gap locks. Converted batch jobs that ran concurrently on Oracle can deadlock; consider `READ COMMITTED` (no gap locks for most statements) for those sessions.
+- Deadlocks are detected automatically (`innodb_deadlock_detect` = ON, verified) and the victim gets error 1213; Oracle raises ORA-00060. Add retry logic. Set `innodb_print_all_deadlocks` = 1 in the parameter group to log every deadlock.
 - Oracle's five table lock modes collapse to MySQL's READ/WRITE; map `SHARE ROW EXCLUSIVE` etc. to `READ`/`WRITE` accordingly.

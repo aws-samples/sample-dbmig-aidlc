@@ -6,7 +6,9 @@
 **Conversion category:** Assisted (Four-star feature compatibility, three-star automation; minor syntax differences require some rewrite)
 **SCT automation:** Three-star automation level; SCT action code index → Cursors
 
-Key gaps: `TYPE … IS REF CURSOR` is not supported by PostgreSQL; `%ISOPEN`, `%BULK_EXCEPTIONS`, `%BULK_ROWCOUNT` are not supported.
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): `%ISOPEN` workaround (verified), implicit-cursor attributes, `SELECT INTO` vs `INTO STRICT` (verified), REF CURSOR → `refcursor`, transaction requirement for returned cursors.
+
+Key gaps: `TYPE … IS REF CURSOR` (strongly typed) has no typed equivalent; map it to plain `refcursor`. `%ISOPEN`, `%BULK_EXCEPTIONS`, `%BULK_ROWCOUNT` are not supported as attributes (workarounds below).
 
 ## Oracle
 
@@ -155,13 +157,17 @@ END $$;
 | Has rows remaining | `%FOUND` | `FOUND` |
 | Rows affected (bulk) | `%BULK_ROWCOUNT` | Not supported; use `GET DIAGNOSTICS integer_var = ROW_COUNT;` per DML, store in array |
 | Which DML failed | `%BULK_EXCEPTIONS` | N/A |
-| Is cursor open | `%ISOPEN` | N/A |
+| Is cursor open | `%ISOPEN` | `EXISTS (SELECT 1 FROM pg_cursors WHERE name = c::text)` (verified: true after `OPEN`, false after `CLOSE`). Assign a fixed name first (`c refcursor := 'c_emp';`), or simply track a boolean. |
+| Implicit cursor attributes | `SQL%ROWCOUNT`, `SQL%FOUND`, `SQL%NOTFOUND` | `GET DIAGNOSTICS n = ROW_COUNT;`, `FOUND`, `NOT FOUND` (set by the last SQL statement) |
+| Cursor FOR loop over a declared cursor | `FOR r IN c1 LOOP` | `FOR r IN c1 LOOP` (same, opens/closes automatically, verified) |
 | No rows remaining | `%NOTFOUND` | `NOT FOUND` |
 | Rows affected | `%ROWCOUNT` | `GET DIAGNOSTICS integer_var = ROW_COUNT;` |
 
 ## Conversion notes
 
-- Cursor variables are always `refcursor` in PL/pgSQL. `TYPE … IS REF CURSOR` (Oracle strongly-typed ref cursors) has no PG equivalent — redesign.
+- Cursor variables are always `refcursor` in PL/pgSQL. Oracle `TYPE t IS REF CURSOR [RETURN …]` and `SYS_REFCURSOR` both map to `refcursor`. The return-type check is lost, which rarely matters.
+- **`SELECT … INTO` without `STRICT` does not raise `NO_DATA_FOUND`.** It leaves the target NULL (verified). Oracle's implicit-cursor `SELECT INTO` raises `NO_DATA_FOUND` / `TOO_MANY_ROWS`, so convert to `SELECT … INTO STRICT` whenever the Oracle code relies on those exceptions (verified: `STRICT` raises `no_data_found`).
+- Returning a `refcursor` to a client requires the client to `FETCH` it **in the same transaction** (autocommit off). Prefer `RETURNS TABLE`/`SETOF` for functions that only return a result set.
 - Replace cursor attributes: `c%NOTFOUND`/`c%FOUND` → `NOT FOUND`/`FOUND` (the special `FOUND` variable, not cursor-qualified).
 - No `%ISOPEN`, `%BULK_ROWCOUNT`, `%BULK_EXCEPTIONS` — use `GET DIAGNOSTICS … = ROW_COUNT` and arrays.
 - PG adds `MOVE`, direction clauses, and `OPEN … FOR EXECUTE format(...)` for dynamic cursors.

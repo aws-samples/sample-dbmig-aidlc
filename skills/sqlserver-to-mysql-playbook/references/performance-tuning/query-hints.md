@@ -6,6 +6,8 @@
 **Conversion category:** Manual (Two star feature compatibility)
 **SCT automation:** Three star automation level (SCT action code index: Query Hints)
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Corrected MAX_EXECUTION_TIME (ms, per statement — verified); added MySQL 8 join-order, index, hash-join, merge and SET_VAR hints (verified); full locking-hint mapping (verified syntax); no plan forcing on Aurora MySQL.
+
 Key difference: hint frameworks differ significantly between the two engines.
 
 ## SQL Server
@@ -151,13 +153,20 @@ Scopes (widest to narrowest): Global, Query-level (query block in `UNION`/subque
 |---|---|---|
 | `BKA`, `NO_BKA` | Turns on or off Batched Key Access join processing | Query block, table |
 | `BNL`, `NO_BNL` | Turns on or off Block Nested-Loop join processing | Query block, table |
-| `MAX_EXECUTION_TIME` | Limits statement run time (seconds, always global) | Global |
+| `MAX_EXECUTION_TIME(ms)` | Limits a read-only `SELECT` statement's run time in **milliseconds** (verified: `MAX_EXECUTION_TIME(1)` interrupted `SLEEP(1)`) | Global (statement) |
 | `MRR`, `NO_MRR` | Turns on or off multi-range read optimization | Table, index |
 | `NO_ICP` | Turns off index condition push-down optimization | Table, index |
 | `NO_RANGE_OPTIMIZATION` | Turns off range optimization | Table, index |
 | `QB_NAME` | Assigns a logical name to a query block | Query block |
 | `SEMIJOIN`, `NO_SEMIJOIN` | Turns on or off semi-join strategies | Query block |
 | `SUBQUERY` | Determines `MATERIALIZATION` and `INTOEXISTS` processing | Query block |
+| `JOIN_ORDER`, `JOIN_PREFIX`, `JOIN_SUFFIX`, `JOIN_FIXED_ORDER` | Join order (≈ `OPTION (FORCE ORDER)`) | Query block |
+| `INDEX`, `NO_INDEX`, `JOIN_INDEX`, `GROUP_INDEX`, `ORDER_INDEX`, `INDEX_MERGE`, `SKIP_SCAN` | Index choice (≈ `WITH (INDEX(…))`) | Table, index |
+| `HASH_JOIN`, `NO_HASH_JOIN` (`BNL`/`NO_BNL` control hash joins since 8.0.20) | Hash join on/off (≈ `OPTION (HASH JOIN)`) | Query block, table |
+| `MERGE`, `NO_MERGE` | Derived-table/view merging | Table |
+| `SET_VAR(var = value)` | One-statement session variable (≈ `OPTION (USE HINT(...))`, `MAXDOP` has none) | Global |
+
+All hints added above were accepted on Aurora MySQL 3.13 and 8.4.8 (verified).
 
 Use `QB_NAME` to name a query block, then reference it with `@` to scope a hint to named subqueries:
 
@@ -168,7 +177,7 @@ WHERE Col1 IN (SELECT /*+ QB_NAME(SubQuery1) */ Col1
 FROM t3);
 ```
 
-> `MAX_EXECUTION_TIME` is measured in seconds and is always global. SQL Server has no equivalent statement-scoped limit (its run-time limit is session-scoped).
+> *(corrected)* `MAX_EXECUTION_TIME(n)` is in **milliseconds** and applies to the statement it is in (or the session via `SET SESSION max_execution_time = n`), for read-only `SELECT`s only.
 
 ### Migration Considerations
 
@@ -211,9 +220,11 @@ SELECT /*+ NO_ICP(t1, t2) */ * FROM Table1 INNER JOIN Table2 ON ...;
 
 - Two-star feature compatibility with three-star SCT automation (SCT action code: Query Hints).
 - **Plan guides have no Aurora MySQL equivalent** — both "force a specific plan" and "apply hints to a query at runtime" are N/A in Aurora MySQL.
-- Join hints: SQL Server `LOOP`/`MERGE`/`HASH` map loosely to Aurora MySQL `BNL`/`NO_BNL` (block-nested loops).
-- Locking hints: supported in SQL Server, N/A in Aurora MySQL.
+- Join hints: SQL Server `HASH JOIN` → `HASH_JOIN`/`BNL`; `LOOP JOIN` → `NO_HASH_JOIN`/`NO_BNL` (+ `BKA`); `MERGE JOIN` → none (MySQL has no sort-merge join); `FORCE ORDER` → `JOIN_FIXED_ORDER` or `STRAIGHT_JOIN`.
+- Locking hints are not optimizer hints in MySQL: `NOLOCK`/`READUNCOMMITTED` → remove (InnoDB readers don't block) or `SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED`; `UPDLOCK`/`ROWLOCK`/`XLOCK` → `SELECT … FOR UPDATE`; `HOLDLOCK`/`SERIALIZABLE` → `FOR SHARE` or `SERIALIZABLE` isolation; `READPAST` → `FOR UPDATE SKIP LOCKED`; `NOWAIT` → `FOR UPDATE NOWAIT`; `TABLOCKX` → `LOCK TABLES … WRITE` (not inside procedures, error 1314) — all available on 3 / 8.4 (verified).
 - Force seek/scan: SQL Server `FORCESEEK`/`FORCESCAN` → Aurora MySQL `FORCE INDEX`, or `USE INDEX` with no index list to force a clustered index scan.
 - Force an index: SQL Server `INDEX=` → Aurora MySQL `USE`.
 - Allow/deny list indexes: N/A in SQL Server; supported in Aurora MySQL via `USE` and `IGNORE`.
-- Parameter value hints (`OPTIMIZE FOR`) and compilation hints (`RECOMPILE`): N/A in Aurora MySQL.
+- Parameter value hints (`OPTIMIZE FOR`) and compilation hints (`RECOMPILE`): N/A in Aurora MySQL (MySQL optimizes each execution; there is no cached-plan sniffing problem to fix).
+- Malformed or unknown hints are ignored with a warning, so a mistranslated hint silently does nothing — check `SHOW WARNINGS` after `EXPLAIN`.
+- There is no plan-forcing facility (Query Store forced plans, plan guides) on Aurora MySQL; Aurora QPM exists only for Aurora PostgreSQL.

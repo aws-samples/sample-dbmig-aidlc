@@ -6,6 +6,8 @@
 **Conversion category:** N/A (migration tool)
 **SCT automation:** This tool *is* AWS SCT. It automatically converts most database objects; remaining objects need manual conversion guided by the rest of the playbook.
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Target-version guidance (SCT/DMS SC emit Aurora MySQL 8.0 code; 5.7-era workarounds to modernize; 8.4 checks), aws_oracle_ext decision, toolkit relationship.
+
 ## Overview
 
 AWS SCT is a Java utility that connects to source and target databases, scans the source schema objects (tables, views, indexes, procedures, and so on), and converts them to target database objects. Because it can automatically migrate most database objects, it greatly reduces manual effort.
@@ -52,3 +54,6 @@ Recommended approach: start every migration with AWS SCT, then use the rest of t
 - Always exclude `sys` and `information_schema` system schemas during conversion.
 - The assessment report's on-screen content is partial — export to PDF for full issue detail.
 - For per-feature automation levels and action codes, see the SCT action code index (sct-action-code-index.md).
+- **Target version:** SCT/DMS SC generate code for Aurora MySQL **8.0** (DMS SC's MySQL target provider is 8.0.32). Output written for older (5.7) targets avoids CTEs, window functions, `CHECK`, `JSON_TABLE` and roles; on Aurora MySQL 3 / 8.4 those are native, so modernize converted code where the behavior is equivalent. For an 8.4 target also check the 8.4 breaks listed in `../target-baseline-aurora-mysql.md`.
+- SCT/DMS SC install the `aws_oracle_ext` schema of emulation functions (`aws_oracle_ext.to_char`, sequence emulation, etc.). Decide whether to keep the dependency or replace calls with native MySQL functions; record the decision.
+- In this toolkit the AI-driven `convert-schema`/`convert-code` path replaces SCT for conversion; existing DMS SC projects can be imported with the `db-migration-dms-sc-ingest` skill.

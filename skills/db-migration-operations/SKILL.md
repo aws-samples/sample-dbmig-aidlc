@@ -14,6 +14,19 @@ accumulated context, human signs off.
   `03-validation/reconcile_report.yaml`)
 - Conversion log and migration plan (for scope and known caveats)
 - `connections.yaml`, `migration-config.yaml`
+- The pair's playbook operations chapters (read the chapter `_index.md`, then only the files
+  the plan needs), under `skills/<pair>-playbook/references/`:
+
+  | Need | Chapter / file |
+  |---|---|
+  | Target version facts, support dates, platform defaults | `target-baseline-*.md` (PostgreSQL pairs: `oracle-to-postgresql-playbook/references/target-baseline-aurora-postgresql-18.md`; MySQL pairs: `oracle-to-mysql-playbook/references/target-baseline-aurora-mysql.md`) |
+  | CDC / AWS DMS cutover | `tools/aws-dms.md` |
+  | Connection switch, pooling, failover | `tools/rds-proxy.md`; `ha-dr/` |
+  | Backups, snapshots, point of no return, rollback | `ha-dr/` |
+  | Parameter groups and session settings to carry over | `configuration/` |
+  | Post-cutover monitoring | `monitoring/` (Oracle pairs) or `management/monitoring.md` (SQL Server pairs); `performance-tuning/` |
+
+  Cite the files you used in each generated document, as the construction phase does.
 
 ## Required disclaimer on every generated artifact
 Every document produced in this phase — the cutover runbook, rollback plan, monitoring
@@ -79,9 +92,12 @@ cutover.require_rollback_plan` is true):
 
 ## Step 4 — Monitoring
 Write `04-operations/monitoring.md`: post-cutover checks for the first hours/days —
-error rates, slow queries (PG `pg_stat_statements`), connection counts, replication/CDC lag,
-autovacuum/bloat, and the app-level KPIs that prove correctness. Reference the playbook
-monitoring and performance-tuning chapters.
+error rates, slow queries (PostgreSQL `pg_stat_statements`; MySQL slow query log and the
+`sys` schema — `performance_schema` is OFF by default on Aurora MySQL), connection counts,
+replication/CDC lag, autovacuum/bloat (PostgreSQL) or InnoDB history length (MySQL), and the
+app-level KPIs that prove correctness. Use CloudWatch Database Insights (Performance Insights
+reaches end of life on 2026-07-31). Take the specifics from the monitoring and
+performance-tuning files listed under Inputs.
 
 ## Gate
 Present the runbook, rollback plan, and monitoring checklist. **Stop at the gate: "Approve

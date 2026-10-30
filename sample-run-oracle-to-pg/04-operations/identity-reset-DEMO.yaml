@@ -1,7 +1,7 @@
 schema: DEMO
 target_schema: demo
-generated_at: '2026-09-28T15:42:51Z'
-applied: false
+generated_at: '2026-10-30T06:48:53Z'
+applied: true
 identity_columns:
 - table: addresses
   column: id
@@ -9,6 +9,7 @@ identity_columns:
   max_id: 3
   next_before: 4
   status_before: OK
+  next_after: 4
   status: OK
 - table: book_types
   column: id
@@ -16,6 +17,7 @@ identity_columns:
   max_id: 3
   next_before: 4
   status_before: OK
+  next_after: 4
   status: OK
 - table: books
   column: id
@@ -23,6 +25,7 @@ identity_columns:
   max_id: 56
   next_before: 57
   status_before: OK
+  next_after: 57
   status: OK
 - table: conditions
   column: id
@@ -30,6 +33,7 @@ identity_columns:
   max_id: 4
   next_before: 5
   status_before: OK
+  next_after: 5
   status: OK
 - table: customers
   column: id
@@ -37,6 +41,7 @@ identity_columns:
   max_id: 3
   next_before: 4
   status_before: OK
+  next_after: 4
   status: OK
 - table: genres
   column: id
@@ -44,6 +49,7 @@ identity_columns:
   max_id: 8
   next_before: 9
   status_before: OK
+  next_after: 9
   status: OK
 - table: listings
   column: id
@@ -51,20 +57,23 @@ identity_columns:
   max_id: 56
   next_before: 57
   status_before: OK
+  next_after: 57
   status: OK
 - table: order_items
   column: id
   sequence: demo.order_items_id_seq
   max_id: null
-  next_before: 101
+  next_before: 103
   status_before: OK
+  next_after: 101
   status: OK
 - table: orders
   column: id
   sequence: demo.orders_id_seq
   max_id: null
-  next_before: 101
+  next_before: 105
   status_before: OK
+  next_after: 101
   status: OK
 - table: password_reset_tokens
   column: id
@@ -72,6 +81,7 @@ identity_columns:
   max_id: null
   next_before: 1
   status_before: OK
+  next_after: 1
   status: OK
 - table: publishers
   column: id
@@ -79,6 +89,7 @@ identity_columns:
   max_id: 10
   next_before: 11
   status_before: OK
+  next_after: 11
   status: OK
 - table: shopping_cart_items
   column: id
@@ -86,6 +97,7 @@ identity_columns:
   max_id: null
   next_before: 101
   status_before: OK
+  next_after: 101
   status: OK
 standalone_sequences:
   source: []

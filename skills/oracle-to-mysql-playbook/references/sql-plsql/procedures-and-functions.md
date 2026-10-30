@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (★★★ feature compatibility, ★★★★ automation)
 **SCT automation:** Action code "Stored Procedures" — syntax and option differences.
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Corrected the binary-logging note (affects creating functions/triggers; procedures vs functions transaction rules); verified no overloading, no parameter defaults, no %TYPE, 64-character names, DEFINER behavior on both versions, SIGNAL mapping; toolkit package-naming convention.
+
 ## Oracle
 
 PL/SQL procedures (`CREATE PROCEDURE`, perform actions) and functions (`CREATE FUNCTION`, return a value) store reusable logic. Privileges: `CREATE PROCEDURE` (own schema), `CREATE ANY PROCEDURE` (other schemas), `EXECUTE` (to run). **Packages** (`CREATE PACKAGE` + `CREATE PACKAGE BODY`) encapsulate related routines; call as `EXEC PKG.PROC(...)`.
@@ -57,7 +59,7 @@ EXEC PCK_CHINOOK_REPORTS.GET_ARTIST_BY_ALBUM();
 
 Aurora MySQL stored procedures provide similar functionality, including security execution context and `IN`/`OUT`/`INOUT` parameters. Used for code reuse, security management (access via procedures only), and performance (no full query text transferred). Stored procedures, triggers, and UDFs are collectively **Stored Routines**.
 
-> Note: With binary logging enabled, running stored routines requires `SUPER` privilege, or set `log_bin_trust_function_creators=true` on the DB parameter group. Routines may contain control flow, DML, DDL, and `START TRANSACTION`/`COMMIT`/`ROLLBACK`.
+> Note: with binary logging enabled, **creating stored functions** (and triggers) that are not declared `DETERMINISTIC`, `NO SQL` or `READS SQL DATA` requires `log_bin_trust_function_creators = 1` in the DB cluster parameter group (the Aurora master user has no `SUPER`). The parameter is 0 by default and binary logging is off by default (both verified on 3.13 and 8.4). **Procedures** may contain control flow, DML, DDL and `START TRANSACTION`/`COMMIT`/`ROLLBACK`; **functions and triggers** may not commit or run DDL (error 1422, verified).
 
 ```sql
 -- Syntax
@@ -100,6 +102,12 @@ CALL LoopItems();
 | Security context | `AUTHID { CURRENT_USER \| DEFINER }` | `DEFINER='user'\|CURRENT_USER` + `SQL SECURITY {DEFINER\|INVOKER}` | `EXECUTE AS 'user'`→`DEFINER='user'`+`SQL SECURITY DEFINER`; `CALLER`→`SQL SECURITY INVOKER`; `SELF`→`DEFINER=CURRENT_USER`+`SQL SECURITY DEFINER` |
 | Parameter direction | `IN`, `OUT` (OUT usable as IN) | `IN`, `OUT`, `INOUT` | |
 
-- **No packages** in MySQL — flatten package procedures/functions into standalone routines (e.g., `PKG_PROC` naming) and convert package-level state to tables/variables.
-- Replace `DBMS_OUTPUT.PUT_LINE` with `SELECT`; replace `RAISE_APPLICATION_ERROR` with `SIGNAL SQLSTATE`.
+- **No packages** in MySQL — flatten package procedures/functions into standalone routines named `<package>_<subprogram>` (toolkit convention, `engines/oracle-to-mysql/checks/package-naming.md`) and convert package-level state to tables or session user variables (`@pkg_var`). Routine names are limited to **64 characters** (error 1059, verified); shorten long `<package>_<subprogram>` names consistently.
+- **No overloading:** a second routine with the same name fails (error 1304, verified). Give overloaded package subprograms distinct names (for example a type suffix).
+- **No parameter defaults:** `IN a INT DEFAULT 1` is a syntax error (verified); every caller must pass every argument (toolkit check §3). No named-notation calls (`p => 1`).
+- **No `%TYPE` / `%ROWTYPE` anchors** (syntax error, verified): declare the concrete column type.
+- `OUT`/`INOUT` arguments must be user variables or routine variables: `CALL p(2, @b); SELECT @b;`.
+- `DEFINER`: the Aurora master user can create routines with any `DEFINER`, even a user that does not exist (verified on both versions); a routine whose definer is missing fails at call time. On 8.4 this ability is the `SET_ANY_DEFINER` / `ALLOW_NONEXISTENT_DEFINER` privileges (`SET_USER_ID` on 3.x). Create the owning account first and use `SQL SECURITY INVOKER` unless definer rights are required.
+- Recursion is disabled for procedures (`max_sp_recursion_depth` = 0) and not allowed for functions; raise the session variable or rewrite recursive PL/SQL as loops or recursive CTEs.
+- Replace `DBMS_OUTPUT.PUT_LINE` with `SELECT`; replace `RAISE_APPLICATION_ERROR(-20001, msg)` with `SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = msg, MYSQL_ERRNO = 20001` (verified: the client receives error 20001-style codes and SQLSTATE 45000). `EXCEPTION WHEN OTHERS` → `DECLARE EXIT HANDLER FOR SQLEXCEPTION BEGIN … RESIGNAL; END`; read details with `GET DIAGNOSTICS CONDITION 1 @msg = MESSAGE_TEXT`.
 - Functions: use `CREATE FUNCTION ... RETURNS <type>` with characteristics; mark `DETERMINISTIC`/`READS SQL DATA` as needed.

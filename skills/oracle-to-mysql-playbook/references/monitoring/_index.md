@@ -17,5 +17,7 @@ V$ dynamic performance views) to Amazon Aurora MySQL.
 - **MySQL**: `information_schema` tables, `SHOW` commands (`PROCESSLIST`,
   `STATUS`, `GLOBAL VARIABLES`), the `mysql` system schema, `performance_schema`,
   and the `sys` schema.
-- **Aurora MySQL**: use **Performance Insights** for workload analysis.
+- **Aurora MySQL**: use **CloudWatch Database Insights** (Performance Insights reached end of life on 2026-07-31) for workload analysis; enable `performance_schema` (off by default).
 - All monitoring queries are **manual** rewrites — table/view names differ.
+
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): `INNODB_LOCKS` removed, `performance_schema` off by default, Database Insights replaces Performance Insights.

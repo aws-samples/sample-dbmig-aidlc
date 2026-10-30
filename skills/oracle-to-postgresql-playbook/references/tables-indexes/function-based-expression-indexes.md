@@ -4,7 +4,9 @@
 > URL: https://docs.aws.amazon.com/dms/latest/oracle-to-aurora-postgresql-migration-playbook/chap-oracle-aurora-pg.tables.expression.html
 
 **Conversion category:** Automatic (four-star feature compatibility, four-star automation)
-**SCT automation:** Indexes action code index. PostgreSQL doesn't support functional indexes that aren't single-column.
+**SCT automation:** Indexes action code index. (The original playbook note that PostgreSQL supports only single-column expression indexes is wrong: multi-expression indexes work, verified on 18.6.)
+
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): multi-expression indexes work (corrected), IMMUTABLE requirement (verified with `to_char`), numeric `EXTRACT`, Oracle NULL-key trick → partial index.
 
 ## Oracle
 Function-based indexes store the output of a function applied to column values, allowing functions in the `WHERE` clause to use the index. The optimizer uses it only when the function appears in the query. Oracle updates the index on each DML so the function result stays correct.
@@ -47,9 +49,10 @@ ANALYZE SYSTEM_EVENTS;
 EXPLAIN SELECT * FROM SYSTEM_EVENTS
   WHERE EXTRACT(DAY FROM EVENT_TIME) = '22';
 -- Bitmap Heap Scan on system_events
---   Recheck Cond: (date_part('day', event_time) = '22'::double precision)
+--   Recheck Cond: (EXTRACT(day FROM event_time) = '22'::numeric)
 --   -> Bitmap Index Scan on evnt_by_day
---        Index Cond: (date_part('day', event_time) = '22'::double precision)
+--        Index Cond: (EXTRACT(day FROM event_time) = '22'::numeric)
+-- (PG 14+: EXTRACT returns numeric, verified; older output showed date_part ... double precision)
 ```
 
 ### Partial indexes (PostgreSQL-specific)
@@ -68,6 +71,8 @@ CREATE INDEX IDX_TIME_CODE ON SYSTEM_EVENTS(EVENT_TIME)
 
 ## Conversion notes
 - Oracle function-based index → PostgreSQL expression index, near-identical syntax.
-- PostgreSQL supports only **single-column** functional/expression indexes (the key difference flagged by SCT).
-- Consider PostgreSQL **partial indexes** (`WHERE` predicate) as an additional optimization not available in Oracle.
+- PostgreSQL supports **multi-column and multi-expression** indexes: `CREATE INDEX ON t ((lower(a)), (b + 1));` (verified). Each expression must be wrapped in its own parentheses.
+- **Every function in an index expression must be `IMMUTABLE`.** Common Oracle function-based indexes fail: `to_char(ts, 'YYYY')` is only `STABLE` (`functions in index expression must be marked IMMUTABLE`, verified), as are `to_date`/`to_timestamp` and casts that depend on `timezone`/`datestyle`. Rewrite with immutable forms (`extract(year FROM ts)`, `date_trunc('day', ts)` on `timestamp` without time zone), or wrap the logic in your own function declared `IMMUTABLE`, and only when it really is.
+- Oracle's trick of indexing `CASE WHEN status = 'OPEN' THEN id END` (NULL keys are not indexed in Oracle) → a PostgreSQL **partial index**: `CREATE INDEX ON t (id) WHERE status = 'OPEN';` (verified). Queries must repeat the predicate (`WHERE status = 'OPEN'`).
+- Oracle `UPPER(col)` indexes for case-insensitive lookup → `CREATE INDEX ON t (upper(col))`, or a `citext` column / nondeterministic collation.
 - Run `ANALYZE` after data load so the planner has statistics to choose the expression index.

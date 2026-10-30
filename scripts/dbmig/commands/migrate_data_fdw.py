@@ -88,7 +88,7 @@ def _load_unit(unit: Dict) -> Dict:
         result["status"] = "error"; result["error"] = f"config: {exc}"
         return result
     try:
-        sch = schema.lower(); tbl = table.lower()
+        sch = unit.get("tgt_schema") or schema.lower(); tbl = table.lower()
         console.info(f"start {label}: server-side INSERT ... SELECT via FDW")
         if shard is not None:
             # Idempotent resume: clear this shard's PK range, then (re)load it. On a
@@ -118,7 +118,8 @@ def _load_unit(unit: Dict) -> Dict:
 # ---- planning -------------------------------------------------------------
 
 def _plan_table(source, target, schema: str, table: str, stage: str, server: str,
-                shards: int, project: str, truncate: bool) -> List[Dict]:
+                shards: int, project: str, truncate: bool,
+                tgt_schema: Optional[str] = None) -> List[Dict]:
     """Create the foreign table for ``table`` and return its work units.
 
     Columns are aligned SOURCE→TARGET by name (case-insensitive): the foreign table
@@ -126,10 +127,11 @@ def _plan_table(source, target, schema: str, table: str, stage: str, server: str
     column with no matching target column is a hard mismatch (the target schema was
     not applied, or a column was renamed in conversion) and raises.
     """
+    tgt_schema = tgt_schema or schema.lower()
     src_cols = source.data_columns(schema.upper(), table)  # [(name, type)] source order, minus virtual/computed
-    tgt_types = target.target_column_types(schema.lower(), table.lower())
+    tgt_types = target.target_column_types(tgt_schema, table.lower())
     if not tgt_types:
-        raise RuntimeError(f"target table {schema.lower()}.{table.lower()} not found "
+        raise RuntimeError(f"target table {tgt_schema}.{table.lower()} not found "
                            "(apply-schema before migrate-data)")
     tmap = {name.lower(): (name, typ) for name, typ in tgt_types}
 
@@ -156,12 +158,12 @@ def _plan_table(source, target, schema: str, table: str, stage: str, server: str
                                     source.fdw_foreign_table_options(schema.upper(), table))
 
     if truncate:
-        target.truncate(schema.lower(), ft)
+        target.truncate(tgt_schema, ft)
         for f in _state_dir(project).glob(f"{schema.upper()}.{table.upper()}*.json"):
             with contextlib.suppress(OSError):   # already gone
                 f.unlink()
 
-    base = {"schema": schema, "table": table, "stage": stage, "ft": ft,
+    base = {"schema": schema, "tgt_schema": tgt_schema, "table": table, "stage": stage, "ft": ft,
             "insert_cols": insert_cols, "select_exprs": select_exprs, "project": project}
 
     # Intra-table sharding: one big single-numeric-PK table -> many parallel
@@ -210,6 +212,7 @@ def run(args) -> int:
         return 2
 
     stage = _stage_schema(args.schema)
+    tgt_schema = config.resolve_target_schema(args)
 
     # Cleanup-only: tear down the FDW objects and exit (for a prior --fdw-keep run).
     if getattr(args, "fdw_cleanup", False):
@@ -262,7 +265,7 @@ def run(args) -> int:
                 try:
                     tier_units.extend(_plan_table(source, target, args.schema, table,
                                                   stage, FDW_SERVER, shards,
-                                                  args.project, truncate))
+                                                  args.project, truncate, tgt_schema))
                 except Exception as exc:  # noqa: BLE001
                     plan_errors.append((table, str(exc).strip()))
             units_by_tier.append(tier_units)
@@ -326,7 +329,7 @@ def run(args) -> int:
     try:
         for name in ok_tables:
             try:
-                rid.reset_identity(args.schema.lower(), name.lower())
+                rid.reset_identity(tgt_schema, name.lower())
 
             except Exception as exc:  # noqa: BLE001 - report, keep loading others
                 console.warn(f"{name}: identity reset failed ({exc}) — run "

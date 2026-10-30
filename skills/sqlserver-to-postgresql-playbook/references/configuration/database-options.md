@@ -6,6 +6,8 @@
 **Conversion category:** N/A (One-star feature compatibility)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): per-database `ALTER DATABASE … SET` exists (corrected); option mapping table (READ_ONLY, OFFLINE, RCSI, statistics, CDC; verified).
+
 ## SQL Server
 
 SQL Server provides database-level options set with `ALTER DATABASE … SET`. Use these to:
@@ -48,5 +50,18 @@ CREATE SCHEMA sales;
 
 ## Conversion notes
 - Database options map to AWS **Database Parameter Group**; server options map to AWS **Cluster Parameter Group** (see Server Options).
-- There is no direct `ALTER DATABASE … SET` equivalent — feature/behavior settings are managed through parameter groups rather than per-database T-SQL.
+- PostgreSQL **does** have per-database settings (the original playbook said there was no `ALTER DATABASE … SET` equivalent). `ALTER DATABASE db SET <parameter> = <value>` sets a default for every new session in that database, and parameter groups set cluster/instance defaults. Verified on Aurora 18.6:
+
+| SQL Server `ALTER DATABASE … SET` | PostgreSQL |
+|---|---|
+| `READ_ONLY` | `ALTER DATABASE db SET default_transaction_read_only = on;` (a session default, not enforcement; combine with privileges) |
+| `OFFLINE` / `SINGLE_USER` | `ALTER DATABASE db ALLOW_CONNECTIONS false;` (plus `pg_terminate_backend` for existing sessions) / `CONNECTION LIMIT 1` |
+| `READ_COMMITTED_SNAPSHOT ON` / `ALLOW_SNAPSHOT_ISOLATION ON` | Nothing to set: PostgreSQL `READ COMMITTED` is already MVCC (readers never block writers), like RCSI. `REPEATABLE READ` ≈ SQL Server `SNAPSHOT` |
+| `AUTO_CREATE/UPDATE_STATISTICS` | autovacuum's auto-analyze (always on by default) |
+| `ANSI_NULLS`, `QUOTED_IDENTIFIER`, `ARITHABORT` | Always standard behavior in PostgreSQL; drop |
+| `COMPATIBILITY_LEVEL` | No equivalent; behavior follows the engine major version |
+| `RECOVERY FULL/SIMPLE` | N/A; Aurora storage handles durability and PITR |
+| `CHANGE_TRACKING` / CDC | Logical replication/decoding (`rds.logical_replication = 1`) or AWS DMS CDC |
+| `ENABLE_BROKER` | No Service Broker; see `../tsql/service-broker.md` |
+| default collation | Set at `CREATE DATABASE … LOCALE_PROVIDER icu ICU_LOCALE '…'`, not changeable later |
 - Aurora PostgreSQL uses three-part naming `<database>.<schema>.<object>`, mirroring SQL Server's database/schema/object hierarchy.

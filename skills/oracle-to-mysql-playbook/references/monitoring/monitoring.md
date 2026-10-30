@@ -3,6 +3,8 @@
 > Source: AWS Oracle→Aurora MySQL Migration Playbook
 > URL: https://docs.aws.amazon.com/dms/latest/oracle-to-aurora-mysql-migration-playbook/chap-oracle-aurora-mysql.monitoring.html
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Performance Insights EOL (2026-07-31) → CloudWatch Database Insights; INNODB_LOCKS removed (verified); performance_schema off by default (verified); modern session, top-SQL and storage mappings; key CloudWatch metrics.
+
 **Conversion category:** Manual
 **SCT automation:** N/A
 
@@ -53,8 +55,10 @@ Performance Views* in the Oracle documentation.
 ## MySQL
 
 MySQL retrieves database state two ways, comparable to Oracle's data dictionary
-tables and V$ views. Amazon Aurora MySQL additionally provides a **Performance
-Insights** console for monitoring/analyzing workloads and troubleshooting.
+tables and V$ views. For workload analysis, Aurora MySQL now uses **CloudWatch Database
+Insights** — **Performance Insights reached end of life on 2026-07-31** and was replaced
+by Database Insights (Standard mode included; Advanced mode adds SQL-level history and
+fleet views).
 
 **Information schema tables** — SQL-standard views describing objects in the
 current database. Comparable to Oracle `USER_*` dictionary tables; owned by the
@@ -88,22 +92,22 @@ documentation.
 - All monitoring is **manual** — rewrite Oracle V$/dictionary queries against the
   MySQL `information_schema`, `performance_schema`, `mysql` system schema, or
   `SHOW` commands. Object names differ, so queries must be changed.
-- For Aurora MySQL, prefer **Performance Insights** for workload analysis and
-  performance troubleshooting; also leverage `performance_schema` and the `sys`
-  schema (curated views over `performance_schema`) for session, lock, IO, and
-  statement-level diagnostics.
+- For Aurora MySQL, use **CloudWatch Database Insights** (successor to Performance Insights, which reached end of life on 2026-07-31) for workload analysis, plus `performance_schema` and the `sys` schema for session, lock, IO and statement-level diagnostics.
+- `V$SQL` / AWR top SQL → `performance_schema.events_statements_summary_by_digest` and `sys.statement_analysis`. **`performance_schema` is OFF by default** on the default Serverless v2 parameter group of both 3.13 and 8.4 (verified: the digest table is empty). It is a static parameter: enable it in the parameter group and reboot before go-live, or Database Insights shows no SQL-level waits.
+- `information_schema.INNODB_METRICS` exists and has enabled counters on both versions (verified).
+- Aurora-specific CloudWatch metrics to alarm on: `AuroraReplicaLag`, `Deadlocks`, `BufferCacheHitRatio`, `DMLLatency`, `CommitLatency`, `ServerlessDatabaseCapacity`/`ACUUtilization`, `FreeableMemory`.
 
 ### Oracle → MySQL equivalence mapping
 
 | Information | Oracle | MySQL |
 |---|---|---|
 | Database properties | `V$DATABASE` | `pg_database` *(per source; use `SHOW VARIABLES` / `information_schema.SCHEMATA` on MySQL)* |
-| Database sessions | `V$SESSION` | `SHOW PROCESSLIST` |
+| Database sessions | `V$SESSION` | `SHOW PROCESSLIST`, `sys.session`, `performance_schema.threads`; `information_schema.INNODB_TRX` for open transactions |
 | Database users | `DBA_USERS` | `mysql.user` |
 | Database tables | `DBA_TABLES` | `information_schema.TABLES` |
-| Database data files | `DBA_DATA_FILES` | `information_schema.FILES` |
+| Database data files | `DBA_DATA_FILES` | Not meaningful on Aurora (shared cluster volume); use the `VolumeBytesUsed` CloudWatch metric and `information_schema.TABLES` (`DATA_LENGTH`, `INDEX_LENGTH`) per table |
 | Table columns | `DBA_TAB_COLS` | `information_schema.COLUMNS` |
-| Database locks | `V$LOCKED_OBJECT` | `information_schema.INNODB_LOCKS` |
+| Database locks | `V$LOCKED_OBJECT` | `performance_schema.data_locks` / `data_lock_waits`, `sys.innodb_lock_waits` (`information_schema.INNODB_LOCKS` was removed in MySQL 8.0 — error 1109, verified) |
 | Currently configured runtime parameters | `V$PARAMETER` | `SHOW GLOBAL VARIABLES` |
 | All system statistics | `V$SYSSTAT` | `information_schema.INNODB_METRICS` |
 | Privileges on tables | `DBA_TAB_PRIVS` | `information_schema.TABLE_PRIVILEGES` |

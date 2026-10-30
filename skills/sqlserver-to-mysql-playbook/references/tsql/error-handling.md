@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (Four star feature compatibility — different paradigm requires rewrite)
 **SCT automation:** Four star automation level
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Corrected 'no variables in SIGNAL' (SET items accept variables, SQLSTATE must be literal — verified), UNDO handlers rejected (verified), GET DIAGNOSTICS mapping (verified), RAISERROR severity, @@ERROR/XACT_ABORT patterns, rollback scope.
+
 ## SQL Server
 
 Since SQL Server 2008, supports .NET-like error handling: `TRY/CATCH` blocks, `THROW`, `FORMATMESSAGE`, error-state functions, plus legacy `RAISERROR`.
@@ -97,7 +99,7 @@ DECLARE TableDoesNotExist CONDITION FOR SQLSTATE VALUE '42S02';
 ### DECLARE … HANDLER
 
 ```sql
-DECLARE {CONTINUE | EXIT | UNDO}
+DECLARE {CONTINUE | EXIT}          -- UNDO is listed in the grammar but is a syntax error (verified)
 HANDLER FOR
 <MySQL Error Code> |
 SQLSTATE [VALUE] <SQLState Value> |
@@ -142,12 +144,17 @@ SIGNAL SQLSTATE '55555'
 RESIGNAL SET MYSQL_ERRNO = 5
 ```
 
-`RESIGNAL` passes on condition info during handler execution, optionally changing some/all of it. Cannot use variables in `SIGNAL`.
+`RESIGNAL` passes on condition info during handler execution, optionally changing some/all of it. *(corrected)* The **`SQLSTATE` value must be a literal** (a variable is a syntax error, verified), but the `SET` items **can** use variables: `SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = v_msg, MYSQL_ERRNO = 50001` works (verified on 3.13 and 8.4.8), so `THROW 50001, @msg, 1` converts directly.
 
 ## Conversion notes
 
 - Map `TRY/CATCH` → nested `BEGIN…END` blocks with per-scope `DECLARE … HANDLER`. Handlers must be declared **first** (before the statements), unlike CATCH which follows.
-- Map `THROW`/`RAISERROR` → `SIGNAL`/`RESIGNAL`. `THROW` with variables is not supported. `FORMATMESSAGE` has no equivalent.
+- Map `THROW`/`RAISERROR` → `SIGNAL`/`RESIGNAL`. `THROW <num>, <msg variable>, <state>` → `SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = v_msg, MYSQL_ERRNO = <num>` (variables allowed in `SET`, verified). `FORMATMESSAGE` → build the text with `CONCAT()` first. `THROW;` (rethrow) → `RESIGNAL;` inside the handler.
+- `ERROR_NUMBER()`, `ERROR_MESSAGE()`, `ERROR_STATE()` → `GET DIAGNOSTICS CONDITION 1 v_no = MYSQL_ERRNO, v_msg = MESSAGE_TEXT, v_state = RETURNED_SQLSTATE` inside the handler (verified: duplicate key gave 23000 / 1062 / *Duplicate entry '1' for key 'employees.PRIMARY'*). `ERROR_LINE()`/`ERROR_PROCEDURE()` have no equivalent.
+- `RAISERROR(…, 10, …)` (informational, severity ≤ 10) → `SIGNAL SQLSTATE '01000'` (a warning that does not stop execution).
+- `@@ERROR` after each statement → a `CONTINUE HANDLER` that sets a flag, or `GET DIAGNOSTICS @n = NUMBER`. `XACT_ABORT ON` → an `EXIT HANDLER FOR SQLEXCEPTION BEGIN ROLLBACK; RESIGNAL; END` at the start of the procedure.
+- **Rollback scope:** an error in MySQL rolls back only the failing statement (like SQL Server without `XACT_ABORT`); the transaction stays open, so the handler must `ROLLBACK` explicitly. Error code 1213 (deadlock) rolls back the whole transaction.
+- Handler placement trap: a `CONTINUE HANDLER FOR NOT FOUND` declared for a cursor also catches a `SELECT … INTO` that finds no rows (see `cursors.md`).
 - Map error-state functions → `GET DIAGNOSTICS`.
 - Consider switching from proprietary error codes to standard `SQLSTATE` values.
 - Handler scope/choice: SQL Server has one CATCH per statement (deterministic, next block in order). Aurora MySQL allows multiple handlers; precedence = MySQL error code > `SQLSTATE` > general (`SQLWARNING`/`SQLEXCEPTION`/`NOT FOUND`), and `SQLEXCEPTION` > `SQLWARNING`. Equal-precedence handlers → non-deterministic choice.
@@ -156,7 +163,7 @@ RESIGNAL SET MYSQL_ERRNO = 5
 |---|---|---|
 | `TRY/CATCH` blocks | Nested `BEGIN…END` with per-scope handlers | Handlers declared first |
 | `THROW`, `RAISERROR` | `SIGNAL`, `RESIGNAL` | |
-| `THROW` with variables | Not supported | |
+| `THROW` with variables | `SIGNAL … SET MESSAGE_TEXT = var` | `SQLSTATE` itself must be a literal |
 | `FORMATMESSAGE` | N/A | |
 | Error-state functions | `GET DIAGNOSTICS` | |
 | `sys.messages` codes | MySQL codes + ANSI/ODBC `SQLSTATE` | Prefer `SQLSTATE` |

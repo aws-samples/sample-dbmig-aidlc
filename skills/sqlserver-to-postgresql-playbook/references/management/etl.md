@@ -6,6 +6,8 @@
 **Conversion category:** N/A (no feature compatibility)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): Glue Studio, in-database ELT with `aws_s3` + `pg_cron`, Step Functions/MWAA orchestration, CDC alternatives.
+
 Key difference: Use AWS Glue for ETL.
 
 ## SQL Server
@@ -40,4 +42,7 @@ Example — AWS Glue job to load a CSV (Visits table) from Amazon S3 into Aurora
 - No compatible ETL engine — replace SSIS/DTS packages with AWS Glue jobs.
 - AWS service replacements: AWS Glue (ETL + Data Catalog + crawlers), Amazon S3 (staging), Amazon CloudWatch (logs/alerts).
 - AWS SCT can automate conversion of existing SSIS packages to AWS Glue.
-- Glue generates Python/Scala Spark scripts; expect to review/tune generated code and column mappings.
+- Glue generates Python/Scala Spark scripts; expect to review/tune generated code and column mappings. The "Jobs (legacy)" console path in the walkthrough is now **AWS Glue Studio** (visual or script jobs); the steps are equivalent.
+- Simpler SSIS packages (file → table, table → table in the same database) often need no Spark at all: `aws_s3.table_import_from_s3` / `query_export_to_s3` plus SQL transformations, scheduled with `pg_cron` (both available on Aurora 18). Reserve Glue for heterogeneous, large or multi-step flows.
+- Orchestration of multi-package SSIS workflows → AWS Step Functions or Amazon MWAA (Airflow).
+- Change-data feeds that SSIS built from CDC tables → AWS DMS CDC, or logical replication from Aurora (`rds.logical_replication = 1`).

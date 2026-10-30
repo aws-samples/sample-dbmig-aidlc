@@ -14,10 +14,10 @@ Shared schema context for this run: `migrations/<project>/02-construction/_conte
 === TASK ===
 Convert the following Oracle object unit to PostgreSQL DDL. Return only valid PostgreSQL DDL, ready to execute. Do not include explanation outside SQL comments. Preserve table and column intent; choose appropriate PostgreSQL types, index types, and constraint forms based on the whole unit. Fold UPPERCASE identifiers to lower_case unquoted PostgreSQL identifiers unless quoting is required. Qualify every created object with the target schema `demo` (derived from the source schema — do NOT use the connection's database/catalog name for qualification).
 
-=== CONSTRUCTS DETECTED IN THIS OBJECT (apply the matching guidance in the context) ===
+=== CONSTRUCTS DETECTED IN THIS PROMPT'S SOURCE (apply the matching guidance; open the named playbook file when the context is not enough, and cite it in the conversion log) ===
 - Oracle Text → tsvector/GIN redesign (decision item); do not create DR$ tables
-- transaction control inside code → procedure (not function); caller owns the txn
-- DECODE/NVL → CASE/COALESCE (NULL-safe comparison)
+- transaction control inside code → procedure (not function); caller owns the txn — see `skills/oracle-to-postgresql-playbook/references/sql-plsql/transaction-model.md`
+- DECODE/NVL → CASE/COALESCE (NULL-safe comparison) — see `skills/oracle-to-postgresql-playbook/references/sql-plsql/single-row-and-aggregate-functions.md`
 
 --- SOURCE DDL (Oracle) — DEMO.ADDRESSES (~unknown rows) ---
 -- === TABLE ===
@@ -146,7 +146,7 @@ ALTER TABLE "DEMO"."BOOKS_COVER" ADD PRIMARY KEY ("BOOK_ID")
 -- === INDEXES ===
 CREATE UNIQUE INDEX "DEMO"."SYS_C006314" ON "DEMO"."BOOKS_COVER" ("BOOK_ID") 
   ;
-  CREATE UNIQUE INDEX "DEMO"."SYS_IL0000024567C00002$$" ON "DEMO"."BOOKS_COVER" (
+  CREATE UNIQUE INDEX "DEMO"."SYS_IL0000024575C00002$$" ON "DEMO"."BOOKS_COVER" (
   ;
 
 -- === FOREIGN KEYS ===

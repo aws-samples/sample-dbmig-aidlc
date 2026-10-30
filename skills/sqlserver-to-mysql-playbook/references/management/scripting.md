@@ -6,6 +6,8 @@
 **Conversion category:** Manual (No feature compatibility)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): MySQL Shell added and MySQL Utilities marked discontinued, current server banner, 8.4 TLS/auth connection (verified), Data API, GO/DELIMITER note.
+
 ## SQL Server
 
 SQL Server supports T-SQL and XQuery scripting within frameworks such as SQL Server Agent and stored procedures. The `SQLCMD` command-line utility runs T-SQL scripts, but the most feature-rich scripting environment is **PowerShell**.
@@ -36,7 +38,11 @@ The most common MySQL development/admin tool (free Community + paid Commercial e
 
 Also supports a Python scripting shell (interactive and programmatic).
 
+### MySQL Shell
+*(added)* MySQL Shell (`mysqlsh`, JavaScript/Python/SQL modes) is the current administration and scripting tool: parallel dump/load (`util.dumpSchemas`, `util.loadDump`), table import, upgrade checker (`util.checkForServerUpgrade` before 3 → 8.4). Use the 8.4 client for Aurora MySQL 8.4.
+
 ### MySQL Utilities
+*(discontinued)* MySQL Utilities are no longer maintained; most functions moved to MySQL Shell. The list below is historical.
 A set of Python command-line tools for maintenance/administration (some won't work on Aurora MySQL due to lack of root access):
 * **Admin** — Clone, Copy, Compare, Diff, Export, Import, User Management.
 * **Replication** — Setup, Configuration, Verification.
@@ -60,7 +66,7 @@ A web service for managing relational databases (setup, operate, scale, backup, 
    ```
    Welcome to the MySQL monitor. Commands end with ; or \g.
    Your MySQL connection id is 350
-   Server version: 5.6.27-log MySQL Community Server (GPL)
+   Server version: 8.4.8 (Aurora MySQL 8.4)   -- the original showed a 5.6 server
    mysql>
    ```
 
@@ -68,4 +74,7 @@ A web service for managing relational databases (setup, operate, scale, backup, 
 - Non-compatible tool sets and scripting languages. AWS replacements: **MySQL Workbench**, **Amazon RDS API**, **AWS Management Console**, and **AWS CLI**.
 - PowerShell SMO snap-ins / SQLCMD / `sqlps` have no equivalent; SQL Server cmdlets can't be used in AWS Tools for PowerShell.
 - No direct host/CLI access to the server (PaaS) — administer via the RDS console/API/CLI; connect with a MySQL client over the cluster endpoint.
-- Some MySQL Utilities require root access and won't work on Aurora MySQL.
+- Some MySQL Utilities require root access and won't work on Aurora MySQL; prefer MySQL Shell.
+- Aurora MySQL 8.4 requires TLS (`require_secure_transport` = ON) and creates users with `caching_sha2_password` (verified): connect with `mysql --ssl-mode=VERIFY_IDENTITY --ssl-ca=global-bundle.pem …` and an 8.x client.
+- The **RDS Data API** (`aws rds-data execute-statement`) runs SQL over HTTPS with IAM, without a network path to the cluster — useful for automation (used for all validation in this review).
+- `sqlcmd` scripts with `GO` batch separators → the `mysql` client uses `;` and `DELIMITER //` for routine bodies; this toolkit applies DDL through PyMySQL without client delimiters.

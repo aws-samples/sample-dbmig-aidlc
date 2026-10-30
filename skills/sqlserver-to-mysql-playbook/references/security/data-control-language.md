@@ -6,6 +6,8 @@
 **Conversion category:** Assisted
 **SCT automation:** N/A (No automation; four-star feature compatibility)
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): partial_revokes default (verified) and its effect, SQL Server securable-syntax mappings, column grants (verified), REPLICATION REPLICA, DEFINER rights instead of ownership chaining.
+
 ## SQL Server
 
 The ANSI standard uses `GRANT` and `REVOKE` to control permissions. SQL Server also provides a `DENY` command to explicitly restrict access. `DENY` takes precedence over `GRANT` and avoids conflicting permissions for users with multiple logins (e.g. a user `DENY`'d through group membership but `GRANT`'d via a personal login is denied access).
@@ -26,7 +28,7 @@ REVOKE [ GRANT OPTION FOR ] {[ ALL [ PRIVILEGES ] ]|<permission>} [ ON <securabl
 
 Aurora MySQL supports the ANSI DCL commands `GRANT` and `REVOKE`. Administrators can grant/revoke permissions for individual objects (column, stored function, table) and can use wildcards to target multiple objects.
 
-Only explicitly granted permissions can be revoked. For example, after:
+Only explicitly granted permissions can be revoked (with the default `partial_revokes = OFF`, verified on 3.13 and 8.4). For example, after:
 
 ```sql
 GRANT SELECT
@@ -124,6 +126,10 @@ FROM 'user'@'localhost';
 ## Conversion notes
 - `GRANT` and `REVOKE` map closely between the two engines (ANSI-standard).
 - **No `DENY` in MySQL.** SQL Server `DENY` (which overrides `GRANT`) has no equivalent and must be reworked by not granting the permission in the first place.
+- With `partial_revokes = ON` (parameter group) you can revoke a *database-level* privilege from a *global* grant (`GRANT SELECT ON *.*` then `REVOKE SELECT ON hr.*`); table-level exceptions still need per-table grants.
+- `GRANT … ON SCHEMA::s` → `ON s.*`; `GRANT EXECUTE ON OBJECT::p` → `GRANT EXECUTE ON PROCEDURE db.p` (or `FUNCTION db.f`); column grants `GRANT SELECT (c1, c2) ON db.t` work (verified).
+- Grant to roles rather than users where possible (roles are native on 3 / 8.4); `REPLICATION SLAVE` is also spelled `REPLICATION REPLICA` (8.0.26+), the preferred name on 8.4.
+- Ownership chaining has no equivalent: a procedure runs with its `DEFINER`'s rights (`SQL SECURITY DEFINER`, default) — the usual way to give users access only through procedures.
 - SQL Server's `WITH GRANT OPTION` maps directly to MySQL's `WITH GRANT OPTION`.
 - MySQL revokes only exactly what was granted: you cannot revoke a single table's permission if it was granted with a wildcard (`db.*`). Revoke at the same granularity it was granted.
 - MySQL user identity includes host (`'user'@'localhost'`), unlike SQL Server principals.

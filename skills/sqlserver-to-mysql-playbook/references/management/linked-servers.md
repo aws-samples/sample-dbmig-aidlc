@@ -6,6 +6,8 @@
 **Conversion category:** Manual (No feature compatibility)
 **SCT automation:** No automation
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): FEDERATED unavailable and silently substituted (verified), practical replacements, OPENROWSET BULK → LOAD DATA FROM S3, no distributed transactions.
+
 ## SQL Server
 
 Linked servers let the database engine connect to external OLE-DB sources to run T-SQL against tables in other SQL Server instances or other RDBMS engines (Oracle, Access, Excel, text files, etc.). Benefits:
@@ -65,3 +67,7 @@ Aurora MySQL doesn't support remote data access. Connectivity between schemas is
 - No equivalent — Aurora MySQL has no linked-server / OLE-DB distributed query capability and no SCT automation.
 - Cross-schema queries work natively on the same instance.
 - Cross-instance / heterogeneous access must be re-implemented in the application layer (e.g., application code that connects to each source), or by consolidating data via AWS DMS / AWS Glue.
+- The `FEDERATED` engine is not available on Aurora (verified); `CREATE TABLE … ENGINE=FEDERATED` silently creates a local InnoDB table, even with `NO_ENGINE_SUBSTITUTION` (verified on 3.13 and 8.4.8). Check `information_schema.tables.ENGINE` after applying converted DDL.
+- Practical replacements: consolidate the linked databases into one Aurora cluster (cross-database `db.table` joins work); replicate remote tables into the cluster with AWS DMS or binlog replication; query across engines with Amazon Athena federated queries; call a Lambda function (`lambda_sync()`) for occasional remote lookups.
+- `OPENQUERY`/`OPENROWSET`/four-part names → none; `OPENROWSET(BULK …)` → `LOAD DATA FROM S3`.
+- Distributed transactions (`BEGIN DISTRIBUTED TRANSACTION`, MSDTC) → none; redesign as idempotent steps or sagas.

@@ -6,6 +6,8 @@
 **Conversion category:** Manual (★★ feature compatibility, no automation)
 **SCT automation:** Action code "Date and Time Functions" — no equivalent for `CREATE TABLE…TIMESTAMP WITH TIME ZONE`; use `CONVERT_TZ`.
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Aurora facts (system zone UTC, set time_zone in the cluster parameter group, named zones pre-loaded — verified), TIMESTAMP 2038 limit (verified), offset literals, toolkit datatype mapping, UTC_TIMESTAMP.
+
 ## Oracle
 
 `TIMESTAMP` variants:
@@ -42,7 +44,9 @@ INSERT INTO tz_tbl VALUES(3, TIMESTAMP '2018-01-01 2:00:00 -8:00');
 
 ## MySQL
 
-MySQL has time zone functions similar to Oracle but far fewer options — most functionality works in **queries, not DDL**. At startup the host time zone is placed in `system_time_zone` (modifiable via the OS `TZ` environment variable). **No equivalent** for Oracle `CREATE TABLE…TIMESTAMP WITH TIME ZONE`.
+MySQL has time zone functions similar to Oracle but far fewer options — most functionality works in **queries, not DDL**. **No equivalent** for Oracle `CREATE TABLE…TIMESTAMP WITH TIME ZONE`.
+
+On Aurora MySQL 3 and 8.4 (verified): `system_time_zone` is **UTC** and `time_zone` is `SYSTEM`; change the server zone with the `time_zone` parameter in the DB cluster parameter group (there is no OS `TZ` to set), or per session with `SET time_zone = 'Europe/Paris'`. Named time-zone tables are **pre-loaded** (`mysql.time_zone_name` has ~1,790 entries), so `CONVERT_TZ('…', 'UTC', 'Europe/Paris')` works without `mysql_tzinfo_to_sql` (verified).
 
 ```sql
 -- Query global and session time zone
@@ -61,5 +65,8 @@ SELECT @@global.time_zone, @@session.time_zone;
 | `TO_TIMESTAMP_TZ` | `CONVERT_TZ(STR_TO_DATE('17-09-2010 23:15','%d-%m-%Y %H:%i'),@@global.time_zone,'+03:00')` |
 
 - There is no time-zone-aware column type — store UTC (or a fixed zone) in `TIMESTAMP`/`DATETIME` and apply `CONVERT_TZ` at query time.
-- `CONVERT_TZ` requires named-zone tables to be loaded (`mysql_tzinfo_to_sql`) if using region names instead of numeric offsets.
+- Named zones work out of the box on Aurora (see above); `mysql_tzinfo_to_sql` is not needed.
+- **`TIMESTAMP` vs `DATETIME`:** `TIMESTAMP` stores UTC and converts from/to the session `time_zone`; its range ends at **2038-01-19 03:14:07 UTC** (inserting `2038-01-20` fails with error 1292, verified). `DATETIME` stores the value as given with no zone. For Oracle `TIMESTAMP WITH TIME ZONE`, store UTC in `DATETIME(6)` plus, if the original offset matters, a separate `VARCHAR(6)` offset or zone-name column. The toolkit's datatype map uses `datetime(p)` for `WITH TIME ZONE` and `timestamp(p)` for `WITH LOCAL TIME ZONE` — check `WITH LOCAL TIME ZONE` columns against the 2038 limit.
+- Literals with an offset (`'2024-06-01 12:00:00+02:00'`, MySQL 8.0.19+) are converted to the session time zone on insert into both `TIMESTAMP` and `DATETIME` (verified: stored as `10:00:00` in a UTC session); the offset itself is not stored.
+- `SYSTIMESTAMP`/`CURRENT_TIMESTAMP` in Oracle carry a zone; MySQL `NOW()` returns session-zone local time. Use `UTC_TIMESTAMP(6)` where Oracle code called `SYS_EXTRACT_UTC(SYSTIMESTAMP)`.
 - Migrate Oracle `WITH TIME ZONE`/`WITH LOCAL TIME ZONE` columns to plain `TIMESTAMP`/`DATETIME` plus application-level or `CONVERT_TZ` conversion.

@@ -4,7 +4,9 @@
 > URL: https://docs.aws.amazon.com/dms/latest/sql-server-to-aurora-postgresql-migration-playbook/chap-sql-server-aurora-pg.storage.partitioning.html
 
 **Conversion category:** Assisted (Two-star feature compatibility, three-star automation level)
-**SCT automation:** Partitioning (AWS SCT action code: Partitioning). Key difference — PostgreSQL doesn't support `LEFT` partition or foreign keys referencing partitioned tables.
+**SCT automation:** Partitioning (AWS SCT action code: Partitioning). Key difference — PostgreSQL has no `RANGE LEFT` (convert boundaries to `FROM … TO`). (The original note that foreign keys cannot reference partitioned tables is outdated: they can since PG 12, verified on 18.6.)
+
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): FKs to partitioned tables supported (corrected, verified), RANGE LEFT rewrite rule, SWITCH → DETACH/ATTACH, DEFAULT partition, `pg_partman`, PG 12–18 features, fixed exclusive upper bounds, identity instead of SERIAL.
 
 ## SQL Server
 
@@ -62,7 +64,7 @@ PostgreSQL 11 added: default partitions, hash partitioning, partition-key `UPDAT
 
 ```sql
 CREATE TABLE emps (
-  emp_id SERIAL NOT NULL,
+  emp_id INT GENERATED ALWAYS AS IDENTITY,   -- identity on partitioned tables: PG 17+
   emp_name VARCHAR(30) NOT NULL)
 PARTITION BY LIST (left(lower(emp_name), 1));
 
@@ -96,15 +98,15 @@ CREATE TABLE sales (
 
 CREATE TABLE sales_2018q1
   PARTITION OF sales (price DEFAULT 0)
-  FOR VALUES FROM ('2018-01-01') TO ('2018-03-31');
+  FOR VALUES FROM ('2018-01-01') TO ('2018-04-01');   -- TO is exclusive
 
 CREATE TABLE sales_2018q2
   PARTITION OF sales (price DEFAULT 0)
-  FOR VALUES FROM ('2018-04-01') TO ('2018-06-30');
+  FOR VALUES FROM ('2018-04-01') TO ('2018-07-01');
 
 CREATE TABLE sales_2018q3
   PARTITION OF sales (price DEFAULT 0)
-  FOR VALUES FROM ('2018-07-01') TO ('2018-09-30');
+  FOR VALUES FROM ('2018-07-01') TO ('2018-10-01');
 
 INSERT INTO sales VALUES (('2018-01-08'),3121121, 100);
 INSERT INTO sales VALUES (('2018-04-20'),4378623);
@@ -117,7 +119,7 @@ When creating a table with `PARTITION OF`, you can also use `PARTITION BY` to cr
 
 ```sql
 CREATE TABLE salers (
-  emp_id serial not null,
+  emp_id int generated always as identity,
   emp_name varchar(30) not null,
   sales_in_usd int not null,
   sale_date date not null
@@ -135,11 +137,13 @@ CREATE TABLE emp_def
 
 CREATE TABLE sales_abc_2018q1
   PARTITION OF emp_abc (sales_in_usd DEFAULT 0)
-  FOR VALUES FROM ('2018-01-01') TO ('2018-03-31');
+  FOR VALUES FROM ('2018-01-01') TO ('2018-04-01');
 -- ... (additional quarterly sub-partitions for emp_abc / emp_def)
 ```
 
 ### Legacy: list partitioning with inheritance tables (pre-PostgreSQL 10)
+
+> **Do not use for new migrations.** Kept only for reading old code; Aurora PostgreSQL 18 uses declarative partitioning.
 
 1. Create a parent table from which all child tables inherit.
 2. Create child tables inheriting from the parent with identical structure.
@@ -191,7 +195,7 @@ LANGUAGE plpgsql;
 
 CREATE TRIGGER SYSTEM_LOGS_ERR_TRIG
   BEFORE INSERT ON SYSTEM_LOGS
-  FOR EACH ROW EXECUTE PROCEDURE SYSTEM_LOGS_ERR_CODE_INS();
+  FOR EACH ROW EXECUTE FUNCTION SYSTEM_LOGS_ERR_CODE_INS();
 ```
 
 Notes for legacy inheritance partitioning:
@@ -243,14 +247,26 @@ CREATE TRIGGER some_trigger AFTER UPDATE ON tst_part
 -- trigger propagated to each partition
 ```
 
-For more information, see [Table Partitioning](https://www.postgresql.org/docs/13/ddl-partitioning.html) in the PostgreSQL documentation.
+### Later releases (verified on Aurora PostgreSQL 18.6 unless noted)
+
+- PG 12: foreign keys **referencing** partitioned tables.
+- PG 14: `DETACH PARTITION … CONCURRENTLY` (not while a `DEFAULT` partition exists).
+- PG 17: identity columns and exclusion constraints on partitioned tables.
+- PG 18: `ANALYZE ONLY`/`VACUUM ONLY` on the parent; `NOT VALID` FKs on partitioned tables.
+- Still absent in PG 18: `SPLIT`/`MERGE PARTITION`, global indexes.
+
+For more information, see [Table Partitioning](https://www.postgresql.org/docs/18/ddl-partitioning.html) in the PostgreSQL documentation.
 
 ## Conversion notes
 
 - SQL Server supports `RANGE` partitioning only; PostgreSQL supports `RANGE` and `LIST` (plus `HASH` from v11).
-- Partition boundary direction: SQL Server allows `LEFT` or `RIGHT`; PostgreSQL is `RIGHT` only — `LEFT` partition definitions must be rewritten.
-- `EXCHANGE`/`SPLIT` partition: available in SQL Server; not available in PostgreSQL (N/A) — plan manual data movement.
-- Foreign keys referencing a partitioned table are not supported in PostgreSQL (FKs *from* a partitioned table propagate to partitions in v11+).
+- Partition boundary direction: SQL Server allows `LEFT` or `RIGHT`; PostgreSQL ranges are `FROM` (inclusive) `TO` (exclusive), which is the same as `RANGE RIGHT`. `RANGE LEFT` boundaries (value belongs to the lower partition) must be rewritten: for integers, `LEFT FOR VALUES (1, 1000)` → partitions `FROM (MINVALUE) TO (2)`, `FROM (2) TO (1001)`, `FROM (1001) TO (MAXVALUE)`. For dates/decimals, shift by the smallest increment or switch to the RIGHT-style boundary the business really meant.
+- `SWITCH PARTITION` (`ALTER TABLE … SWITCH PARTITION n TO t`) → `ALTER TABLE parent DETACH PARTITION p;` / `ALTER TABLE parent ATTACH PARTITION staging FOR VALUES …` (add a matching `CHECK` constraint on the staging table first so ATTACH skips the scan). `SPLIT RANGE` / `MERGE RANGE` → create new partitions and move rows; PG 18 still has no `SPLIT`/`MERGE PARTITION` (verified).
+- Foreign keys referencing a partitioned table **are** supported (PG 12+, verified). FKs *from* a partitioned table propagate to partitions.
+- `$PARTITION.fn(value)` → `SELECT tableoid::regclass FROM t WHERE …` for the partition a row lives in. Partition pruning happens automatically from `WHERE` clauses.
+- Always add a `DEFAULT` partition (or partitions to `MINVALUE`/`MAXVALUE`): SQL Server partition functions cover the whole domain, so PostgreSQL inserts outside the defined ranges would fail with `23514` at runtime. NULL keys go only to the `DEFAULT` partition.
+- PK/UNIQUE on a partitioned table must include the partition key (SQL Server has the same rule for aligned unique indexes). For a non-aligned unique index there is no equivalent.
+- Automatic partition creation (SQL Server sliding-window jobs) → `pg_partman` 5.4 + `pg_cron` (both available on Aurora 18).
 - SQL Server uses partition functions + partition schemes mapped to file groups; PostgreSQL uses declarative `PARTITION BY`/`PARTITION OF` (or legacy inheritance + redirect triggers pre-v10).
 - SCT provides three-star automation for partitioning, but two-star feature compatibility means manual review/rewrite is still expected, especially for `LEFT` boundaries, `EXCHANGE`/`SPLIT`, and FK references.
 
@@ -258,9 +274,10 @@ For more information, see [Table Partitioning](https://www.postgresql.org/docs/1
 
 | Feature | SQL Server | Aurora PostgreSQL |
 |---|---|---|
-| Partition types | `RANGE` only | `RANGE`, `LIST` (`HASH` v11+) |
-| Partition boundary direction | `LEFT` or `RIGHT` | `RIGHT` |
-| Exchange partition | Any partition to any partition | N/A |
+| Partition types | `RANGE` only | `RANGE`, `LIST`, `HASH` |
+| Partition boundary direction | `LEFT` or `RIGHT` | `RIGHT`-equivalent (`FROM` inclusive, `TO` exclusive) |
+| Exchange partition | `SWITCH` | `DETACH` + `ATTACH` |
+| FK referencing partitioned table | Yes | Yes (PG 12+) |
 | Partition function | Abstract function object | Abstract function object |
 | Partition scheme | Abstract storage mapping object | Abstract storage mapping object |
 | Limitations | None — all tables partitioned | Not all commands compatible with table inheritance |

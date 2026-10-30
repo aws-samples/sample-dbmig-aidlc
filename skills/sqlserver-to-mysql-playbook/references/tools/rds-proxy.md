@@ -6,6 +6,8 @@
 **Conversion category:** N/A (tooling)
 **SCT automation:** N/A — post-migration connection-management feature for the target.
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): 8.4/auth check, session-pinning list for converted T-SQL, AWS driver wrappers.
+
 ## SQL Server
 N/A on the source side. RDS Proxy is a target-side architectural enhancement; the playbook presents it as a benefit available after migrating to Aurora/RDS MySQL.
 
@@ -21,3 +23,6 @@ Amazon RDS Proxy is a fully managed, highly available database proxy for Amazon 
 - **Highly available:** Deployed across multiple Availability Zones to protect against infrastructure failure.
 - **Pricing:** Pay per vCPU of the database instance for which the proxy is enabled.
 - **Benefits summary:** Improved application performance, increased availability (66% faster failover), centralized security via Secrets Manager, fully managed, fully compatible, available and durable across AZs.
+- Confirm RDS Proxy supports Aurora MySQL 8.4 and `caching_sha2_password` clients before go-live.
+- Converted T-SQL that keeps **session state** — `#temp` tables emulated as temporary tables, `SET` options (`sql_mode`, isolation), user variables, `GET_LOCK` (for `sp_getapplock`), prepared statements — **pins** connections and removes most pooling benefit.
+- Alternative without a proxy: AWS Advanced JDBC/Python/Go wrappers with fast failover.

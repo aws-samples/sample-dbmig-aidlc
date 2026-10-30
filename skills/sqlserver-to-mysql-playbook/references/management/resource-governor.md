@@ -6,6 +6,8 @@
 **Conversion category:** Manual (One star feature compatibility)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Verified per-user limits and that resource groups are unavailable to the master user (1227); max_execution_time; custom endpoints and separate readers for isolation.
+
 ## SQL Server
 
 SQL Server Resource Governor controls and manages resource consumption, enforcing workload limits on CPU, physical I/O, and Memory. Configurations are dynamic and changeable in real time. In SQL Server 2019, `REQUEST_MAX_MEMORY_GRANT_PERCENT` (in `CREATE/ALTER WORKLOAD GROUP`) changed from integer to float for more granular memory control.
@@ -97,3 +99,6 @@ Both limit resources per workload type, but differ in scope and flexibility. Res
 - Requires application changes: connections must use the specific resource-limited users.
 - Aurora MySQL raises errors instead of throttling — add retry logic in the application.
 - No SCT automation; map workloads to users manually.
+- Verified on 3.13 and 8.4.8: per-user limits work (`WITH MAX_USER_CONNECTIONS 5 MAX_QUERIES_PER_HOUR 1000`, visible in `mysql.user`). MySQL **resource groups** (`CREATE RESOURCE GROUP`, CPU affinity/priority — the closest to Resource Governor pools) are **not usable** on Aurora: the master user lacks `RESOURCE_GROUP_ADMIN` (error 1227, verified).
+- Per-query runtime caps: `SET SESSION max_execution_time = ms` or the `/*+ MAX_EXECUTION_TIME(ms) */` hint (read-only `SELECT`s).
+- Architectural isolation instead of pools: separate Aurora clusters per workload, **Aurora custom endpoints** that route reporting users to specific readers, Serverless v2 readers that scale independently, and Aurora Parallel Query for analytics.

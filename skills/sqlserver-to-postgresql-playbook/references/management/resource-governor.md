@@ -6,6 +6,8 @@
 **Conversion category:** N/A (three-star feature compatibility)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): per-role declarative limits (timeouts incl. PG 17 `transaction_timeout`, verified), role-based classifier, custom endpoints, Serverless v2.
+
 Key difference: Distribute load, applications, or users across multiple instances.
 
 ## SQL Server
@@ -66,15 +68,19 @@ Examples — create a cluster (RDS → Databases → Create database → follow 
 |---|---|
 | Set max CPU usage for a resource group | Create a dedicated Aurora instance for a specific application. |
 | Limit degree of parallelism for specific queries | `SET max_parallel_workers_per_gather TO x;` (set as part of the app's DB connection) |
-| Limit parallel runs | `SET max_parallel_workers_per_gather TO 0;` or `SET max_parallel_workers TO x;` (whole system, PostgreSQL 10+) |
-| Limit number of active sessions | Detect open connections per app and restrict via DB procedures or the application DAL, e.g.: `select pid from pg_stat_activity where usename in (select usename from pg_stat_activity where state = 'active' group by usename having count(*) > 10) and state = 'active' order by query_Start;` |
-| Restrict max query runtime | Terminate long-running sessions: `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE now() - pg_stat_activity.query_start > interval '5 minutes';` |
-| Limit max idle time for sessions | Terminate idle sessions: `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'regress' AND pid <> pg_backend_pid() AND state = 'idle' AND state_change < current_timestamp - INTERVAL '5' MINUTE;` |
-| Limit time an idle session holding locks can block others | Terminate blocking idle sessions via a join of `pg_locks` (blocked vs blocking) and `pg_stat_activity`, calling `pg_terminate_backend(blocking_locks.pid)` where the lock is not granted and the blocker's `state_change` is older than the threshold. |
+| Limit parallel runs | `SET max_parallel_workers_per_gather TO 0;` or `SET max_parallel_workers TO x;` (whole system) |
+| Classifier function (route by login/host/app) | One **role per workload group**, with settings attached to the role: `ALTER ROLE reporting SET max_parallel_workers_per_gather = 2; ALTER ROLE reporting SET work_mem = '256MB';`. Route read workloads with **Aurora custom endpoints** |
+| `GROUP_MAX_REQUESTS` (concurrent requests) | `ALTER ROLE reporting CONNECTION LIMIT 10;` and/or a fixed pool size in RDS Proxy / the application pool |
+| `REQUEST_MAX_CPU_TIME_SEC` / max query runtime | **Declarative:** `ALTER ROLE reporting SET statement_timeout = '5min';`, PG 17+ `transaction_timeout` (verified on 18.6). Ad hoc: `pg_cancel_backend` on long runners |
+| Limit max idle time for sessions | `ALTER ROLE app SET idle_session_timeout = '30min';` (PG 14+) |
+| Limit time an idle session holding locks can block others | `ALTER ROLE app SET idle_in_transaction_session_timeout = '10min';` plus `lock_timeout`; blockers via `pg_blocking_pids(pid)` |
+| `REQUEST_MAX_MEMORY_GRANT_PERCENT` | per-role `work_mem` / `hash_mem_multiplier` |
+| `MAX_CPU_PERCENT` / `MAX_IOPS_PER_VOLUME` | No in-engine limit; isolate the workload on its own instance or Serverless v2 cluster |
 
 ## Conversion notes
 
 - No engine equivalent — replace Resource Governor with workload isolation across multiple Aurora clusters/instances and read replicas (each independently sized).
 - Parallelism limits map to `max_parallel_workers_per_gather` / `max_parallel_workers`.
-- Session/query/idle limits are not declarative; implement with `pg_stat_activity` + `pg_terminate_backend` in procedures, the application DAL, or scheduled jobs.
+- Session/query/idle limits **are** declarative per role on PostgreSQL 14–18 (`statement_timeout`, `transaction_timeout`, `idle_session_timeout`, `idle_in_transaction_session_timeout`, `CONNECTION LIMIT`). Fall back to `pg_terminate_backend` jobs (`pg_cron`) only for rules these cannot express.
+- Aurora Serverless v2 per workload gives each group its own CPU/memory envelope that scales independently.
 - AWS service replacement: Amazon Aurora replicas + Amazon EC2 instance types for resource segmentation.

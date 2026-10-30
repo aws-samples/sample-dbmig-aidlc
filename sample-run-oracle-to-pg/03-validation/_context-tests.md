@@ -54,7 +54,9 @@ Rules:
   actual type (e.g. `numeric` vs `bigint`) compiles fine and fails only at execution.
 - If the tables an object reads are EMPTY in the sampled data, say so in `notes:` —
   the case only exercises the empty/default path (reported as LOW_COVERAGE).
-- For packages, generate cases for the public subprograms a caller would use.
+- For packages, generate cases for the public subprograms a caller would use. A package
+  spec may mix both shapes: set `type: function` or `type: procedure` on each CASE to
+  override the spec-level `type`.
 - Write source_sql / call_source in the SOURCE dialect and target_sql / call_target
   in the TARGET dialect (e.g. Oracle `... FROM dual` / `BEGIN p(); END;`, SQL Server
   `EXEC p ...`, PostgreSQL `SELECT ...` / `CALL p(...)`).
@@ -198,3 +200,24 @@ AUDIT.LOG            -> audit_log
 
 The check only inspects routine names; it does not address package **state**
 (package-level variables), which is a separate conversion concern.
+
+---
+
+# Target-version behavior differences to test for (verified on the target version)
+
+Source: `skills/oracle-to-postgresql-playbook/references/target-baseline-aurora-postgresql-18.md`
+
+## Behavior differences to test for (verified on 18.6)
+
+- `'' IS NULL` is false; `'a' || NULL` is NULL (use `concat`).
+- `SELECT … INTO` without `STRICT` does not raise `NO_DATA_FOUND`.
+- `GREATEST`/`LEAST` ignore NULLs.
+- `substr(s, -n)` does not count from the end.
+- `to_date` drops the time; `::timestamp(0)` rounds fractional seconds.
+- `now()`/`LOCALTIMESTAMP` are fixed at transaction start.
+- `date + interval '1 month'` differs from `ADD_MONTHS` at month end.
+- `COMMIT` inside a block with an `EXCEPTION` clause fails, and a `WHEN OTHERS` handler hides the failure.
+- Composite `UNIQUE` with NULLs accepts duplicates that Oracle rejects.
+- A NULL range-partition key goes only to the `DEFAULT` partition.
+- Identifiers over 63 bytes are silently truncated.
+- Sequence `MAXVALUE` is limited to bigint, and `CACHE` is per session.

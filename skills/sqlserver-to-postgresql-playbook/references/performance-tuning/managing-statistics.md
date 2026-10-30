@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (three-star feature compatibility — similar functionality, syntax/option differences)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): partial-index and extended statistics, NORECOMPUTE emulation, `pg_stats`, PG 18 statistics export/restore, post-load ANALYZE, PG 18 autovacuum threshold.
+
 Both engines use statistics (histograms, value distributions, page/row counts) to drive their cost-based optimizers. Functionality is similar; the syntax and configuration options differ.
 
 ## SQL Server
@@ -121,5 +123,10 @@ select relname, last_analyze from pg_stat_all_tables;
 - Sampled collection: SQL Server `UPDATE STATISTICS ... WITH SAMPLE 50 PERCENT` → PostgreSQL controls sample size via `SET default_statistics_target to 150; ANALYZE EMPLOYEES;` (per-row percentage is not specified directly).
 - View last collection: SQL Server `DBCC SHOW_STATISTICS('MyTable','MyStatistics')` → PostgreSQL `select relname, last_analyze from pg_stat_all_tables;`.
 - Automatic refresh: SQL Server `AUTO_CREATE_STATISTICS`/`AUTO_UPDATE_STATISTICS` → PostgreSQL `AUTOVACUUM` daemon (also handles `VACUUM`), tuned with per-table `autovacuum_*` storage parameters.
-- SQL Server filtered statistics (`WHERE` predicate) have no direct PostgreSQL equivalent; PostgreSQL 10+ `CREATE STATISTICS` provides extended (multi-column) statistics instead.
+- SQL Server filtered statistics (`WHERE` predicate) have no direct PostgreSQL equivalent. A **partial index** gets its own statistics for its predicate, and PostgreSQL 10+ `CREATE STATISTICS … (ndistinct, dependencies, mcv)` provides extended (multi-column) statistics, the equivalent of SQL Server multi-column statistics (verified on 18.6).
+- `UPDATE STATISTICS … WITH NORECOMPUTE` (freeze statistics) → no lock; disable auto-analyze for that table (`ALTER TABLE t SET (autovacuum_analyze_threshold = 2000000000)`).
+- `DBCC SHOW_STATISTICS` histogram → `SELECT * FROM pg_stats WHERE tablename = 't'` (most-common values, histogram bounds, `n_distinct`, correlation) and `pg_stats_ext` for extended statistics.
+- Copying statistics between environments (SQL Server `STATS_STREAM`) → PostgreSQL 18 `pg_dump --statistics` / `--statistics-only` and `pg_restore_relation_stats()` / `pg_restore_attribute_stats()` (available on Aurora 18.6).
+- `sp_updatestats` after a bulk load → `ANALYZE` (or `vacuumdb --all --analyze-in-stages -j N`). Do this after every migration data load.
+- Since PostgreSQL 18, `autovacuum_vacuum_max_threshold` (default 100,000,000) caps when very large tables are vacuumed; per-table `autovacuum_*_scale_factor` still matters.
 - PostgreSQL cannot `ANALYZE` indexes; SQL Server statistics are tied to indexes and columns. PostgreSQL statistics granularity is tuned with `default_statistics_target` (global/session) or per-column `SET STATISTICS`.

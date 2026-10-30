@@ -6,6 +6,8 @@
 **Conversion category:** Manual (Two-star feature compatibility — some features may be replaced by Amazon RDS Proxy)
 **SCT automation:** No automation
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): added version-support check, session pinning caveats for converted code, and AWS Advanced wrappers / PgBouncer alternatives.
+
 ## Oracle
 
 Starting with Oracle 18c, Oracle Connection Manager can be configured to run in **Traffic Director mode**. Oracle Traffic Director is a fast, reliable load-balancing solution. Enabling it for Oracle Connection Manager (CMAN) provides:
@@ -36,3 +38,6 @@ See: [Amazon RDS Proxy](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/r
 - This is an infrastructure/service mapping rather than a code conversion — there is no direct SQL/syntax translation. Conversion is manual with no automation.
 - Oracle Traffic Director (CMAN Traffic Director mode) → Amazon RDS Proxy is a functional, not feature-for-feature, replacement. Some Oracle features (firewall, tenant isolation, DDOS protection, secure tunneling) are not part of RDS Proxy's scope and may need other AWS services (e.g., security groups, VPC, network ACLs) or be dropped.
 - RDS Proxy's core value for migration: connection pooling/multiplexing, reduced DB connection overhead, improved failover handling, and serverless auto-scaling across AZs.
+- Check the RDS Proxy supported-engines page for your Aurora PostgreSQL major version before you design around it. Support for a new major version can trail the engine's release.
+- **Session pinning**: session-level state (`SET` outside a transaction, temporary tables, advisory locks, prepared statements in some drivers) pins a client to one database connection and removes the multiplexing benefit. Converted code that relies on session state (former package variables, global temporary tables) needs review before it goes behind RDS Proxy.
+- Alternatives and complements: the **AWS Advanced JDBC / Python / Node.js wrappers** (topology-aware fast failover, IAM and Secrets Manager auth) and self-managed **PgBouncer** on EC2/ECS. Use reader endpoints or proxy read-only endpoints for read scaling.

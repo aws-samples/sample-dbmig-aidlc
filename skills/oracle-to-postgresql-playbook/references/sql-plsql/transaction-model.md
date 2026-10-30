@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (Four-star feature compatibility, four-star automation; PostgreSQL doesn't support `SAVEPOINT`/`ROLLBACK TO SAVEPOINT` inside functions)
 **SCT automation:** Four-star automation level; SCT action code index → Transaction Isolation
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): autocommit is a client setting, SAVEPOINT → inner EXCEPTION block, transaction control in procedures, PG 17 `transaction_timeout`, Oracle SERIALIZABLE ≈ PG REPEATABLE READ.
+
 ## Oracle
 
 Transactions are atomic logical units enforcing ACID (Atomicity, Consistency, Isolation, Durability).
@@ -82,13 +84,16 @@ READ WRITE | READ ONLY [ NOT ] DEFERRABLE
 
 | Feature | Oracle | PostgreSQL |
 |---|---|---|
-| AutoCommit | Off | Off by default, but client tools (e.g., psql) may set ON. Check via `\echo :AUTOCOMMIT` |
+| AutoCommit | Off (SQL*Plus); drivers default ON | Client/driver setting. `psql`, JDBC, psycopg and most drivers default to **ON**. Check via `\echo :AUTOCOMMIT` in psql |
 | MVCC | Yes | Yes |
 | Default isolation | Read-committed | Read-committed |
 | Supported isolation | Serializable, Read-only | Repeatable reads, Serializable, Read-only |
 | Configure session isolation | Yes | Yes |
 | Configure transaction isolation | Yes | Yes |
-| Nested transactions | Yes | No — use `SAVEPOINT` |
+| Nested transactions | No true nesting (autonomous transactions only) | No — use `SAVEPOINT`, or in PL/pgSQL a `BEGIN … EXCEPTION … END` block (an implicit subtransaction) |
+| Autonomous transactions | `PRAGMA AUTONOMOUS_TRANSACTION` | Not supported — `dblink` loopback or redesign |
+| Transaction control in procedures | `COMMIT`/`ROLLBACK` anywhere | `COMMIT`/`ROLLBACK` in procedures and `DO` (PG 11+), not in functions or inside blocks with an `EXCEPTION` clause |
+| Transaction time limit | Resource profile | `transaction_timeout` (PG 17+), `statement_timeout`, `idle_in_transaction_session_timeout` |
 | `SAVEPOINT` support | Yes | Yes |
 
 ### Behavior examples
@@ -100,8 +105,12 @@ Serializable: same setup, but when TX2 tries to `UPDATE` after TX1 commits, it r
 ## Conversion notes
 
 - Default isolation (read-committed) and MVCC model match Oracle — minimal change for typical code.
-- **`SAVEPOINT`/`ROLLBACK TO SAVEPOINT` are not allowed inside PostgreSQL functions** — refactor procedural error handling that relies on in-function savepoints.
+- **`SAVEPOINT`/`ROLLBACK TO SAVEPOINT` are not allowed inside PL/pgSQL** (functions or procedures). Convert `SAVEPOINT sp; … EXCEPTION WHEN … THEN ROLLBACK TO sp;` to an inner `BEGIN … EXCEPTION WHEN … THEN … END;` block, which rolls back that block's changes automatically.
+- `COMMIT`/`ROLLBACK` inside Oracle procedures: allowed in PostgreSQL procedures called with `CALL`, with the restrictions in `procedures-and-functions.md` (never inside a block with an `EXCEPTION` clause; the error can be swallowed silently).
+- Oracle DDL commits implicitly; PostgreSQL DDL is transactional and is rolled back with the transaction.
+- `SET TRANSACTION READ ONLY` maps directly. `SERIALIZABLE READ ONLY DEFERRABLE` is a PG option for long consistent reports that never fail with serialization errors.
 - No true nested transactions in PG; emulate with `SAVEPOINT`.
 - Watch **auto-commit differences**: Oracle keeps a transaction open; psql and other PG clients may auto-commit. Verify client settings before relying on implicit transactions.
 - Map `ALTER SESSION SET ISOLATION_LEVEL` → `SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL …`.
-- Serializable in PG can raise serialization-failure errors requiring application retry logic.
+- Serializable in PG can raise serialization-failure errors (`40001`) requiring application retry logic. PostgreSQL `SERIALIZABLE` is true serializable (SSI), stricter than Oracle's `SERIALIZABLE`, which is snapshot isolation. Oracle `SERIALIZABLE` code usually maps best to PostgreSQL `REPEATABLE READ`, which is also snapshot isolation. Choose deliberately and record the decision.
+- `COMMIT AND CHAIN` / `ROLLBACK AND CHAIN` (PG 12+) start a new transaction with the same characteristics.

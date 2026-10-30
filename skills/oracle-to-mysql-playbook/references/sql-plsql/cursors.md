@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (★★★★ feature compatibility, ★★★ automation)
 **SCT automation:** Action code "Cursors" — minor syntax rewrites; MySQL lacks `%ISOPEN`, `%ROWTYPE`, `%BULK_ROWCOUNT`.
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Corrected sensitivity (asensitive), record fetch, and the parameterized-cursor advice (PREPARE cannot back a cursor; variables are bound at OPEN — verified); added the verified SELECT INTO / NOT FOUND trap and its fix, error 1325, BULK COLLECT and REF CURSOR mappings.
+
 ## Oracle
 
 PL/SQL cursors are pointers to query result sets. Two types:
@@ -43,7 +45,7 @@ END;
 
 ## MySQL
 
-Aurora MySQL supports cursors **only inside stored routines/procedures/functions**. Characteristics: **not sensitive**, **read-only** (not updatable), **not scrollable** (forward-only, `FETCH NEXT` only). Cursor declarations must come after variable/condition declarations and before handler declarations.
+Aurora MySQL supports cursors **only inside stored routines/procedures/functions**. Characteristics: **asensitive** (the server may or may not materialize the result, so do not rely on seeing or not seeing changes made after `OPEN`), **read-only** (not updatable — no `WHERE CURRENT OF`), **not scrollable** (forward-only, `FETCH NEXT` only). Unchanged on Aurora MySQL 3 and 8.4. Cursor declarations must come after variable/condition declarations and before handler declarations.
 
 ```sql
 DECLARE <Cursor Name> CURSOR FOR <SELECT Statement>;
@@ -89,18 +91,22 @@ CALL LoopItems();
 |---|---|---|
 | Declare explicit cursor | `CURSOR c1 IS SELECT ...` | `DECLARE c1 CURSOR FOR SELECT ...` |
 | Open | `OPEN c1;` | `OPEN c1;` |
-| Fetch into record | `FETCH c1 INTO rowvar;` | `FETCH NEXT FROM c1 INTO rowvar;` |
+| Fetch into record | `FETCH c1 INTO rowvar;` | no record variables: fetch into one scalar per column (`%ROWTYPE` is unsupported) |
 | Fetch into scalars | `FETCH c1 INTO a,b,c;` | `FETCH NEXT FROM c1 INTO a,b,c;` |
 | Implicit cursor FOR loop | `FOR item IN (SELECT ...) LOOP` | N/A — use explicit cursor + loop |
-| Parameterized cursor | `CURSOR c1 (key NUMBER) IS ...; OPEN c1(2);` | Build with `CONCAT` + `PREPARE`/`EXECUTE` dynamic SQL, then `OPEN` |
+| Parameterized cursor | `CURSOR c1 (key NUMBER) IS ...; OPEN c1(2);` | Reference a routine parameter or local variable in the cursor's `SELECT`; its value is taken at `OPEN` (verified). A cursor **cannot** be opened over a `PREPARE`d statement, so the original "build with PREPARE" advice does not work |
 | Exit on no data | `EXIT WHEN c1%NOTFOUND;` | `DECLARE CONTINUE HANDLER FOR NOT FOUND SET done=TRUE;` + `IF done THEN LEAVE;` |
 | `%FOUND` | yes | N/A |
 | `%BULK_ROWCOUNT` | yes | use counters |
 | `%BULK_EXCEPTIONS` | yes | N/A |
-| `%ISOPEN` | yes | N/A |
+| `%ISOPEN` | yes | N/A — track in a variable; opening an open cursor raises error 1325 (verified) |
 | `%NOTFOUND` | yes | NOT FOUND handler |
 | `%ROWCOUNT` | yes | N/A |
 
 - Wrap each cursor in its own `BEGIN…END` block so its NOT FOUND handler doesn't catch conditions from other statements.
 - Replace Oracle cursor attributes (`%FOUND`, `%ROWCOUNT`, `%ISOPEN`, etc.) with handler flags and manual counters.
-- Parameterized cursors require dynamic SQL (`PREPARE`/`EXECUTE`).
+- Parameterized cursors: use variables in the cursor query (see table). Truly dynamic cursor SQL needs a workaround: `PREPARE` an `INSERT INTO tmp_tbl SELECT …`, then declare the cursor on the temporary table.
+- **Trap (verified):** a `SELECT … INTO` that finds no rows raises the same `NOT FOUND` condition as an exhausted cursor. Inside a cursor loop it sets the loop's `done` flag and ends the loop early (3-row cursor processed only 1 row). Wrap such lookups in their own `BEGIN DECLARE CONTINUE HANDLER FOR NOT FOUND BEGIN END; SELECT … INTO …; END;` block (verified: all 3 rows processed), or reset `done` after them.
+- `FOR rec IN (SELECT …) LOOP` (implicit cursor) → explicit cursor + loop, or better a single set-based statement.
+- `BULK COLLECT`/`FORALL` → set-based `INSERT … SELECT` / multi-table `UPDATE`; there are no collections.
+- `SYS_REFCURSOR` returned to the client → have the procedure end with a plain `SELECT` (the result set is returned to the caller; several `SELECT`s return several result sets).

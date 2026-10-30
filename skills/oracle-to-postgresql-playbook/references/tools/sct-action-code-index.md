@@ -6,6 +6,8 @@
 **Conversion category:** N/A (cross-cutting index of automation levels and action codes)
 **SCT automation:** This page defines the automation-level legend used throughout the playbook and lists per-topic SCT action codes.
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): added a table of action codes whose limitation no longer exists on PG 18 (MERGE, SKIP LOCKED, GROUPING SETS, virtual columns, multi-expression indexes, FKs on partitioned tables, partition DML, PIVOT via crosstab, etc., verified) and the list that still needs manual work.
+
 ## Automation level legend
 
 | Icon | Level | Description |
@@ -16,6 +18,35 @@
 | ★★ | Low automation | Medium–high complexity manual conversions may be needed. |
 | ★ | Very low automation | High risk or complex manual conversions may be needed. |
 | (none) | No automation | Not currently supported by AWS SCT; manual conversion required. |
+
+## Action codes that no longer describe a limitation on Aurora PostgreSQL 18
+
+SCT/DMS SC still emit many of the codes below, but several reflect PostgreSQL limits that were lifted years ago. When triaging SCT/DMS SC output for a PG 18 target, treat these as **"convert natively"** rather than "manual redesign" (each verified on 18.6 unless marked):
+
+| Code(s) | Original meaning | Status on Aurora PostgreSQL 18 |
+|---|---|---|
+| 5102, 5621 | No `MERGE` | Native `MERGE` (PG 15) + `RETURNING`/`NOT MATCHED BY SOURCE` (PG 17). See `../sql-plsql/merge-statement.md` |
+| 5139 | No `FOR UPDATE SKIP LOCKED` | Supported (since PG 9.5) |
+| 5144 | No `FOR UPDATE WAIT n` | `SET LOCAL lock_timeout = 'n s'` + `FOR UPDATE`; `NOWAIT` supported |
+| 5557 | No `GROUPING SETS`/`CUBE`/`ROLLUP` | Supported (since PG 9.5) |
+| 5554 | No virtual columns | Generated columns; `VIRTUAL` by default in PG 18 |
+| 5555 | No multi-column functional indexes | Supported: `CREATE INDEX … ((expr1), (expr2))` |
+| 5225, 5226, 5559 | No `REF CURSOR` types / cursor return types | Map to `refcursor` (untyped) |
+| 5634 | No `OUT`/`INOUT` parameters | Supported in functions; in procedures since PG 14 |
+| 5238 | No trigger `REFERENCING` | Transition tables `REFERENCING NEW/OLD TABLE` (PG 10+) for statement triggers. `:NEW`/`:OLD` renaming is simply `NEW`/`OLD` |
+| 5311, 5415 | No system triggers | `LOGON` → `login` event trigger (PG 17+); DDL → event triggers. STARTUP/SHUTDOWN/SERVERERROR still unsupported |
+| 5241 | No `FOLLOWS`/`PRECEDES` | No clause, but triggers fire in name order; rename to control order |
+| 5652 | No NULL partition-key handling | `DEFAULT` partition (or `FOR VALUES IN (NULL)` for list) |
+| 5653, 5654 | No FKs to/from partitioned tables | Supported (PG 11/12+) |
+| 5658 | `DEFAULT` partitions need PG 11+ | Available |
+| 5024, 5090, 5098, 5558 | No DML on a named partition | Partitions are ordinary tables: `INSERT INTO sales_2024 …` / `DELETE FROM sales_2024 …` directly (verified) |
+| 5077 | No `PIVOT` | `tablefunc` `crosstab()` (available on Aurora 18) or `FILTER`-based conditional aggregation |
+| 5617 | Regex parameter gaps | PG 15+ has `regexp_like/count/instr/substr` with flags. Still check back-references and `'x'` |
+| 5118 | No associative arrays | Aurora `collection` extension (see `../sql-plsql/collections-and-bulk-operations.md`) |
+| 5629, 5630 | `DBMS_SQL` not supported | orafce `dbms_sql` subset |
+| Sequences ("IDENTITY vs SERIAL") | | Use `GENERATED … AS IDENTITY`, not `SERIAL` |
+
+Codes that **still** mean manual work on PG 18 include 5663 (autonomous transactions), 5611 (`SAVEPOINT` in routines → inner `EXCEPTION` blocks), 5126 (`MODEL`), 5352/5353 (synonyms), 5212/5550/5551 (`BFILE`/`ROWID`/`UROWID`), 5196/5321/5322 (object tables/views), 5242 (compound triggers), 5335 (`GOTO`), 5603 (conditional compilation), 5064/5067/5070/5618 (`LOG ERRORS`), 5095 (DML on materialized views), and global indexes.
 
 ## Oracle
 The action codes below are emitted by AWS SCT (and AWS DMS) when converting Oracle objects. Each section's star rating indicates the overall automation level for that feature category in Oracle→Aurora PostgreSQL migration.
@@ -185,8 +216,8 @@ UDTs aren't supported; SCT replaces standard UDTs with base types. Complex UDTs 
 - 5587 — No `EXTEND` methods with parameters.
 - 5638 — No global variables of nested table as a function/procedure argument.
 
-### Merge — No automation
-`MERGE` is unsupported and not auto-converted; manual conversion is straightforward in most cases.
+### Merge — No automation (in the original playbook)
+`MERGE` was unsupported when the playbook was written. On PG 15+ it is native; see the status table at the top.
 - 5102 — No `MERGE` statements.
 - 5618 — No `MERGE` with `ERROR LOG` clause.
 - 5621 — Ensure the unique constraint for the %s field exists.
@@ -216,7 +247,7 @@ Basic non-clustered indexes auto-migrate. Filtered indexes, included-column inde
 - 5555 — No multi-column functional indexes.
 
 ### Partitioning — ★★★ (Medium)
-Aurora PostgreSQL uses table inheritance; physical Oracle concepts (file groups) don't apply. PostgreSQL supports a richer framework (hash partitioning, sub-partitioning).
+(Original playbook wording.) Aurora PostgreSQL uses **declarative partitioning** (the old playbook said table inheritance, which is legacy); physical Oracle concepts (file groups) don't apply. PostgreSQL supports a richer framework (hash partitioning, sub-partitioning).
 - 5652 — No mechanism to handle null values for partition keys.
 - 5653 — No foreign keys referencing partitioned tables.
 - 5654 — No foreign keys in partitioned tables referencing other tables.
@@ -232,8 +263,8 @@ Aurora PostgreSQL natively supports almost all OLAP functions.
 
 ## Conversion notes
 - Star ratings let you triage effort: ★★★★★/★★★★ topics are mostly mechanical; ★★/★ and "No automation" (Merge, Database links) topics require redesign or full rewrite.
-- "No automation" topics in this Oracle→Aurora PostgreSQL set: **Merge** and **Database links**.
+- "No automation" topics in this Oracle→Aurora PostgreSQL set: **Merge** and **Database links**. On PG 18 `MERGE` converts natively, and database links map to `postgres_fdw`/`oracle_fdw` (both available on Aurora 18).
 - Lowest automation feature with partial support: **Materialized views** (★★).
 - Date/time and timestamp handling repeatedly flagged (5213, 5552/5553, 5656, 5584) — verify and test all temporal logic manually.
 - `ROWID`/`UROWID`, `BFILE`, nested tables, object types, synonyms, and autonomous transactions have no PostgreSQL equivalent and require redesign.
-- For database links, install and use the `postgres_fdw` extension as the replacement mechanism.
+- For database links, install and use the `postgres_fdw` extension as the replacement mechanism (or `oracle_fdw` when the remote side stays Oracle).

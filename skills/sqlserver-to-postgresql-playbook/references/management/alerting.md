@@ -6,6 +6,8 @@
 **Conversion category:** N/A (one-star feature compatibility)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): CloudWatch Logs metric filters + alarms for severity alerts, CloudWatch metrics/Database Insights for performance alerts, `aws_lambda` for custom alerts.
+
 Key difference: Use Amazon RDS event notification with Amazon Simple Notification Service (Amazon SNS).
 
 ## SQL Server
@@ -73,9 +75,15 @@ Parameters controlling log/error file placement (modify via an Aurora DB Paramet
 
 Note: `log_directory` and `logging_collector` modifications are disabled for an Aurora PostgreSQL instance.
 
+**Replacing SQL Server Agent alerts on Aurora PostgreSQL 18:**
+- Error-severity alerts (`sp_add_alert @severity = …`) → publish the PostgreSQL log to **CloudWatch Logs** (`--cloudwatch-logs-export-configuration '{"EnableLogTypes":["postgresql"]}'`), add a **metric filter** on `ERROR`/`FATAL`/`PANIC` or a specific SQLSTATE, and attach a **CloudWatch alarm** → SNS.
+- Performance-condition alerts (counter thresholds) → **CloudWatch alarms** on Aurora metrics (`CPUUtilization`, `DatabaseConnections`, `AuroraReplicaLag`, `FreeableMemory`, `ServerlessDatabaseCapacity`/`ACUUtilization`, `Deadlocks`), or **CloudWatch Database Insights** (the Performance Insights successor) anomaly detection.
+- Custom application alerts raised in SQL → `aws_lambda.invoke(…, 'Event')` from PL/pgSQL to a Lambda that publishes to SNS (not transactional; see `database-mail.md`).
+
 ## Conversion notes
 
 - No direct engine-alert equivalent — replace Agent alerts with Amazon RDS event notifications + Amazon SNS.
 - AWS service replacement: Amazon SNS for notification delivery (email/SMS/HTTP).
 - Aurora cluster-level events require subscribing at the cluster level, not just the instance.
 - Application-level error raising maps to PostgreSQL log severity levels controlled through DB parameter groups.
+- Agent alert "responses" that start a job → EventBridge rule on the SNS/RDS event → Lambda or Step Functions.

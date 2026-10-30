@@ -120,6 +120,9 @@ def build_parser() -> argparse.ArgumentParser:
     # migrate-data
     p = sub.add_parser("migrate-data", help="parallel data copy with COPY + resume")
     _add_common(p, tables=True)
+    p.add_argument("--target-schema", dest="target_schema", default=None,
+                   help="target schema/database name (default: the DMS SC target schema "
+                        "recorded by import-dms-sc, else --schema lower-cased)")
     p.add_argument("--method", choices=["toolkit", "fdw"], default=None,
                    help="data-movement method: 'toolkit' (default) pulls rows through "
                         "this host and COPYs into the target; 'fdw' makes the target "
@@ -161,13 +164,17 @@ def build_parser() -> argparse.ArgumentParser:
                             "to MAX(key) and verify (dry-run unless --apply)")
     _add_common(p, tables=True)
     p.add_argument("--target-schema", dest="target_schema", default=None,
-                   help="target schema/database name (default: --schema lower-cased)")
+                   help="target schema/database name (default: the DMS SC target schema "
+                        "recorded by import-dms-sc, else --schema lower-cased)")
     p.add_argument("--apply", action="store_true",
                    help="actually sync the counters, then re-verify (default: report only)")
 
     # compare
     p = sub.add_parser("compare", help="reconcile source vs target row counts")
     _add_common(p, tables=True)
+    p.add_argument("--target-schema", dest="target_schema", default=None,
+                   help="target schema/database name (default: the DMS SC target schema "
+                        "recorded by import-dms-sc, else --schema lower-cased)")
     _add_mode(p)
 
     # diff-target (reconcile DMS SC import against live target)

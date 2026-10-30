@@ -1,7 +1,9 @@
-# Change plan (like-for-like)
+# Change plan — Bob's Used Bookstore → Aurora PostgreSQL 18.6 (like-for-like)
 
 From `dbmig app-scan` (141 files, EF Core detected, 9 entities / 90 mapped fields checked against the live
-`dbo` schema: **86 identifier-case issues, 1 table-name drift, 2 required type fixes**).
+`bookstore.dbo` schema on 18.6: **82 identifier-case issues, 8 fields on the drifted `Orders` table, 2 required type fixes** —
+the same findings as the previous run on 17.7, so the previous, validated change set is re-applied). Nothing was edited
+before this plan; backup: edited files only (git repo).
 
 | # | Site | Class | Change |
 |---|---|---|---|

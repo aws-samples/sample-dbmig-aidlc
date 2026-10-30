@@ -237,7 +237,8 @@ def _reconcile(args) -> None:
 def _update_report(project: str, schema: str, tschema: str,
                    counts: Dict[str, int]) -> None:
     body = [
-        "### Target preparation — secondary objects (drop before load / recreate after)",
+        f"### Target preparation — `{schema}` (drop secondary objects before load / "
+        "recreate after)",
         "",
         f"- Schema `{schema}` (target `{tschema}`): captured "  # nosemgrep: string-concat-in-list -- intentional: one long message split across lines
         f"**{counts['foreign_keys']}** foreign key(s), **{counts['indexes']}** non-unique "
@@ -251,4 +252,6 @@ def _update_report(project: str, schema: str, tschema: str,
         "",
     ]
     # order 31: renders just under the Validation (order 30) section header.
-    report.update_section(project, "validation.targetprep", 31, "\n".join(body))
+    # One section per schema (a shared id let the last schema overwrite the others).
+    report.update_section(project, f"validation.targetprep.{schema.lower()}", 31,
+                          "\n".join(body))

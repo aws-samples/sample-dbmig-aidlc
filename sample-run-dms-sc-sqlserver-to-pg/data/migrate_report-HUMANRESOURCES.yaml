@@ -1,0 +1,57 @@
+total_rows: 934
+tables:
+  EmployeePayHistory:
+    copied: 316
+    status: ok
+    error: null
+  EmployeeDepartmentHistory:
+    copied: 296
+    status: ok
+    error: null
+  Department:
+    copied: 16
+    status: ok
+    error: null
+  Employee:
+    copied: 290
+    status: ok
+    error: null
+  Shift:
+    copied: 3
+    status: ok
+    error: null
+  JobCandidate:
+    copied: 13
+    status: ok
+    error: null
+units:
+- table: EmployeePayHistory
+  shard: null
+  copied: 316
+  status: ok
+  error: null
+- table: EmployeeDepartmentHistory
+  shard: null
+  copied: 296
+  status: ok
+  error: null
+- table: Department
+  shard: null
+  copied: 16
+  status: ok
+  error: null
+- table: Employee
+  shard: null
+  copied: 290
+  status: ok
+  error: null
+- table: Shift
+  shard: null
+  copied: 3
+  status: ok
+  error: null
+- table: JobCandidate
+  shard: null
+  copied: 13
+  status: ok
+  error: null

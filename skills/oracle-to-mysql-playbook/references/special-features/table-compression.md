@@ -6,6 +6,8 @@
 **Conversion category:** Manual (three-star feature compatibility) — similar functionality, syntax/option differences; Aurora MySQL doesn't compress partitions.
 **SCT automation:** N/A
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): ROW_FORMAT=COMPRESSED silently becomes COMPACT and page compression fails with 4029 (both verified on 3 / 8.4); size-reduction alternatives.
+
 ## Oracle
 
 Table compression reduces data size, saving disk space and memory and speeding up read-heavy queries, at the cost of higher CPU during load/DML. Transparent to applications; common in OLAP but also usable in OLTP. Set at `CREATE TABLE` or via `ALTER TABLE` with the `COMPRESS` clause.
@@ -48,6 +50,11 @@ PARTITION comp_part_tbl_q4 VALUES LESS THAN (MAXVALUE) NOCOMPRESS);
 
 Aurora MySQL does **not** support compressed tables (`ROW_FORMAT=COMPRESSED`). Expand compressed tables by setting `ROW_FORMAT` to `DEFAULT`, `COMPACT`, `DYNAMIC`, or `REDUNDANT`.
 
+Verified on Aurora MySQL 3.13 and 8.4.8:
+- `CREATE TABLE … ROW_FORMAT=COMPRESSED` **does not fail**: the table is silently created as `COMPACT` (`information_schema.tables.ROW_FORMAT`). Check the row format after applying converted DDL.
+- Page compression `COMPRESSION='zlib'` fails with error 4029 (punch hole not supported by Aurora storage).
+- New tables default to `DYNAMIC` (`innodb_default_row_format`).
+
 ```sql
 ALTER TABLE my_tbl ROW_FORMAT=DYNAMIC;
 ```
@@ -58,3 +65,4 @@ ALTER TABLE my_tbl ROW_FORMAT=DYNAMIC;
 - InnoDB `ROW_FORMAT=COMPRESSED` is not available on Aurora MySQL — do not rely on table-level compression for storage savings.
 - Per-partition compression has no equivalent.
 - Aurora's storage layer manages space differently; storage/cost optimization is handled at the Aurora storage level rather than via table compression.
+- To reduce size: compress large values in the application (or with `COMPRESS()`/`UNCOMPRESS()` into a `BLOB`), archive cold partitions to S3 (`SELECT … INTO OUTFILE S3`), or choose Aurora I/O-Optimized vs Standard storage by workload.

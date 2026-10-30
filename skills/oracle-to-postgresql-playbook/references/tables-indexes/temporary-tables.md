@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (three-star feature compatibility, three-star automation)
 **SCT automation:** Creating Tables action code index. PostgreSQL doesn't support GLOBAL temporary tables, can't read across sessions, and drops temp tables at session end.
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): temp FK restriction (verified), `GLOBAL` ignored (verified), autovacuum doesn't analyze temp tables, GTT conversion patterns, fixed schema-qualified temp table example.
+
 ## Oracle
 `CREATE GLOBAL TEMPORARY TABLE` — persistent DDL structure but non-persistent data; no redo on DML. Data is visible only to the inserting session. Oracle 18c adds **private** temporary tables (dropped at session/transaction end).
 
@@ -46,7 +48,7 @@ CREATE GLOBAL TEMPORARY TABLE EMP_TEMP (   -- GLOBAL accepted, ignored
 CREATE INDEX IDX_EMP_TEMP_FN ON EMP_TEMP(EMP_FULL_NAME);
 INSERT INTO EMP_TEMP VALUES(1, 'John Smith', '5000');
 COMMIT;
-SELECT * FROM SCT.EMP_TEMP;   -- 1 row
+SELECT * FROM EMP_TEMP;       -- 1 row (temp tables live in the session's pg_temp schema; do not schema-qualify them)
 DROP TABLE EMP_TEMP;
 ```
 
@@ -60,7 +62,7 @@ With `ON COMMIT DELETE ROWS`, a `SELECT` after `COMMIT` returns 0 rows.
 | Accessible from multiple sessions | Yes | No |
 | DDL persists after session end / restart | Yes | No (dropped at session end) |
 | Create index | Yes | Yes |
-| Foreign key | Yes | Yes |
+| Foreign key | Yes (to permanent tables) | Only to other temp tables. A temp table cannot reference a permanent table (`constraints on temporary tables may reference only temporary tables`, verified) |
 | ON COMMIT default | DELETE ROWS | PRESERVE ROWS |
 | ON COMMIT PRESERVE ROWS | Yes | Yes |
 | ON COMMIT DELETE ROWS | Yes | Yes |
@@ -72,4 +74,15 @@ With `ON COMMIT DELETE ROWS`, a `SELECT` after `COMMIT` returns 0 rows.
 - Biggest behavioral gap: **default `ON COMMIT`** is reversed — Oracle defaults to DELETE ROWS, PostgreSQL to PRESERVE ROWS. Set the clause explicitly to avoid surprises.
 - PostgreSQL temp tables are session-private and dropped at session end; any code relying on a persistent global temp-table definition must `CREATE TEMP TABLE` in each session.
 - No cross-session sharing — redesign workflows that read another session's temp data.
-- Replace `dbms_stats` calls with `ANALYZE`.
+- Replace `dbms_stats` calls with `ANALYZE`. **Autovacuum never analyzes temp tables**, so run `ANALYZE temp_table` after filling a large one, or the planner assumes default row counts.
+- `CREATE GLOBAL TEMPORARY TABLE` runs on PG 18 but `GLOBAL` is ignored (verified), so converted DDL that only adds `TEMPORARY` silently creates a table that disappears with the session that ran the migration script.
+
+### Conversion patterns for Oracle GTTs (choose per table, record the choice)
+
+1. **Create on first use** (most common): in each procedure that uses the GTT, run
+   `CREATE TEMP TABLE IF NOT EXISTS emp_temp (…) ON COMMIT DELETE ROWS;` (keep Oracle's `ON COMMIT` setting).
+   Simple, but frequent create/drop churns the system catalog. Avoid it in very hot code paths.
+2. **Unlogged permanent table keyed by session**: `CREATE UNLOGGED TABLE emp_temp (sess_id int DEFAULT pg_backend_pid(), …)`, with every query filtered on `sess_id = pg_backend_pid()` (or row-level security doing that) and cleanup at the end of the work. The definition persists like an Oracle GTT, but this is not crash-safe and the data is not visible on replicas. Not safe behind connection poolers that reuse backends across users.
+3. **Replace with a CTE or array** when the GTT only passes an intermediate result inside one procedure.
+
+Oracle 18c **private temporary tables** (`ORA$PTT_…`, `ON COMMIT DROP DEFINITION`) → `CREATE TEMP TABLE … ON COMMIT DROP` (verified).

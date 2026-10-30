@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (★★★★ feature compatibility, ★★★★ automation)
 **SCT automation:** N/A — MySQL doesn't support all functions; unsupported ones require manual creation.
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Added a verified TO_CHAR/TO_NUMBER mapping table: FORMAT adds thousands separators, locale argument, LPAD, QUARTER/WEEK/DAYNAME, %i/%M pitfalls, CAST of non-numeric strings returns 0 not an error.
+
 ## Oracle
 
 Covers `TO_CHAR` and `TO_NUMBER`.
@@ -96,3 +98,22 @@ SELECT CAST('99999' AS UNSIGNED);            -- 99999
 - MySQL has no single function matching Oracle's rich `TO_CHAR`/`TO_NUMBER` format models — map each format model to `DATE_FORMAT`/`FORMAT`/`CAST` equivalents.
 - Oracle date format codes (`YYYY`, `MON`, `DD`, `HH24`, `MI`, `SS`, `Q`, `WW`, ...) must be translated to MySQL `DATE_FORMAT` specifiers (`%Y`, `%b`, `%d`, `%H`, `%i`, `%s`, etc.). No direct equivalents exist for `'YEAR'` (words), `'DL'` (long date), or quarter `'Q'` — implement manually.
 - For currency/padding format models (`$9999.99`, `L999.99`, `FM`), use `FORMAT` + string manipulation or `CONCAT`.
+
+### Verified mappings (Aurora MySQL 3.13 and 8.4.8)
+
+| Oracle | MySQL | Note |
+|---|---|---|
+| `TO_CHAR(1234.5, '9999.99')` / `'FM9990.00'` | `CAST(ROUND(n, 2) AS CHAR)` gives `1234.5`; for fixed decimals `CAST(CAST(n AS DECIMAL(10,2)) AS CHAR)` | **`FORMAT(n, 2)` adds thousands separators** (`1,234.50`) — only right for `'9G999D99'`-style models |
+| `TO_CHAR(n, '9G999D99', 'NLS_NUMERIC_CHARACTERS='',.''')` | `FORMAT(n, 2, 'de_DE')` → `1.234.567,89` | locale argument |
+| `TO_CHAR(7, 'FM00000')` | `LPAD(7, 5, '0')` → `00007` | |
+| `TO_CHAR(n, '$9,999.99')` | `CONCAT('$', FORMAT(n, 2))` | |
+| `TO_CHAR(d, 'Q')` | `QUARTER(d)` | |
+| `TO_CHAR(d, 'IW')` | `WEEK(d, 3)` (ISO week) | `'WW'` (Oracle: week starting Jan 1) has no exact mode; compute `FLOOR((DAYOFYEAR(d)-1)/7)+1` |
+| `TO_CHAR(d, 'Day')` / `'DY'` | `DAYNAME(d)` / `DATE_FORMAT(d, '%a')` | English only unless `lc_time_names` is set |
+| `TO_CHAR(d, 'DL')` | `DATE_FORMAT(d, '%W %M %e, %Y')` | |
+| `TO_CHAR(d, 'HH:MI AM')` | `DATE_FORMAT(d, '%h:%i %p')` | `%i` is minutes, `%s` seconds, `%M` is the **month name** |
+| `TO_CHAR(d, 'DD-MON-YYYY')` | `UPPER(DATE_FORMAT(d, '%d-%b-%Y'))` | Oracle returns upper-case month abbreviations |
+| `TO_NUMBER('abc')` | `CAST('abc' AS DECIMAL(10,2))` returns **0.00 with a warning**, not an error (verified) | validate with `REGEXP_LIKE(s, '^-?[0-9]+(\\.[0-9]+)?$')` first where Oracle code relied on ORA-01722 |
+| `TO_DATE(s, fmt)` | `STR_TO_DATE(s, fmt)` | returns NULL (with a warning) on an invalid date |
+
+- `NLS_DATE_FORMAT`-dependent implicit conversions (`WHERE d = '01-JAN-24'`) fail or compare as strings in MySQL; always convert with an explicit format. MySQL's implicit date literal format is `'YYYY-MM-DD[ hh:mm:ss]'`.

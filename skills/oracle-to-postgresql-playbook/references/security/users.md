@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (Three star feature compatibility)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): Kerberos/IAM authentication are supported (removed the 'not supported' claim), SCRAM default and MD5 deprecation, schema-per-user pattern after the PG 15 public-schema change.
+
 ## Oracle
 
 Database user accounts authenticate connecting sessions and authorize access for individual users to specific database objects. DBAs grant privileges to user accounts, and applications use user accounts to access database objects.
@@ -61,6 +63,8 @@ See the Roles reference (`roles.md`) for the full set of `CREATE ROLE` / `CREATE
 - PostgreSQL has **no separate "user" object** — convert Oracle users into roles created `WITH LOGIN` (or `CREATE USER`, which implies `LOGIN`).
 - **User ≠ schema in PostgreSQL.** Oracle automatically creates a same-named schema with each user; in PostgreSQL you must create the schema separately with `CREATE SCHEMA`.
 - **Common vs. local users:** Oracle common users (C## prefix) map to cluster-global login roles; Oracle local (per-PDB) users have **no equivalent** because PostgreSQL roles are always cluster-wide.
-- **Authentication:** Oracle's external (Kerberos/OS) and global (directory service) authentication are not directly supported on Aurora PostgreSQL; plan to migrate to password auth (or IAM database authentication where applicable).
+- **Authentication:** Oracle external (Kerberos) and global (directory service) authentication map to **Kerberos with AWS Directory Service** (`rds_ad` role, plus `pg_ad_mapping` for AD-group-to-role mapping) or **IAM database authentication** (`rds_iam` role). OS authentication has no equivalent. Password auth uses SCRAM-SHA-256; MD5 is deprecated in PostgreSQL 18. Store application passwords in AWS Secrets Manager with rotation.
 - **Profiles, password policy/complexity, and tablespace quotas** do not have direct PostgreSQL equivalents — handle via role attributes (`CONNECTION LIMIT`, `VALID UNTIL`, `NOLOGIN`) and external policy where needed.
 - For lock/unlock semantics, use `ALTER ROLE ... NOLOGIN` / `LOGIN` instead of `ACCOUNT LOCK`/`UNLOCK`.
+- Oracle `PASSWORD EXPIRE` → `VALID UNTIL` with a past timestamp. This blocks password login; PostgreSQL has no forced change at next login.
+- Each former Oracle user/schema: `CREATE ROLE app LOGIN; CREATE SCHEMA app AUTHORIZATION app; ALTER ROLE app SET search_path = app;`. Since PG 15, `PUBLIC` cannot create objects in `public`, so per-user schemas are the default pattern.

@@ -6,6 +6,8 @@
 **Conversion category:** N/A (tooling)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): PG 18 support check, session-pinning caveat for converted T-SQL, Npgsql pooling note.
+
 ## SQL Server
 - Not applicable as a source consideration. RDS Proxy is a **target-side** connection-management layer; it does not proxy SQL Server.
 
@@ -25,3 +27,6 @@
   - **Available & durable** — deployed across multiple Availability Zones (AZs) to protect against infrastructure failure.
 - **Pricing:** Pay per vCPU of the database instance for which the proxy is enabled.
 - See: "Amazon RDS Proxy for Scalable Serverless Applications" and the Amazon RDS Proxy product page.
+- Confirm RDS Proxy supports the target major version (PostgreSQL 18) on the RDS Proxy supported-engines page before go-live.
+- Converted T-SQL that relies on **session state** (temp tables, `SET` options, `set_config` session variables replacing `SESSION_CONTEXT`, prepared statements in some drivers) **pins** connections and removes most pooling benefit. Review it before putting the application behind the proxy.
+- For .NET applications, Npgsql's built-in pooling plus the reader endpoint is often enough; RDS Proxy mainly adds faster failover and IAM-based authentication.

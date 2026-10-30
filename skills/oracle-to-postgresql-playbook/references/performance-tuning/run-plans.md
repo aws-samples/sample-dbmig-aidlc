@@ -6,6 +6,8 @@
 **Conversion category:** Manual
 **SCT automation:** N/A (two-star feature compatibility; syntax differences, completely different optimizer with different operators and rules in PostgreSQL)
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): PG 12–18 `EXPLAIN` options (BUFFERS default, SERIALIZE, MEMORY, GENERIC_PLAN), skip scan in plans, QPM enablement steps (verified), `auto_explain`.
+
 A run plan is the sequence of operations the database engine performs to execute a SQL statement.
 
 ## Oracle
@@ -77,15 +79,20 @@ where option and values can be one of:
   ANALYZE [ boolean ]
   VERBOSE [ boolean ]
   COSTS [ boolean ]
-  BUFFERS [ boolean ]
+  BUFFERS [ boolean ]        -- on by default with ANALYZE since PG 18
+  SETTINGS [ boolean ]       -- PG 12: show non-default planner settings
+  GENERIC_PLAN [ boolean ]   -- PG 16: plan a statement with $1 placeholders without values
+  WAL [ boolean ]            -- PG 13: WAL records/bytes generated (with ANALYZE)
   TIMING [ boolean ]
-  SUMMARY [ boolean ] (since PostgreSQL 10)
+  SERIALIZE [ { NONE | TEXT | BINARY } ]  -- PG 17: include output conversion cost (with ANALYZE)
+  MEMORY [ boolean ]         -- PG 17: planner memory usage
+  SUMMARY [ boolean ]
   FORMAT { TEXT | XML | JSON | YAML }
 ```
 
-By default, planning and run time are shown with `EXPLAIN ANALYZE` but not otherwise; the `SUMMARY` option gives explicit control to include planning/run-time metrics.
+By default, planning and run time are shown with `EXPLAIN ANALYZE` but not otherwise; the `SUMMARY` option gives explicit control to include planning/run-time metrics. In PostgreSQL 18 `EXPLAIN ANALYZE` also prints `Buffers:` lines by default, shows fractional average row counts (`rows=1.00`), and reports `Index Searches: n` for index scans. A count above 1 on a multicolumn B-tree means the PG 18 **skip scan** was used (verified on 18.6: an index on `(a, b)` was used for `WHERE b = 5000`).
 
-PostgreSQL can cancel statements running longer than a limit via the instance-level `statement_timeout` parameter. If specified without units it is milliseconds; zero (default) disables the timeout. Third-party connection poolers such as `Pgbouncer` and `PgPool` add more flexibility over how long a connection can run or stay idle.
+PostgreSQL can cancel statements running longer than a limit via `statement_timeout` (settable in the parameter group, per database, per role with `ALTER ROLE … SET`, per session, or per transaction with `SET LOCAL`). If specified without units it is milliseconds; zero (default) disables the timeout. PostgreSQL 17 adds `transaction_timeout` for whole transactions. Third-party connection poolers such as `Pgbouncer` and `PgPool` add more flexibility over how long a connection can run or stay idle.
 
 Example — view the estimated plan:
 
@@ -112,6 +119,7 @@ Rows Removed by Filter: 106
 Planning time: 0.073 ms
 Execution time: 0.037 ms
 (5 rows)
+-- PG 18 output also includes "Buffers: shared hit=…" and prints rows=1.00, "Planning Time" / "Execution Time"
 ```
 
 A full table scan appears as a `Seq Scan`:
@@ -133,7 +141,7 @@ PostgreSQL scan types include sequential scans, index scans, and bitmap index sc
 
 ### Aurora PostgreSQL Query Plan Management (QPM)
 
-Aurora PostgreSQL QPM addresses plan instability, letting users maintain stable yet optimal performance for a set of managed SQL statements. Two main objectives:
+Aurora PostgreSQL QPM (`apg_plan_mgmt`) addresses plan instability. On Aurora 18, set `rds.enable_plan_management = 1` in the **cluster** parameter group (static, needs a reboot), then run `CREATE EXTENSION apg_plan_mgmt;` and set `apg_plan_mgmt.capture_plan_baselines = automatic|manual` and `apg_plan_mgmt.use_plan_baselines = on` (verified on 18.6). QPM addresses plan instability, letting users maintain stable yet optimal performance for a set of managed SQL statements. Two main objectives:
 * **Plan stability** — prevents plan regression and improves stability when system changes occur.
 * **Plan adaptability** — automatically detects new minimum-cost plans and controls when new plans may be used.
 
@@ -154,4 +162,6 @@ See *EXPLAIN* in the PostgreSQL documentation.
 - Use `EXPLAIN ANALYZE` cautiously: it runs the statement, so it modifies data for DML — wrap in a transaction and roll back if needed.
 - Use `VERBOSE`, `BUFFERS`, and `SUMMARY` options for richer diagnostics; `FORMAT JSON`/`YAML`/`XML` is useful for tooling.
 - For plan-stability concerns equivalent to Oracle SQL Plan Baselines/Quarantine, use Aurora PostgreSQL **Query Plan Management (QPM)**.
-- Control long-running statements with `statement_timeout` (instance-level), optionally augmented by connection poolers (`Pgbouncer`, `PgPool`).
+- Control long-running statements with `statement_timeout` / `transaction_timeout` (parameter group, role, session or transaction level), optionally augmented by connection poolers (`Pgbouncer`, `PgPool`).
+- Oracle `DBMS_XPLAN.DISPLAY_CURSOR` (plan of a statement that already ran) → `auto_explain` (preloadable on Aurora 18; set `auto_explain.log_min_duration`, `auto_explain.log_analyze`) writes plans of slow statements to the PostgreSQL log, and CloudWatch Database Insights Advanced mode shows execution plans.
+- Oracle SQL Quarantine → no direct equivalent; use `statement_timeout` per role plus QPM to keep a known plan.

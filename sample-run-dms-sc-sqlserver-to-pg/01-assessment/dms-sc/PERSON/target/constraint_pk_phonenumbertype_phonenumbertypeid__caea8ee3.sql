@@ -1,2 +1,0 @@
-ALTER TABLE person.phonenumbertype
-ADD CONSTRAINT pk_phonenumbertype_phonenumbertypeid_1838629593 PRIMARY KEY (phonenumbertypeid);

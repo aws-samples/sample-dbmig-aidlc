@@ -1,0 +1,2 @@
+ALTER TABLE adventureworks_dbo.databaselog
+ADD CONSTRAINT pk_databaselog_databaselogid_1614628795 PRIMARY KEY (databaselogid);

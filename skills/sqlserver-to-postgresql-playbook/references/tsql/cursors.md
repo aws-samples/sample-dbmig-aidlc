@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (three-star feature compatibility, three-star automation)
 **SCT automation:** Three-star automation level; SCT action code index: Cursors
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): corrected cursor sensitivity (PostgreSQL cursors are static/insensitive, verified), `@@FETCH_STATUS`/`@@CURSOR_ROWS`/GLOBAL mappings, set-based rewrite advice.
+
 ## SQL Server
 
 Cursors provide row-by-row sequential access to result sets as an alternative to set-based operations. They support positioning (absolute/relative offsets), retrieving rows/blocks, modifying at the current position, and isolating concurrent modifications. Usable in scripts, stored procedures, and triggers.
@@ -53,9 +55,9 @@ SQL Server `DECLARE..CURSOR` options with no PostgreSQL equivalent:
 | SQL Server option | Use | PostgreSQL comment |
 |---|---|---|
 | `FORWARD_ONLY` | only `FETCH NEXT` | use `FOR LOOP` instead |
-| `STATIC` | temp copy of data | use temp tables for small sets |
+| `STATIC` | temp copy of data | **Default in PostgreSQL**: a cursor sees the snapshot taken when it was opened (`INSENSITIVE`) |
 | `KEYSET` | fixed membership/order | N/A |
-| `DYNAMIC` | reflects all data changes | Default in PostgreSQL |
+| `DYNAMIC` | reflects all data changes | **Not supported**: changes made after `OPEN` are not visible (verified on 18.6: rows inserted and updated after `OPEN` were not returned). *(corrected: the original playbook listed DYNAMIC as the PostgreSQL default)* |
 | `FAST_FORWARD` | FORWARD_ONLY + READ_ONLY perf | N/A |
 | `SCROLL_LOCKS` | positioned updates guaranteed | N/A |
 | `OPTIMISTIC` | positioned update fails if row changed | N/A |
@@ -111,7 +113,9 @@ END$$;
 | Cursor fetch | `FETCH NEXT\|PRIOR\|FIRST\|LAST\|ABSOLUTE\|RELATIVE` | `FETCH [direction [FROM\|IN]] cursor_name` |
 | Cursor close | `CLOSE` | `CLOSE` |
 | Cursor deallocate | `DEALLOCATE` | Same effect as CLOSE (not required) |
-| Cursor end condition | `@@FETCH_STATUS` system variable | Not supported |
+| Cursor end condition | `@@FETCH_STATUS` system variable | `FOUND` / `NOT FOUND` after each `FETCH` (`EXIT WHEN NOT FOUND`) |
+| `@@CURSOR_ROWS` | rows in last opened cursor | no equivalent (`GET DIAGNOSTICS n = ROW_COUNT` after `MOVE FORWARD ALL`, then `MOVE ABSOLUTE 0`) |
+| `CURSOR … GLOBAL` | visible across batches in the session | No; use a named portal (`c refcursor := 'name'`) returned to the caller, or `DECLARE … CURSOR WITH HOLD` in SQL |
 
 ## Conversion notes
 - Most cursor operations map directly (`DECLARE`/`OPEN`/`FETCH`/`CLOSE`).
@@ -119,3 +123,6 @@ END$$;
 - `DEALLOCATE` is unnecessary in PostgreSQL (`CLOSE` is sufficient).
 - DYNAMIC behavior is the PostgreSQL default; STATIC/KEYSET/FAST_FORWARD/SCROLL_LOCKS/OPTIMISTIC/TYPE_WARNING have no equivalents — re-design as needed.
 - Prefer `FOR LOOP` over explicit cursors where possible for simpler, idiomatic code.
+- Most T-SQL cursor loops exist to do row-by-row DML. Convert them to one set-based `UPDATE … FROM` / `INSERT … SELECT` / `MERGE` when the logic allows; it is typically much faster in PostgreSQL.
+- `WHILE @@FETCH_STATUS = 0` loops with the fetch duplicated before the loop and at its end → a single `LOOP FETCH … ; EXIT WHEN NOT FOUND; … END LOOP;`.
+- Procedures that return a cursor to the client (`CURSOR VARYING OUTPUT`) → `INOUT refcursor` parameter; the client must fetch it inside the same transaction.

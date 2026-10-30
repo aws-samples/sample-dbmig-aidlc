@@ -20,13 +20,15 @@ Distilled reference notes for the ANSI SQL section of the AWS SQL Server 2019 �
 | Window Functions | [window-functions.md](window-functions.md) | Automatic (★★★★★ / ★★★★★) | N/A |
 
 ## Key migration takeaways
-- **High-effort / manual:** Temporal tables (no Aurora support — rebuild with triggers + custom history table).
+> **Target baseline: Aurora PostgreSQL 18** (validated on 18.6). Highlights: `ON DELETE SET DEFAULT` **is** supported; SQL Server single-NULL UNIQUE → `UNIQUE NULLS NOT DISTINCT`; computed columns → PG 18 `VIRTUAL`/`STORED` generated columns; `IDENTITY` → identity (not `SERIAL`); `NOCHECK` constraints → `NOT VALID`/`NOT ENFORCED`; case-insensitive data → nondeterministic ICU collation (PG 18 `LIKE` support) or `citext`; `AVG(int)` returns numeric. See `../target-baseline-aurora-postgresql-18.md`.
+
+- **High-effort / manual:** Temporal tables (no system versioning on Aurora — rebuild with a history table + trigger; PG 18 `WITHOUT OVERLAPS` helps for application-time periods).
 - **Watch-outs requiring rewrite:**
-  - `SET DEFAULT` referential action, subqueries in check constraints (constraints).
-  - `IDENTITY`→`SERIAL`, `ON <File Group>`, table variables, memory-optimized tables, `ROWVERSION` (creating tables).
+  - Subqueries in check constraints; UNIQUE single-NULL semantics (constraints). (`SET DEFAULT` is supported.)
+  - `IDENTITY`→`GENERATED … AS IDENTITY`, `ON <File Group>`, table variables, `##` global temp tables, memory-optimized tables, `ROWVERSION` (creating tables).
   - `TINYINT`/`SMALLMONEY`/`BINARY`/`UNIQUEIDENTIFIER`/`HIERARCHYID`/`SQL_VARIANT`/`ROWVERSION` type mappings (data types).
   - `OUTER JOIN` with commas (`*=`/`=*`), `CROSS APPLY`/`OUTER APPLY` → `LATERAL` joins (table join).
   - `WITH CUBE`/`WITH ROLLUP`/`GROUP BY ALL` legacy syntax (group by).
   - Indexed and partitioned views (views).
-  - `RECURSIVE` keyword required + integer division casting (CTEs).
+  - `RECURSIVE` keyword required, `MAXRECURSION`, `AVG(int)` type difference (CTEs, GROUP BY).
 - **Mostly seamless:** Derived tables, window functions, basic GROUP BY — syntax largely identical (verify returned data types).

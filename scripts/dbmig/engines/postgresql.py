@@ -249,12 +249,19 @@ def copy_rows(conn, schema: str, table: str, columns: Sequence[str],
 
     The caller is responsible for transaction commit/rollback so multiple COPY
     chunks can share a transaction if desired. Here we commit per call.
+
+    Python ``bool`` values (SQL Server ``bit``) are written as ``1``/``0``: COPY's
+    text form of a bool is ``t``/``f``, which a ``boolean`` column accepts but a
+    ``numeric``/``smallint`` column rejects — and AWS DMS SC maps ``bit`` to
+    ``numeric(1,0)``. ``1``/``0`` is valid input for all of them.
     """
     copy_sql = build_copy_sql(schema, table, columns)
     written = 0
     with conn.cursor() as cur:
         with cur.copy(copy_sql) as copy:
             for row in rows:
+                if any(v is True or v is False for v in row):
+                    row = [int(v) if (v is True or v is False) else v for v in row]
                 copy.write_row(row)
                 written += 1
     conn.commit()
@@ -442,6 +449,12 @@ class PostgreSQLEngine(TargetEngine):
                          "WHERE trigger_schema=%s"),
             "routines": ("SELECT p.proname FROM pg_proc p JOIN pg_namespace n "
                          "ON n.oid=p.pronamespace WHERE n.nspname=%s"),
+            # functions that only implement a trigger (PostgreSQL needs one per
+            # trigger; DMS SC creates them as fn_<trigger>) — not stand-alone routines
+            "trigger_functions": ("SELECT DISTINCT p.proname FROM pg_trigger t "
+                                  "JOIN pg_proc p ON p.oid=t.tgfoid "
+                                  "JOIN pg_namespace n ON n.oid=p.pronamespace "
+                                  "WHERE n.nspname=%s AND NOT t.tgisinternal"),
         }
         out: dict = {}
         for kind, sql in q.items():

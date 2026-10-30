@@ -181,6 +181,28 @@ def _connect_postgres(c: Connection):
     return psycopg.connect(conninfo)
 
 
+# Session sql_mode dbmig uses on MySQL targets. Aurora MySQL's default parameter groups
+# leave the GLOBAL sql_mode EMPTY (verified on Aurora MySQL 3.13 and 8.4.8): then a
+# too-long value is truncated, an invalid date becomes 0000-00-00 and a NULL in a
+# multi-row insert becomes 0 — all with only a warning. Apply, load and tests must fail
+# loudly instead, so dbmig sets the MySQL 8 community default per session. Override in
+# connections.yaml with ``sql_mode: server`` (keep the server's) or an explicit list.
+MYSQL_STRICT_SQL_MODE = ("ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,"
+                         "ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION")
+
+
+def mysql_session_sql_mode(c: "Connection") -> Optional[str]:
+    """The sql_mode dbmig sets per MySQL session, or None to keep the server's."""
+    raw = str(c.extra.get("sql_mode") or "strict").strip()
+    if raw.lower() == "server":
+        return None
+    if raw.lower() == "strict":
+        return MYSQL_STRICT_SQL_MODE
+    if not all(part.strip().replace("_", "").isalnum() for part in raw.split(",")):
+        raise config.ConfigError(f"invalid sql_mode: {raw!r}")
+    return ",".join(part.strip().upper() for part in raw.split(","))
+
+
 def _connect_mysql(c: Connection):
     import pymysql  # imported lazily (pure-Python driver — no native client)
     from pymysql.constants import CLIENT
@@ -203,6 +225,9 @@ def _connect_mysql(c: Connection):
     )
     if c.database:
         kwargs["database"] = c.database
+    mode_sql = mysql_session_sql_mode(c)
+    if mode_sql:
+        kwargs["init_command"] = f"SET SESSION sql_mode = '{mode_sql}'"
     # Target = Aurora/RDS MySQL (TLS enabled by default). 'require' (the default)
     # opens an encrypted connection with no plaintext fallback. Note: an empty
     # ssl={} is falsy in pymysql and would silently *disable* TLS, so we pass an

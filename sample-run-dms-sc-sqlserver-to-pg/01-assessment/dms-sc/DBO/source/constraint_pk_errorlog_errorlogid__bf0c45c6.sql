@@ -1,0 +1,2 @@
+ALTER TABLE [dbo].[ErrorLog]
+ADD CONSTRAINT [PK_ErrorLog_ErrorLogID] PRIMARY KEY CLUSTERED ([ErrorLogID]);

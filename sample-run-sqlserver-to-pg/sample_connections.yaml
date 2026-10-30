@@ -2,6 +2,7 @@
 # AWS Secrets Manager at run time — never written to disk.
 source:
   engine: sqlserver
+  version: "2022"
   host: <RDS_SQLSERVER_ENDPOINT>
   port: 1433
   database: BobsUsedBookStore
@@ -9,9 +10,10 @@ source:
   password: ${MSSQL_PASSWORD}
 target:
   engine: postgresql
+  version: "18.6"   # drives the target-baseline version check
   host: <AURORA_PG_CLUSTER_ENDPOINT>
   port: 5432
-  database: <target-db>
+  database: bookstore
   username: postgres
   password: ${PG_PASSWORD}
   sslmode: require

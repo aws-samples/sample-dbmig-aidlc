@@ -1,37 +1,5 @@
 results:
-- label: Address
-  status: applied
-  error: null
-  pass: 1
-- label: Author
-  status: applied
-  error: null
-  pass: 1
-- label: BillOfMaterials
-  status: applied
-  error: null
-  pass: 1
 - label: Book
-  status: applied
-  error: null
-  pass: 1
-- label: Coupons
-  status: applied
-  error: null
-  pass: 1
-- label: Customer
-  status: applied
-  error: null
-  pass: 1
-- label: DatabaseLog
-  status: applied
-  error: null
-  pass: 1
-- label: ErrorLog
-  status: applied
-  error: null
-  pass: 1
-- label: Members
   status: applied
   error: null
   pass: 1
@@ -39,43 +7,7 @@ results:
   status: applied
   error: null
   pass: 1
-- label: Order
-  status: applied
-  error: null
-  pass: 1
-- label: OrderItem
-  status: applied
-  error: null
-  pass: 1
-- label: Person
-  status: applied
-  error: null
-  pass: 1
-- label: Product
-  status: applied
-  error: null
-  pass: 1
-- label: ProductSaleRegions
-  status: applied
-  error: null
-  pass: 1
-- label: ProductSales
-  status: applied
-  error: null
-  pass: 1
 - label: ReferenceData
-  status: applied
-  error: null
-  pass: 1
-- label: Shopping
-  status: applied
-  error: null
-  pass: 1
-- label: ShoppingCart
-  status: applied
-  error: null
-  pass: 1
-- label: ShoppingCartItem
   status: applied
   error: null
   pass: 1

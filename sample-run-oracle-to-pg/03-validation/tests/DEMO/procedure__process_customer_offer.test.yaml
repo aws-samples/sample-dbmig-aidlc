@@ -2,7 +2,8 @@ object: PROCESS_CUSTOMER_OFFER
 schema: DEMO
 type: procedure
 notes: >
-  COMMITs in the source: NON-DESTRUCTIVE case only (non-existent listing 999999 -> 0 rows updated). The APPROVE/REJECT update paths are not exercised against real rows — review manually.
+  COMMITs in the source: NON-DESTRUCTIVE case only (non-existent listing 999999 -> 0 rows updated).
+  The APPROVE/REJECT update paths on real rows need manual review.
 cases:
   - id: p1
     call_source: "BEGIN DEMO.PROCESS_CUSTOMER_OFFER(999999, 'APPROVE', 1, 'test'); END;"

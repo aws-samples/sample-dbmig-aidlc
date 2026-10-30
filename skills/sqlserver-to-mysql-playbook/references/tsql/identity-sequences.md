@@ -6,6 +6,8 @@
 **Conversion category:** Manual (Two star feature compatibility)
 **SCT automation:** Three star automation level
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Corrected counter persistence (persisted since MySQL 8.0) and the non-PK/compound-PK limits (both work under index rules — verified); SET GLOBAL denied; LAST_INSERT_ID semantics, IDENT_CURRENT caching, sequence-table pattern, 8.4 float restriction, toolkit reseed.
+
 ## SQL Server
 
 Three mechanisms for auto-generated values: the `IDENTITY` column property, `SEQUENCE` objects, and the `IDENTITY`/`NEWSEQUENTIALID` functions.
@@ -72,7 +74,7 @@ AUTO_INCREMENT [UNIQUE [KEY]] [[PRIMARY] KEY]...
 
 ### Sequence value initialization (critical difference)
 
-SQL Server persists `IDENTITY` metadata to disk — sequence continues after restart. Aurora MySQL keeps the auto-increment counter **in memory only**; on restart, the first INSERT computes the counter as `SELECT MAX(<col>) FROM <table> FOR UPDATE` + increment (or 1 if empty). Every restart cancels any `AUTO_INCREMENT = <Value>` table option. Explicit values are allowed; an explicit value greater than the counter resets the counter to it.
+*(corrected)* Since MySQL 8.0 the `AUTO_INCREMENT` counter is **persisted** (redo log + data dictionary), so on Aurora MySQL 3 and 8.4 it survives restarts and failovers like SQL Server `IDENTITY`. The original text described MySQL 5.7 (counter recomputed as `MAX(col)+1` after restart). Explicit values are allowed; an explicit value greater than the counter moves the counter past it (verified: 10 → next 11); `ALTER TABLE … AUTO_INCREMENT = n` below the current maximum is silently raised to `MAX+1` (verified).
 
 ### Examples
 
@@ -92,7 +94,7 @@ INSERT INTO MyTable (Col2) VALUES ('Post explicit value');       -- 11
 ALTER TABLE MyTable AUTO_INCREMENT = 30;
 
 -- change increment (affects ALL auto_increment columns)
-SET @@auto_increment_increment=10;
+SET SESSION auto_increment_increment = 10;   -- session scope; SET GLOBAL is denied to the Aurora master user (verified)
 SHOW VARIABLES LIKE 'auto_inc%';
 ```
 
@@ -101,9 +103,15 @@ SHOW VARIABLES LIKE 'auto_inc%';
 - `IDENTITY` → `AUTO_INCREMENT`; application must insert NULL/0 (or omit the column) to trigger generation.
 - `SEQUENCE` objects → not supported; build a custom solution if table-independent sequences are needed.
 - Ensure `AUTO_INCREMENT` columns are indexed and have no `DEFAULT`.
-- Last value behavior differs: re-evaluated as `MAX(value)+1` on each restart (vs SQL Server's persisted value).
+- Last value: persisted across restarts on Aurora MySQL 3 / 8.4 (as in SQL Server). Gaps appear after rollbacks and with `innodb_autoinc_lock_mode` = 2 (default, verified), as with `IDENTITY`.
 - Seed/interval params are global, not per-column.
-- Non-PK auto-enumerator columns and compound PKs with auto-enumerator are **not supported** — implement an application enumerator.
+- *(corrected)* A non-PK `AUTO_INCREMENT` column works if it is the **first column of some index** (for example `UNIQUE (col)`), and a compound PK works if the `AUTO_INCREMENT` column is the **first** PK column; as a later PK column it fails with error 1075 (all verified).
+- `SCOPE_IDENTITY()` / `@@IDENTITY` → `LAST_INSERT_ID()` (per connection; for a multi-row insert it returns the **first** generated value). `IDENT_CURRENT('t')` → `SELECT AUTO_INCREMENT FROM information_schema.tables …` (cached for `information_schema_stats_expiry` = 86400 s, verified — set the session value to 0 for a fresh number).
+- `SET IDENTITY_INSERT t ON` → not needed: just insert the explicit value (or 0/NULL to generate).
+- `IDENTITY(1,1)` seed → `AUTO_INCREMENT = <seed>` table option; per-column increment other than 1 has no equivalent.
+- `CREATE SEQUENCE` / `NEXT VALUE FOR` → a sequence table with `UPDATE seq SET id = LAST_INSERT_ID(id + 1); SELECT LAST_INSERT_ID();` (verified pattern, concurrency-safe per session) wrapped in a function or procedure. `sp_sequence_get_range` → `LAST_INSERT_ID(id + n)`.
+- Use integer types: Aurora MySQL 8.4 rejects `AUTO_INCREMENT` on `FLOAT`/`DOUBLE` (error 1063, verified); `DECIMAL(p,0)` identities → `BIGINT`.
+- Toolkit: `./dbmig migrate-data` reseeds `AUTO_INCREMENT` to `MAX+1` after the load.
 
 | Feature | SQL Server | Aurora MySQL | Comments |
 |---|---|---|---|
@@ -112,7 +120,7 @@ SHOW VARIABLES LIKE 'auto_inc%';
 | Reseed | `DBCC CHECKIDENT` | `ALTER TABLE … AUTO_INCREMENT = <v>` | |
 | Column restrictions | Numeric | Numeric, indexed, no `DEFAULT` | |
 | Seed/interval control | `CREATE/ALTER TABLE` | `auto_increment_increment`/`_offset` | Global, not per-column |
-| Sequence init | Maintained across restarts | Re-initialized each restart | `MAX+1` |
+| Sequence init | Maintained across restarts | Maintained across restarts (MySQL 8.0+) | corrected |
 | Explicit values | Not allowed (needs `SET IDENTITY_INSERT ON`) | Supported | NULL/0 triggers; larger value reseeds |
-| Non-PK auto enumerator | Supported | Not supported | App enumerator |
-| Compound PK with auto enumerator | Supported | Not supported | App enumerator |
+| Non-PK auto enumerator | Supported | Supported if first column of an index | verified |
+| Compound PK with auto enumerator | Supported | Supported as the first PK column only | verified (1075 otherwise) |

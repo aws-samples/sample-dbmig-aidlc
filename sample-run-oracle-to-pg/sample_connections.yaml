@@ -7,14 +7,13 @@ source:
   version: "19c"
   host: <ORACLE_RDS_ENDPOINT>   # masked; e.g. <name>.<id>.<region>.rds.amazonaws.com
   port: 1521
-  service_name: ORCL
-  sid:
+  sid: ORCL                # RDS secret dbname; SID worked on this endpoint
   username: admin
   password: ${ORA_PASSWORD}
 
 target:
   engine: postgresql
-  version: "17"
+  version: "18.6"   # drives the target-baseline version check
   host: <AURORA_PG_CLUSTER_ENDPOINT>   # masked; e.g. <cluster>.cluster-<id>.<region>.rds.amazonaws.com
   port: 5432
   database: demodb         # new database created for this migration

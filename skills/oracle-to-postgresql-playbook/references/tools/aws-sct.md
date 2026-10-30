@@ -6,6 +6,8 @@
 **Conversion category:** N/A (migration tooling page)
 **SCT automation:** This is the SCT tool itself. SCT automatically migrates most schema objects; objects it cannot convert are flagged with action codes (see sct-action-code-index.md) for manual handling.
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): pick the newest target version, legacy patterns in SCT output to modernize on PG 18, `aws_oracle_ext` decision, toolkit relationship.
+
 ## Oracle
 AWS SCT is a Java utility that connects to the source Oracle database, scans schema objects (tables, views, indexes, procedures, etc.), and converts them to target objects. It greatly reduces manual effort because it migrates most database objects automatically.
 
@@ -50,3 +52,6 @@ SCT generates the equivalent Aurora PostgreSQL DDL/code. End-to-end procedure:
 - The **Convert schema** step is non-destructive; it only builds a virtual target schema until you explicitly Apply or run the saved SQL.
 - Use SCT as the automated first pass, then consult the playbook's feature topics for the items SCT marks with action codes.
 - See the AWS SCT User Guide for the full list of supported drivers and installation steps.
+- **Target version:** choose the newest PostgreSQL target version SCT/DMS SC offers. SCT output written for older targets uses legacy patterns that PG 18 no longer needs: procedures as `RETURNS VOID` functions, `INSERT … ON CONFLICT` instead of `MERGE`, `NUMBER` → `double precision`, `aws_oracle_ext` emulation functions for things PG 15+ now has natively (regex functions), `WITH (OIDS=FALSE)`. Review converted code against this playbook and modernize where the behavior is equivalent.
+- SCT/DMS SC install the `aws_oracle_ext` extension-pack schema for emulated Oracle functions. Decide whether to keep it (fast conversion) or replace the calls with native PostgreSQL / orafce functions (no extension-pack dependency). Record the decision.
+- In this toolkit, the AI-driven `convert-schema`/`convert-code` path replaces SCT for conversion. SCT/DMS SC output can be imported instead (`db-migration-dms-sc-ingest`).

@@ -6,6 +6,29 @@
 **Conversion category:** N/A (reference index of per-feature conversion categories)
 **SCT automation:** This page defines the automation-level scale and lists action codes per topic.
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): added a status table of action codes whose limitation no longer exists on Aurora MySQL 3 / 8.4 (virtual columns, CHECK, CTEs, function indexes, trigger ordering, LATERAL, SKIP LOCKED/NOWAIT, updatable views; verified) and the list that still needs manual work.
+
+
+## Status on Aurora MySQL 8.4 / 3 (verified 2026-10-29)
+
+SCT/DMS SC still emit many of the codes below, but several reflect Aurora MySQL 5.7 limits. When triaging output for an Aurora MySQL 3 or 8.4 target, treat these as **"convert natively"** (each verified on 3.13.0 and 8.4.8):
+
+| Code(s) | Original limitation | Native on Aurora MySQL 3 / 8.4 |
+|---|---|---|
+| 209, 215 | No virtual columns (SCT emulates with triggers) | `GENERATED ALWAYS AS (…) VIRTUAL\|STORED` |
+| 325 | No CHECK constraints (SCT emulates with triggers) | `CHECK` enforced (8.0.16+) |
+| 326 | No `DISABLED` constraints | `CHECK … NOT ENFORCED` (FKs: no equivalent) |
+| 127 + CTE section | No CTEs / recursive `WITH` | `WITH [RECURSIVE]` (`cte_max_recursion_depth` 1000) |
+| 207 | No function indexes | functional key parts `INDEX ((expr))` |
+| 241, 588 | No `FOLLOWS`/`PRECEDES`, one trigger per event | multiple triggers per event with `FOLLOWS`/`PRECEDES` |
+| 594 | No `LATERAL` | `JOIN LATERAL (…)` (8.0.14+) |
+| 139, 143, 138 | No `SKIP LOCKED` / `NOWAIT` / `FOR UPDATE OF` | `FOR UPDATE [OF tbl] SKIP LOCKED\|NOWAIT` (`OF` takes a table alias, not columns) |
+| 33 | No fractional seconds in `TIMESTAMP` literals | `TIMESTAMP '… .123456'` works |
+| 93, 97, 89 | No DML on views | simple views are updatable (insert/update/delete verified) |
+| 303 | No `XMLTable` | still none for XML, but `JSON_TABLE` covers the same need for JSON |
+
+Still **not** available on either version (verified): `CREATE SEQUENCE` (341), `MERGE` (102), `GROUPING SETS` (125; only `WITH ROLLUP` + `GROUPING()`), `ORDER BY … NULLS FIRST/LAST` (141; use `ORDER BY col IS NULL, col`), `PIVOT`/`UNPIVOT` (77/78), `RETURNING` (66/69/72), DML on a derived table (65/68, error 1288), `WITH READ ONLY` views (75), `LOCK TABLES` in procedures (346, error 1314), `GOTO` (335), statement-level / `INSTEAD OF` triggers (236/237), dynamic SQL in functions and triggers, materialized views (94), synonyms (352), database links (600), global temporary tables (198/348).
+
 ## Automation level scale
 
 | Stars / icon | Level | Description |
@@ -71,7 +94,7 @@ Data type syntax and rules are similar; AWS SCT auto-converts most. Date/time ha
 
 ## Common table expressions — No automation
 
-Aurora MySQL 5.7 doesn't support CTEs. AWS SCT can't auto-convert; use traditional SQL workarounds.
+Aurora MySQL 5.7 didn't support CTEs. **Aurora MySQL 3 / 8.4 support `WITH` and `WITH RECURSIVE` natively (verified)**; rewrite SCT workarounds as CTEs.
 
 | Code | Message |
 |---|---|
@@ -173,7 +196,7 @@ Auto-converts most common date/time functions despite large syntax differences. 
 
 ## User-defined types — ★★★ Medium automation
 
-Aurora MySQL 5.7 doesn't support user-defined types or table-valued parameters. AWS SCT converts standard UDTs by replacing them with base types; manual conversion required for user-defined table types (used for table-valued parameters in stored procedures).
+Aurora MySQL (all versions, including 3 / 8.4) doesn't support user-defined types or table-valued parameters. AWS SCT converts standard UDTs by replacing them with base types; manual conversion required for user-defined table types (used for table-valued parameters in stored procedures).
 
 | Code | Message |
 |---|---|
@@ -182,7 +205,7 @@ Aurora MySQL 5.7 doesn't support user-defined types or table-valued parameters. 
 
 ## Synonyms — No automation
 
-Aurora MySQL 5.7 doesn't support synonyms. AWS SCT can't auto-convert.
+Aurora MySQL (all versions, including 3 / 8.4) doesn't support synonyms. AWS SCT can't auto-convert.
 
 | Code | Message |
 |---|---|
@@ -200,7 +223,7 @@ Aurora MySQL has minimal XML support but offers a native JSON data type and 25+ 
 
 ## MERGE — No automation
 
-Aurora MySQL 5.7 doesn't support `MERGE`. AWS SCT can't auto-convert; manual conversion is straightforward in most cases.
+Aurora MySQL (all versions, including 3 / 8.4) doesn't support `MERGE` (verified). AWS SCT can't auto-convert; manual conversion is straightforward in most cases.
 
 | Code | Message |
 |---|---|
@@ -237,7 +260,7 @@ Because Aurora MySQL stores each table in its own file (managed by AWS, not modi
 
 ## Materialized views — No automation
 
-Aurora MySQL 5.7 doesn't support materialized views. AWS SCT can't auto-convert.
+Aurora MySQL (all versions, including 3 / 8.4) doesn't support materialized views. AWS SCT can't auto-convert.
 
 | Code | Message |
 |---|---|

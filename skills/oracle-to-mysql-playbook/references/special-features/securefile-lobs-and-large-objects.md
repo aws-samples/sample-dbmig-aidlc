@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (four-star feature compatibility; four-star automation) — MySQL doesn't support SecureFiles; compatibility/automation refer to plain LOBs only.
 **SCT automation:** N/A
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Corrected the trailing-space/unique-index claim for NO PAD collations (verified), prefix-index error 1170, size and packet limits, DBMS_LOB mapping, S3 for large files.
+
 ## Oracle
 
 LOBs store binary data in the database. Oracle 11g introduced SecureFile LOBs (created with the `SECUREFILE` keyword) for more efficient storage. Benefits: compression (Oracle Advanced Compression), de-duplication (removes duplicate LOB data), and encryption (with TDE).
@@ -26,7 +28,7 @@ MySQL does not support SecureFile advanced storage/security/encryption options, 
 - **BLOB types** (binary, byte strings; sorted by byte numeric value): `TINYBLOB`, `BLOB`, `MEDIUMBLOB`, `LONGBLOB`.
 - **TEXT types** (non-binary character strings; sorted/compared by character set collation): `TINYTEXT`, `TEXT`, `MEDIUMTEXT`, `LONGTEXT`.
 
-These differ only in maximum length. For `TEXT` columns, index entries are space-padded; a unique index raises duplicate-key errors for values differing only in trailing spaces (e.g., 'b' vs 'b ').
+These differ only in maximum length (`TEXT` 64 KB, `MEDIUMTEXT` 16 MB, `LONGTEXT` 4 GB; sizes are in bytes, so `utf8mb4` text holds fewer characters). With the default **NO PAD** collation `utf8mb4_0900_ai_ci`, trailing spaces are significant: a unique prefix index on a `TEXT` column accepts both `'b'` and `'b '` (verified on 3.13 and 8.4). The original playbook described PAD SPACE collations, where they collide.
 
 Constraints:
 - Only the first `max_sort_length` bytes (default 1024) are used when sorting/grouping; adjustable at startup/runtime.
@@ -43,5 +45,8 @@ CREATE TABLE test (blob_col BLOB, INDEX(blob_col(10)));
 
 - Map Oracle `CLOB` → MySQL `TEXT` family; Oracle `BLOB`/SecureFile binary → MySQL `BLOB` family, sized appropriately (`LONGBLOB`/`LONGTEXT` for the largest).
 - SecureFile compression, de-duplication, and TDE encryption have **no equivalent** — rely on Aurora storage-level encryption (KMS) and handle compression/de-dup at the application layer if needed.
-- BLOB/TEXT columns can only be indexed with a **prefix length** (e.g., `INDEX(blob_col(10))`).
+- BLOB/TEXT columns can only be indexed with a **prefix length** (e.g., `INDEX(blob_col(10))`; without it error 1170, verified), or through a generated column / functional index on a hash (`INDEX ((MD5(col)))`) for equality lookups.
+- `max_allowed_packet` is 64 MB by default on Aurora (verified) and `max_sort_length` 1024 bytes; raise `max_allowed_packet` in the parameter group for documents larger than that, and on the client too.
+- Oracle `DBMS_LOB` piecewise APIs (`READ`, `WRITE`, `APPEND`, `INSTR`, `SUBSTR`) → whole-value string functions (`SUBSTRING`, `CONCAT`, `LOCATE`) or streaming in the application driver.
+- Large LOBs make every update rewrite the value; store big immutable files in Amazon S3 and keep the key in the table where possible.
 - Tune `max_allowed_packet` and be aware of `max_sort_length` and temp-table-to-disk behavior for large values.

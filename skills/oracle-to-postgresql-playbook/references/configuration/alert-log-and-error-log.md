@@ -3,6 +3,8 @@
 > Source: AWS Oracle→Aurora PostgreSQL Migration Playbook
 > URL: https://docs.aws.amazon.com/dms/latest/oracle-to-aurora-postgresql-migration-playbook/chap-oracle-aurora-pg.configuration.errorlog.html
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): added CloudWatch Logs export, `log_destination` allowed values, and the PG 18 list form of `log_connections`.
+
 **Conversion category:** N/A (config/operations topic) — feature compatibility: one star
 **SCT automation:** N/A. Key difference: use [Event Notifications Subscription] with Amazon SNS.
 
@@ -67,3 +69,11 @@ PostgreSQL provides detailed logging/reporting of errors over the database and s
 - For event-driven alerting (analogous to monitoring the Alert Log), use **Event Notifications Subscription** with **Amazon SNS**.
 - Aurora **disables** modification of certain parameters: `log_directory` (destination directory for log files) and `logging_collector` (subprocess that captures stderr/csvlogs into files) — because Aurora restricts OS access.
 - Map `ORA-` error numbers to PostgreSQL `SQLSTATE` codes when porting error-handling logic.
+
+### Aurora PostgreSQL 18 notes (validated on 18.6)
+
+- **Publish logs to CloudWatch Logs** (`aws rds modify-db-cluster --cloudwatch-logs-export-configuration '{"EnableLogTypes":["postgresql"]}'`). This is the closest replacement for "tail the alert log": metric filters and alarms on `ERROR`/`FATAL`/`PANIC` replace scripts that grep `alert<sid>.log` for `ORA-`.
+- `log_destination` accepts only `stderr` or `csvlog` in the Aurora PostgreSQL 18 parameter group. PostgreSQL's `jsonlog` destination is not offered.
+- PostgreSQL 18 changed `log_connections` from a boolean to a list: `receipt`, `authentication`, `authorization`, `setup_durations`, or `all`. The old `on` value still works. Use `setup_durations` to log connection-setup latency.
+- Useful additions for Oracle DBAs used to the alert log: `log_lock_waits = on` (lock waits longer than `deadlock_timeout`), `log_autovacuum_min_duration`, `log_temp_files = 0` (spills to disk), and `auto_explain` (preloadable in Aurora 18) for slow-plan capture.
+- For DBA-level monitoring, use **CloudWatch Database Insights**. Performance Insights reached end of life on 2026-07-31, and its users were moved to Database Insights.

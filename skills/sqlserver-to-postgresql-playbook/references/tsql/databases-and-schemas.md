@@ -6,6 +6,8 @@
 **Conversion category:** Automatic (five-star feature compatibility, five-star automation)
 **SCT automation:** Five-star automation level; N/A action code
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): database→schema consolidation instead of cross-database queries, `search_path` for `dbo`, PG 15 public-schema change, PG 15–17 `CREATE DATABASE` options.
+
 ## SQL Server
 
 Databases and schemas are logical containers for security/access control. Security exists at three levels: objects, schemas (collections of objects), databases (collections of schemas). Built-in security schemas (`guest`, `dbo`, `db_datareader`, `sys`, `INFORMATION_SCHEMA`) usually need not be migrated.
@@ -91,7 +93,9 @@ CREATE SCHEMA world_flights
 
 ## Conversion notes
 - Both engines use the instance → database → schema → object hierarchy with three-part names — high compatibility.
-- **No `USE` command in PostgreSQL**: cannot switch default database within a session. To use a different database, open a new connection. Cross-database object references aren't supported as in SQL Server.
+- **No `USE` command in PostgreSQL**: cannot switch default database within a session. To use a different database, open a new connection. Cross-database object references (`OtherDb.dbo.Table`) aren't supported; use `postgres_fdw` / `dblink`, or (usually better) **consolidate the SQL Server databases that query each other into schemas of one PostgreSQL database** (`OtherDb.dbo.Table` → `otherdb.table`). Record the database→schema mapping in `customer-specific/decisions.md`.
+- `dbo` default schema → `search_path` (`ALTER ROLE app SET search_path = app, public;`). Since PG 15, ordinary roles cannot create objects in `public`, so create an application schema owned by the application role (`CREATE SCHEMA app AUTHORIZATION app_owner`).
+- PG 15+ `CREATE DATABASE` adds `LOCALE_PROVIDER icu|libc|builtin`, `ICU_LOCALE`, `BUILTIN_LOCALE` (PG 17) and `STRATEGY wal_log|file_copy`; the database's collation cannot be changed later (see `collations.md`).
 - Applications using a single database with multiple schemas migrate with fewer rewrites (two-part names already in use).
 - Built-in SQL Server schemas (`dbo`, `sys`, etc.) generally don't need migration; objects in `dbo` typically map to the PostgreSQL `public` schema or a named schema.
 - PostgreSQL has no filegroup concept; ignore SQL Server file/filegroup management during conversion (use tablespaces if needed).

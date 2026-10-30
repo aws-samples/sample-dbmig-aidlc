@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (Four star feature compatibility)
 **SCT automation:** Four star automation level
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): LATERAL is supported on 3 / 8.4 (corrected, verified) as the APPLY replacement; FULL OUTER JOIN still unsupported (verified); fixed the NOT IN null trap in the rewrite.
+
 **Key differences:** Basic syntax compatible. `FULL OUTER`, `APPLY`, and ANSI SQL 89 outer joins need rewrites.
 
 ## SQL Server
@@ -55,7 +57,7 @@ Additional join types not in SQL Server:
 - `STRAIGHT_JOIN` — forces left set read first (optimizer hint).
 - `USING (column list)` clause as alternative to `ON`.
 
-ANSI SQL 89 comma syntax supported for inner joins only. `APPLY` / `LATERAL JOIN` are NOT supported.
+ANSI SQL 89 comma syntax supported for inner joins only. *(corrected)* **`LATERAL` derived tables are supported** on Aurora MySQL 3 / 8.4 (MySQL 8.0.14+): `CROSS APPLY (…)` → `JOIN LATERAL (…) AS x ON TRUE`, `OUTER APPLY (…)` → `LEFT JOIN LATERAL (…) AS x ON TRUE` (verified). `FULL OUTER JOIN` is still a syntax error (verified).
 
 ### Syntax
 ```sql
@@ -88,9 +90,10 @@ FROM T1
     T2
     ON T1.Col1 = T2.Col1
 UNION ALL
-SELECT NULL, NULL, Col1, Col2
+SELECT NULL, NULL, T2.Col1, T2.Col2
 FROM T2
-WHERE Col1 NOT IN (SELECT Col1 FROM T1);
+WHERE NOT EXISTS (SELECT 1 FROM T1 WHERE T1.Col1 = T2.Col1);
+-- NOT EXISTS instead of the original NOT IN: NOT IN returns no rows if T1.Col1 contains a NULL
 ```
 
 ## Conversion notes
@@ -101,7 +104,7 @@ WHERE Col1 NOT IN (SELECT Col1 FROM T1);
 | `OUTER JOIN` with `ON` clause | Supported | |
 | `OUTER JOIN` with commas | Not supported | Requires T-SQL rewrite post 2008 R2. |
 | `CROSS JOIN` or commas | Supported | |
-| `CROSS APPLY` / `OUTER APPLY` | Not supported | Rewrite required. |
+| `CROSS APPLY` / `OUTER APPLY` | `JOIN LATERAL` / `LEFT JOIN LATERAL … ON TRUE` | MySQL 8.0.14+ (verified). Applying a table-valued function has no equivalent (MySQL has no TVFs). |
 | `FULL OUTER JOIN` | Not supported | Rewrite using `LEFT JOIN` + `UNION ALL`. |
 | Not supported | `NATURAL JOIN` | Not recommended (breaks if table structure changes). |
 | Not supported | `STRAIGHT_JOIN` | |

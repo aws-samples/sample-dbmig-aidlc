@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (★★ — two-star feature compatibility)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): EXTENDED removed (verified), EXPLAIN ANALYZE TREE-only (verified), JSON/TREE formats, 8.4 explain_json_format_version, plan history sources.
+
 Key differences: Syntax differences. Completely different optimizer with different operators and rules.
 
 ## Oracle
@@ -68,7 +70,8 @@ Aurora MySQL provides the `EXPLAIN` / `DESCRIBE` statement — usable with `SELE
 ### Syntax
 
 ```sql
-{EXPLAIN | DESCRIBE | DESC} [EXTENDED | FORMAT = TRADITIONAL | JSON]
+{EXPLAIN | DESCRIBE | DESC} [FORMAT = TRADITIONAL | JSON | TREE]      -- EXTENDED was removed in 8.0 (syntax error, verified)
+EXPLAIN ANALYZE [FORMAT = TREE] <statement>
 [SELECT statement | DELETE statement | INSERT statement | REPLACE statement | UPDATE
 statement | FOR CONNECTION <connection id>]
 ```
@@ -95,4 +98,11 @@ To force a join order matching the order tables are specified in a `SELECT`, use
 - Oracle uses `SET AUTOTRACE TRACEONLY EXPLAIN` / `EXPLAIN PLAN`; MySQL uses `EXPLAIN` / `DESCRIBE` / `DESC`.
 - Oracle presents a structured tree with cost/cardinality columns; MySQL's traditional output is a flat row set (`id`, `select_type`, `table`, `type`, `possible_keys`, `key`, `rows`, `Extra`, etc.) or JSON/TREE format.
 - MySQL adds `EXPLAIN ANALYZE` (8.0.18+) to compare estimated vs. actual cost — analogous to Oracle's actual-execution statistics.
-- Use `STRAIGHT_JOIN` in MySQL to force join order, comparable to ordering/join hints in Oracle.
+- Use `STRAIGHT_JOIN` or the `JOIN_ORDER`/`JOIN_FIXED_ORDER` hints to force join order, comparable to Oracle `ORDERED`/`LEADING`.
+
+Verified on Aurora MySQL 3.13 and 8.4.8:
+- `EXPLAIN FORMAT=JSON` and `FORMAT=TREE` work; `EXPLAIN ANALYZE` works with `TREE` only (`FORMAT=JSON` → error 1235). Hash joins appear as *Inner hash join* in tree output.
+- `EXPLAIN ANALYZE` **executes** the statement — for DML run it in a transaction you roll back (same caution as Oracle `GATHER_PLAN_STATISTICS`).
+- 8.4 adds `explain_json_format_version` (1 by default; 2 gives a tree-shaped JSON plan); 3.x does not have it.
+- `EXPLAIN FOR CONNECTION <id>` ≈ `DBMS_XPLAN.DISPLAY_CURSOR` for a running session.
+- For history (≈ AWR/`DBMS_XPLAN.DISPLAY_AWR`) use Database Insights or the slow query log with `log_slow_extra`; MySQL keeps no plan history.

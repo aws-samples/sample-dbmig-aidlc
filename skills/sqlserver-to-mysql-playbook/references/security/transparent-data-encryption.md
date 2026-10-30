@@ -6,6 +6,8 @@
 **Conversion category:** Manual (configuration at instance-creation time)
 **SCT automation:** N/A (four-star feature compatibility; enable encryption when creating the database instance)
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): default_table_encryption does not exist on Aurora (verified) — table-level encryption text applies only to community/RDS MySQL.
+
 ## SQL Server
 
 TDE protects data at-rest in case an attacker obtains the physical media containing database files. It requires no application changes and is transparent to users — the storage engine encrypts/decrypts data on-the-fly. Data is **not** encrypted while in memory or on the network. TDE can be toggled per-database.
@@ -66,5 +68,6 @@ Then set the master encryption key (by ARN or from the list) during instance cre
 - No direct SQL/DDL equivalent. SQL Server's per-database TDE (master key + certificate + DEK + `ALTER DATABASE ... SET ENCRYPTION ON`) is replaced by **Amazon RDS/Aurora storage-level encryption configured at instance creation**, using AWS KMS keys — not SQL statements.
 - Encryption must be decided at instance-creation time; you cannot enable it later in place (use the snapshot → encrypted-copy → restore path).
 - Both approaches encrypt at rest only (not in memory or on the network).
-- For table-level granularity, MySQL 8 offers `default_table_encryption` / `DEFAULT ENCRYPTION` / `table_encryption_privilege_check`, but the primary mechanism for Aurora is whole-instance KMS encryption.
+- *(corrected)* `default_table_encryption` and `table_encryption_privilege_check` **do not exist on Aurora MySQL** (error 1193 on 3.13 and 8.4.8, verified); the table-level encryption section above applies to community MySQL / RDS for MySQL only. Aurora encrypts the whole cluster volume with KMS; drop `ENCRYPTION='Y'` options from converted DDL.
+- Aurora Serverless v2 and provisioned clusters are encrypted per cluster; encryption is chosen at cluster creation (this review's validation clusters were created with `--storage-encrypted`).
 - Plan KMS key ownership/region carefully; losing key access puts the instance in an unrecoverable terminal state.

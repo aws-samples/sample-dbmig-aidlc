@@ -6,6 +6,8 @@
 **Conversion category:** Manual (Five-star feature compatibility — storage-level backup managed by Amazon RDS)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): current instance class in examples, corrected the snapshot quota, noted Backtrack is MySQL-only, and added fast clones as the restore-point equivalent.
+
 ## Oracle
 
 Oracle Flashback Database protects against human errors by reverting the entire database to a previous point in time using SQL commands. It uses a self-logging mechanism that captures all changes and stores previous versions of modifications in the configured **Fast Recovery Area**.
@@ -40,7 +42,7 @@ Snapshots are the primary backup mechanism for Amazon Aurora databases — fast 
 
 Backup types:
 - **Automated Backups** — always enabled on Aurora; no performance impact.
-- **Manual Backups** — create a snapshot any time; no performance impact. Restoring requires creating a **new instance**. Up to **100 manual snapshots** per database.
+- **Manual Backups** — create a snapshot any time; no performance impact. Restoring requires creating a **new cluster**. The default quota is **100 manual cluster snapshots per Region** (adjustable through Service Quotas).
 
 Console operations:
 - **Enable automatic backups / set retention** (equivalent to RMAN `configure retention policy to recovery window of X days`): RDS → Databases → choose/create DB → Additional configuration → set **Backup retention period** in days.
@@ -80,7 +82,7 @@ aws rds create-db-instance \
   --engine aurora-postgresql \
   --db-cluster-identifier NewCluster \
   --db-instance-identifier newinstance-nodeA \
-  --db-instance-class db.r4.large
+  --db-instance-class db.r8g.large
 
 # Point-in-time restore
 aws rds restore-db-cluster-to-point-in-time \
@@ -94,7 +96,7 @@ aws rds create-db-instance \
   --engine aurora-postgresql \
   --db-cluster-identifier clustername-restore \
   --db-instance-identifier newinstance-nodeA \
-  --db-instance-class db.r4.large
+  --db-instance-class db.r8g.large
 ```
 
 ## Conversion notes
@@ -108,4 +110,7 @@ aws rds create-db-instance \
 
 - Major gotcha: Oracle Flashback Database reverts **in place**; Aurora restore always creates a **new cluster/instance** — plan for endpoint cutover after restore.
 - Aurora has no concept of incremental backups; snapshots + continuous PITR cover the same need.
-- Up to 100 manual snapshots per database; automated backups are always on with a configurable retention window.
+- Default quota of 100 manual cluster snapshots per Region (adjustable); automated backups are always on with a 1–35 day retention window.
+- **Aurora Backtrack (in-place rewind) is Aurora MySQL only.** Aurora PostgreSQL has no in-place equivalent of Flashback Database.
+- **Closest equivalent to a guaranteed restore point before a risky change: an Aurora fast clone.** `aws rds restore-db-cluster-to-point-in-time --restore-type copy-on-write --use-latest-restorable-time` is ready in minutes, costs only for changed pages, and gives a read/write copy to compare against or cut back to. A snapshot works too but takes longer to restore.
+- For row-level "undo" of a bad DML statement (Flashback Query / Flashback Table), see `flashback-table-and-snapshots.md`. Clone or PITR to a new cluster, then copy the affected rows back.

@@ -3,6 +3,8 @@
 > **Source:** SQL Server 2018 deprecated features list — Microsoft SQL Server 2019 to Amazon Aurora PostgreSQL Migration Playbook
 > **URL:** https://docs.aws.amazon.com/dms/latest/sql-server-to-aurora-postgresql-migration-playbook/chap-sql-server-aurora-pg.deprecatedfeatures.html
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): identity instead of SERIAL, corrected the sequence-restart claim, procedure RETURN status → OUT parameter, other deprecated constructs.
+
 This page lists SQL Server features that are deprecated in SQL Server and that warrant attention when migrating to Amazon Aurora PostgreSQL. Each item notes the deprecated SQL Server construct and the recommended replacement on Aurora PostgreSQL.
 
 ## SQL Server
@@ -14,8 +16,8 @@ This page lists SQL Server features that are deprecated in SQL Server and that w
 | `TIMESTAMP` syntax for `CREATE TABLE` | The SQL Server `TIMESTAMP` (rowversion) column syntax is deprecated. Use `rowversion`; on Aurora PostgreSQL model with a proper timestamp/`bytea` or sequence-based row version. See *Creating Tables*. |
 | `DBCC DBREINDEX`, `INDEXDEFRAG`, and `SHOWCONTIG` | Use `ALTER INDEX ... REBUILD/REORGANIZE` and catalog views in SQL Server; on Aurora PostgreSQL use `REINDEX` / `VACUUM` and the autovacuum framework. See *Maintenance Plans*. |
 | Old SQL Mail | Use Database Mail in SQL Server; on Aurora PostgreSQL integrate Amazon services (e.g., Lambda / SES) for email. See *Database Mail*. |
-| `IDENTITY` seed, increment, non-primary-key, and compound | On Aurora PostgreSQL use `SERIAL` / `IDENTITY` columns and `SEQUENCE` objects (note sequence behavior differs across restarts). See *Sequences and Identity*. |
-| Stored procedures `RETURN` values | Use output parameters or result sets; on Aurora PostgreSQL use `CREATE FUNCTION` returning a value (`CREATE PROCEDURE` does not return values the same way). See *Stored Procedures*. |
+| `IDENTITY` seed, increment, non-primary-key, and compound | On Aurora PostgreSQL use `GENERATED … AS IDENTITY` columns (preferred over `SERIAL`) and `SEQUENCE` objects. See *Sequences and Identity*. |
+| Stored procedures `RETURN` values | Use output parameters or result sets. On Aurora PostgreSQL, a procedure's integer return status becomes an `INOUT`/`OUT` parameter of a `CREATE PROCEDURE` (returned by `CALL`, PG 14+), or the routine becomes a `CREATE FUNCTION` returning the value. Choose by how callers use it. See *Stored Procedures*. |
 | `GROUP BY ALL`, `CUBE`, and `COMPUTE BY` | Use ANSI grouping: `GROUP BY`, `GROUPING SETS`, `CUBE`, `ROLLUP`. `COMPUTE BY` has no equivalent — use aggregate queries / window functions. See *GROUP BY*. |
 | DTS (Data Transformation Services) | Use SSIS or, for migration, AWS DMS / modern ETL services. See *ETL*. |
 | Old outer join syntax `*=` and `=*` | Use ANSI explicit `LEFT OUTER JOIN` / `RIGHT OUTER JOIN` syntax. See *Table JOIN*. |
@@ -28,6 +30,7 @@ This page lists SQL Server features that are deprecated in SQL Server and that w
 - Replace legacy LOB types (`TEXT`/`NTEXT`/`IMAGE`) with `TEXT`/`BYTEA` on Aurora PostgreSQL; behavior and indexing differ from the SQL Server large-object types.
 - Convert old-style outer joins (`*=`, `=*`) to ANSI `LEFT/RIGHT OUTER JOIN` — the legacy operators are not supported and can change result semantics.
 - Replace alias-by-assignment (`'Alias' = Expression`) with `Expression AS Alias`; the assignment form silently produces a boolean predicate on Aurora PostgreSQL.
-- `IDENTITY` → `SERIAL`/`IDENTITY`/sequences: note that Aurora PostgreSQL sequence seed resets relative to the max existing value on restart rather than persisting an in-memory cache. See `../tsql/` for sequence and identity details.
-- `RETURN` values from stored procedures map to functions on Aurora PostgreSQL; review the *Stored Procedures* conversion guidance under `../tsql/`.
+- `IDENTITY` → `GENERATED … AS IDENTITY`/sequences. PostgreSQL sequences **persist** their last value across restarts and do not reset to the table's max value. Values cached in a session (`CACHE n`) that were never used are lost, which leaves gaps, like SQL Server's identity cache after a restart. After loading data with explicit IDs, reset the sequence (`./dbmig reset-identity`). See `../tsql/identity-and-sequences.md`. (The original note claiming a reset-to-max on restart was wrong.)
+- `RETURN` status values from stored procedures: `OUT` parameter of a PostgreSQL procedure, or a function. See `../tsql/stored-procedures.md`.
+- Also deprecated in SQL Server and absent from PostgreSQL: `sp_` system procedure aliases (`sp_addlogin` etc.), `NOLOCK`/`READUNCOMMITTED` hints on DML targets, `FASTFIRSTROW` and other legacy hints, and the `::` function-call syntax. Drop them; PostgreSQL MVCC readers never block, so `NOLOCK` is unnecessary.
 - `SET ROWCOUNT` → `LIMIT`; `GROUP BY ALL`/`CUBE`/`COMPUTE BY` → ANSI grouping. See `../ansi-sql/` for ANSI-standard SQL conversion details.

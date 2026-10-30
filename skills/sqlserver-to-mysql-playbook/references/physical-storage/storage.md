@@ -6,6 +6,8 @@
 **Conversion category:** Manual (Three star feature compatibility, No automation)
 **SCT automation:** N/A — AWS SCT action code index: Partitioning
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Fixed the subpartition example; added verified restrictions (unique keys must include partition columns — 1503; no FKs — 1506; HASH needs integers — 1659), RANGE LEFT boundary conversion, REORGANIZE splitting any partition, partition-level DML, event-based sliding windows.
+
 Aurora MySQL offers more partition types than SQL Server but with more restrictions on partitioned tables.
 
 ## SQL Server
@@ -78,7 +80,7 @@ Partition types supported:
 Partition management uses Aurora MySQL `ALTER TABLE` extensions:
 
 - **Dropping** — range/list: `ALTER TABLE … DROP PARTITION`. Range: data deleted; new rows that would fit go to the immediate neighbor. List: data deleted; new rows that would fit can't be INSERTed/UPDATEd (no logical container). Hash/key: `ALTER TABLE … COALESCE PARTITION <N>` reduces total partitions by N.
-- **Adding/Splitting** — `ALTER TABLE … ADD PARTITION` adds a new range boundary or list values. Range: new range may only be added to the end. Split an existing range partition with `ALTER TABLE … REORGANIZE PARTITION`.
+- **Adding/Splitting** — `ALTER TABLE … ADD PARTITION` adds a new range boundary or list values. Range: new range may only be added to the end. Split **any** existing range partition with `ALTER TABLE … REORGANIZE PARTITION` (verified on a middle partition) — the equivalent of SQL Server `SPLIT RANGE`; `MERGE RANGE` → `REORGANIZE PARTITION p1, p2 INTO (…)`.
 - **Switching/Exchanging** — `ALTER TABLE <Partitioned Table> EXCHANGE PARTITION <Partition> WITH TABLE <Non Partitioned Table>`. The non-partitioned table can't be temporary; schemas must be identical; it can't have/being a referenced FK. All rows must be within partition boundaries unless `WITHOUT VALIDATION` is used. Requires `ALTER`, `INSERT`, `CREATE`, `DROP` privileges. Does not fire triggers. `AUTO_INCREMENT` columns in the exchanged table are reset.
 
 ### Syntax
@@ -143,9 +145,9 @@ PARTITION BY RANGE (Col1)
 Create subpartitions:
 
 ```sql
-CREATE TABLE MyTable (Col1 INT NOT NULL, DateCol DATE NOT NULL, )
+CREATE TABLE MyTable (Col1 INT NOT NULL, DateCol DATE NOT NULL)   -- the original had a trailing comma
 PARTITION BY RANGE(YEAR(DateCol))
-SUBPARTITION BY HASH(TO_DAYS(<DateCol>))
+SUBPARTITION BY HASH(TO_DAYS(DateCol))
 SUBPARTITIONS 2 (
     PARTITION p0 VALUES LESS THAN (1990),
     PARTITION p1 VALUES LESS THAN (2000),
@@ -180,5 +182,11 @@ ALTER TABLE MyTable ADD PARTITION (PARTITION p4 VALUES LESS THAN (50000));
 - **Exchange partition**: SQL Server can switch any partition to any partition; Aurora MySQL only exchanges a partition with a non-partitioned table (no partition-to-partition switch).
 - **Partition function/scheme**: SQL Server uses abstract, reusable function and storage-mapping (file group) objects. Aurora MySQL defines partitioning per table; there is no partition scheme because physical storage is managed by Amazon RDS. File-group concepts don't apply.
 - **Partitioning key types**: Aurora MySQL partitioning keys/expressions must be `INT` types and can't be `ENUM`; the expression may yield NULL. Exceptions: range/list COLUMNS partitioning allows strings, `DATE`, `DATETIME`; `[LINEAR] KEY` allows any valid MySQL type except `TEXT` and `BLOB`.
-- **Restrictions**: Aurora MySQL partitioned tables can't use foreign keys (neither referencing nor referenced), `FULLTEXT` indexes, or spatial types (`POINT`, `GEOMETRY`). SQL Server has no such limits since all tables are partitioned.
+- **Restrictions**: Aurora MySQL partitioned tables can't use foreign keys (neither referencing nor referenced — error 1506, verified), `FULLTEXT` indexes, or spatial types (`POINT`, `GEOMETRY`). SQL Server has no such limits since all tables are partitioned.
+- **Every PRIMARY KEY and UNIQUE key must include all partitioning columns** (error 1503, verified). SQL Server allows a non-aligned unique index; in MySQL uniqueness weakens to (key, partition column) — get sign-off, or don't partition.
+- `HASH` needs an integer expression (`VARCHAR` → error 1659, verified); use `KEY` partitioning for strings.
+- **LEFT-range partition functions:** SQL Server `RANGE LEFT FOR VALUES (100, 200)` puts the boundary value in the lower partition; MySQL `VALUES LESS THAN` puts it in the upper one. Convert boundaries to `LESS THAN (101)`, `(201)` for integers, or to the next date/day for date keys.
+- Partition-level operations: `TRUNCATE TABLE … WITH (PARTITIONS (2))` → `ALTER TABLE … TRUNCATE PARTITION p2`; `$PARTITION.fn(col)` → query `information_schema.partitions` or `EXPLAIN` (`partitions` column); `SELECT … FROM t PARTITION (p2)` works (verified).
+- Partitioning on a generated column works (verified), which covers partitioning by a computed expression.
+- Sliding-window maintenance (SQL Server Agent job with `SPLIT`/`SWITCH`) → a MySQL `EVENT` (scheduler ON by default on Aurora, verified) running `REORGANIZE`/`EXCHANGE`/`DROP PARTITION`.
 - See MySQL docs: Overview of Partitioning, Partition Management, Partitioning Types, and Restrictions and Limitations on Partitioning.

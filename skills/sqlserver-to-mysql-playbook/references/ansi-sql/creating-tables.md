@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (Four star feature compatibility)
 **SCT automation:** Four star automation level
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Fixed the ROWVERSION trigger (AFTER cannot set NEW — error 1362; NULL counter), verified that column-level REFERENCES is silently ignored, CTAS column behavior, 8.4 FK rule, computed columns and table variables.
+
 **Key differences:** `IDENTITY` vs `AUTO_INCREMENT`. Primary key is always clustered. `CREATE TEMPORARY TABLE` syntax. Unsupported `@table` variables.
 
 ## SQL Server
@@ -58,9 +60,9 @@ CREATE TABLE MyTable
 (
     Col1 INT NOT NULL PRIMARY KEY IDENTITY (1,1),
     Col2 VARCHAR(20) NOT NULL CHECK (Col2 <> ''),
-    Col3 VARCHAR(100) NULL
-    REFERENCES MyOtherTable (Col3)
-);
+    Col3 VARCHAR(100) NULL,
+    FOREIGN KEY (Col3) REFERENCES MyOtherTable (Col3)   -- table-level form; a column-level
+);                                                       -- REFERENCES clause is silently ignored (verified)
 ```
 
 Table with additional index:
@@ -107,11 +109,13 @@ CREATE TABLE WorkItems
     WorkItemID INT AUTO_INCREMENT PRIMARY KEY,
     WorkItemDescription JSON NOT NULL,
     Status VARCHAR(10) NOT NULL DEFAULT 'Pending',
-    VersionNumber INTEGER NULL
+    VersionNumber INTEGER NOT NULL DEFAULT 0
 );
 
+-- Must be BEFORE UPDATE: an AFTER trigger cannot assign NEW (error 1362, verified).
+-- NOT NULL DEFAULT 0, because NULL + 1 stays NULL.
 CREATE TRIGGER MaintainWorkItemVersionNumber
-AFTER UPDATE
+BEFORE UPDATE
 ON WorkItems FOR EACH ROW
 SET NEW.VersionNumber = OLD.VersionNumber + 1;
 ```
@@ -147,9 +151,9 @@ CREATE TABLE MyTable
     Col1 INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     Col2 VARCHAR(20) NOT NULL
     CHECK (Col2 <> ''),
-    Col3 VARCHAR(100) NULL
-    REFERENCES MyOtherTable (Col3)
-);
+    Col3 VARCHAR(100) NULL,
+    FOREIGN KEY (Col3) REFERENCES MyOtherTable (Col3)   -- table-level form; a column-level
+);                                                       -- REFERENCES clause is silently ignored (verified)
 ```
 
 Table with additional index:
@@ -175,10 +179,15 @@ CREATE TABLE MyTable
 | Global temporary tables | `##GlobalTempTable` | Not supported | Use standard tables. |
 | Table variables | `DECLARE @Table` | Not supported | |
 | Create table as query | `SELECT… INTO` | `CREATE TABLE… AS` | |
-| Copy table structure | Not supported | `CREATE TABLE… LIKE` | |
+| Copy table structure | Not supported | `CREATE TABLE… LIKE` | copies indexes, not FKs |
+| Computed columns | `AS (expr) [PERSISTED]` | `AS (expr) VIRTUAL\|STORED` | native in MySQL 8 |
 | Memory-optimized tables | Supported | Not supported | Consider Amazon ElastiCache (Redis). |
 
 - `IDENTITY` columns must be rewritten to `AUTO_INCREMENT` (must be indexed).
 - Unlike `SET IDENTITY_INSERT ON`, Aurora MySQL allows inserting explicit values directly.
 - `SELECT INTO` → `CREATE TABLE … AS`.
-- FKs in Aurora MySQL can point to non-unique parent values.
+- FKs must be declared as **table-level** `FOREIGN KEY (…) REFERENCES …` clauses; column-level `REFERENCES` (common in SQL Server DDL, and used by the original example) is parsed and silently ignored — no foreign key is created (verified on 3.13 and 8.4.8). Check `information_schema.referential_constraints` after applying DDL.
+- FKs to non-unique parent columns work on Aurora MySQL 3 but are rejected on 8.4 (error 6125, verified).
+- `CREATE TABLE t (c1 INT) AS SELECT 1 AS c2` creates **both** `c1` and `c2` (verified) — column definitions are added to, not matched with, the query columns.
+- `ROWVERSION`/`TIMESTAMP` (SQL Server) → `BEFORE UPDATE` trigger maintaining a counter (example above, verified), or `DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)` when a change timestamp is enough.
+- Table variables (`DECLARE @t TABLE`) → `CREATE TEMPORARY TABLE`; memory-optimized tables → regular InnoDB tables (the `MEMORY` engine is not crash-safe).

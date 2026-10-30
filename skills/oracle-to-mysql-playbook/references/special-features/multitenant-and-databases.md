@@ -6,6 +6,8 @@
 **Conversion category:** Manual (three-star feature compatibility) — distribute load, applications, and users across multiple instances/databases.
 **SCT automation:** N/A
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Fast cloning and blue/green as PDB clone/refresh equivalents, MySQL Shell dumps, shared-resource caveat for database-per-tenant.
+
 ## Oracle
 
 Oracle 12c introduced multitenant architecture: a container database (CDB) hosting one or more pluggable databases (PDB), a 1:N instance-to-database relationship (pre-12c was 1:1).
@@ -66,3 +68,6 @@ Oracle 12c can do logical (DataPump) and physical (RMAN) backups at CDB and PDB 
 - Per-PDB physical backup/restore is not available — plan logical (`mysqldump`) backups for single-database granularity.
 - PDB cloning/transport and refreshable switchover require AWS-native workarounds (export/import, DMS, replication, application failover).
 - Centralized fleet management maps to RDS/Aurora console and CLI orchestration.
+- **PDB clone** → **Aurora fast cloning** (copy-on-write clone of the whole cluster in minutes); drop the databases you don't need from the clone. **Refreshable PDB / switchover** → Aurora blue/green deployments or an Aurora replica cluster.
+- Logical per-database backups: prefer MySQL Shell `util.dumpSchemas()` / `util.loadDump()` (parallel) over `mysqldump`.
+- A MySQL database is only a namespace: users, roles, `max_connections`, buffer pool, parameter groups and the binary log are shared by all databases in a cluster. For per-tenant resource or upgrade isolation use separate clusters (Serverless v2 keeps idle ones cheap).

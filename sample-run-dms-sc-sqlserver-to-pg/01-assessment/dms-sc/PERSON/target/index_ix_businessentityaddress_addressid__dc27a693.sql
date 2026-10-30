@@ -1,3 +1,0 @@
-CREATE INDEX ix_businessentityaddress_ix_businessentityaddress_addressid
-ON person.businessentityaddress
-USING BTREE (addressid ASC);

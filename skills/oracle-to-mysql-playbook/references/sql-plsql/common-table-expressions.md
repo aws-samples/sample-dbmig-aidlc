@@ -6,6 +6,8 @@
 **Conversion category:** Manual (★★ feature compatibility, no automation) — workaround available
 **SCT automation:** Action code "Common Table Expressions"
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): CTEs and recursive CTEs are native on 3 / 8.4 (verified); added a verified CONNECT BY → WITH RECURSIVE pattern, the anchor-column width trap (error 1406), cte_max_recursion_depth (error 3636), no SEARCH/CYCLE; 5.7 workarounds moved to a legacy section; fixed `PRIMARY` → `PRIMARY KEY`.
+
 ## Oracle
 
 CTEs implement sequential logic / reusable code via a named subquery used multiple times. Implemented with the `WITH` clause (ANSI SQL-99, available since Oracle 9.2). Similar to an inline view or temp table; reduces repetition and improves readability.
@@ -29,9 +31,39 @@ ORDER BY 2;
 
 ## MySQL
 
-**Aurora MySQL 5.7 does NOT support CTEs.** (Amazon RDS for MySQL 8 and MySQL 8.0+ support both non-recursive and recursive CTEs via `WITH`; as of 8.0.19 recursive CTEs support `LIMIT`/`OFFSET`.)
+**Aurora MySQL 3 and 8.4 support non-recursive and recursive CTEs** (`WITH`, `WITH RECURSIVE`; verified on 3.13.0 and 8.4.8). The Oracle example converts with only the concatenation change (`||` → `CONCAT`):
 
-### Workarounds for Aurora MySQL 5.7
+```sql
+WITH dept_count (department_id, dept_count) AS
+  (SELECT department_id, COUNT(*) FROM employees GROUP BY department_id)
+SELECT CONCAT(e.first_name, ' ', e.last_name) AS emp_name, d.dept_count AS emp_dept_count
+FROM employees e JOIN dept_count d USING (department_id)
+ORDER BY 2;
+```
+
+### `CONNECT BY` → `WITH RECURSIVE` (verified)
+
+```sql
+-- Oracle: SELECT employee, LEVEL-1, SYS_CONNECT_BY_PATH(employee,'/') FROM employees
+--         START WITH direct_manager IS NULL CONNECT BY PRIOR employee = direct_manager
+WITH RECURSIVE h AS (
+  SELECT employee, direct_manager, 0 AS lvl, CAST(employee AS CHAR(1000)) AS path
+  FROM employees WHERE direct_manager IS NULL
+  UNION ALL
+  SELECT c.employee, c.direct_manager, h.lvl + 1, CONCAT(h.path, '/', c.employee)
+  FROM employees c JOIN h ON c.direct_manager = h.employee)
+SELECT employee, lvl, path FROM h ORDER BY path;
+```
+
+- **Column types come from the anchor member.** Without the `CAST(… AS CHAR(1000))`, the path column is `varchar(5)` and the recursive step fails with *Data too long for column 'path'* (error 1406, verified with `STRICT_TRANS_TABLES` set). Under Aurora's default (empty) `sql_mode` there is no error and no warning: the string is silently truncated to the anchor width (`'a-x-x-x'` comes back as `'a'`, verified on 3.13.0 and 8.4.8). Widen every column that grows in the recursive part.
+- **Recursion limit:** `cte_max_recursion_depth` = 1000 by default; a deeper or runaway recursion stops with error 3636 (verified). Raise it per session (`SET SESSION cte_max_recursion_depth = 100000`) or bound the recursion with a level column.
+- `LIMIT` inside a recursive CTE works (8.0.19+, verified).
+- No `SEARCH DEPTH/BREADTH FIRST` or `CYCLE` clauses and no `NOCYCLE`: build an ordering path (as above) for `ORDER SIBLINGS BY`, and stop cycles with `WHERE FIND_IN_SET(c.employee, REPLACE(h.path,'/',',')) = 0`.
+- `CONNECT_BY_ROOT` → carry the root column through the recursion; `CONNECT_BY_ISLEAF` → `NOT EXISTS (SELECT 1 FROM employees x WHERE x.direct_manager = h.employee)`.
+- CTEs can be used in views and in `INSERT … SELECT`, `UPDATE` and `DELETE` (multi-table forms).
+
+### Legacy: Aurora MySQL 5.7 workarounds
+Aurora MySQL 2 (5.7) is past standard support. The derived-table and stored-procedure-loop workarounds from the original playbook are only needed there:
 
 **Non-recursive CTE → derived table** (subquery in `FROM`). Repeat the derived-table definition if multiple instances are needed.
 
@@ -57,7 +89,7 @@ Full derived-table example:
 CREATE TABLE OrderItems(
     OrderID INT NOT NULL, Item VARCHAR(20) NOT NULL,
     Quantity SMALLINT NOT NULL,
-    PRIMARY (OrderID, Item));
+    PRIMARY KEY (OrderID, Item));
 
 INSERT INTO OrderItems (OrderID, Item, Quantity)
 VALUES (1,'M8 Bolt',100),(2,'M8 Nut',100),(3,'M8 Washer',200),(3,'M6 Washer',100);
@@ -104,8 +136,7 @@ CALL P();
 
 | Oracle | Aurora MySQL | Comments |
 |---|---|---|
-| Non-recursive CTE | Derived table | Repeat the derived-table subquery for each instance needed |
-| Recursive CTE | Loop inside stored procedure/function | |
+| Non-recursive CTE | `WITH` (native) | 5.7 only: derived table |
+| Recursive CTE / `CONNECT BY` | `WITH RECURSIVE` (native) | widen growing columns in the anchor; `cte_max_recursion_depth` |
 
-- If targeting MySQL 8 / RDS MySQL 8, CTEs are natively supported — no rewrite needed.
-- Aurora MySQL 5.7 requires the workarounds above.
+- On Aurora MySQL 3 / 8.4, convert CTEs and `CONNECT BY` to `WITH [RECURSIVE]`; do not use the 5.7 workarounds.

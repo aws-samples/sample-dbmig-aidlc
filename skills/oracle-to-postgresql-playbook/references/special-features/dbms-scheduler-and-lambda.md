@@ -6,6 +6,8 @@
 **Conversion category:** Manual (One-star feature compatibility, no automation)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): `pg_cron` is the recommended in-database scheduler (verified on 18.6, including the `schedule_in_database` restriction and its workaround); EventBridge Scheduler/Step Functions for external jobs and chains.
+
 ## Oracle
 
 The `DBMS_SCHEDULER` package defines and runs recurring or one-time jobs. A job typically uses two objects: a `PROGRAM` (what runs) and a `SCHEDULE` (when it runs). A program can run a database program unit (e.g. a procedure) or an external executable (filesystem shell scripts, etc.). Three job types: **Time-Based**, **Event-Based**, and **Dependency (Chained)**.
@@ -137,10 +139,32 @@ Additional maintenance concepts: **JOB CLASS** (group jobs with similar behavior
 
 ## PostgreSQL
 
-Aurora PostgreSQL has no built-in DBMS_SCHEDULER equivalent. Combine Aurora PostgreSQL with **Amazon CloudWatch** and **AWS Lambda** to achieve similar scheduled functionality (e.g. invoking a Lambda on a CloudWatch schedule). See the playbook topic "Sending an Email from Aurora PostgreSQL using Lambda Integration".
+Aurora PostgreSQL has no built-in DBMS_SCHEDULER equivalent. There are two supported patterns:
+
+**1. `pg_cron` (in-database jobs; recommended for jobs that only run SQL or procedures).** `pg_cron` 1.6 is available on Aurora 18. Add it to `shared_preload_libraries` in the cluster parameter group, reboot, then (verified on 18.6):
+```sql
+-- the extension lives in the database named by cron.database_name (default: postgres)
+CREATE EXTENSION pg_cron;                                   -- in database postgres
+
+-- ≈ CREATE_JOB with repeat_interval 'FREQ=HOURLY;INTERVAL=1'
+SELECT cron.schedule('calc_stats', '0 * * * *', $$CALL hr.update_hr_schema_stats()$$);
+
+-- run in another database: on Aurora the master user cannot call cron.schedule_in_database
+-- (permission denied, verified); schedule, then set the target database:
+UPDATE cron.job SET database = 'appdb' WHERE jobname = 'calc_stats';
+
+SELECT * FROM cron.job;                                    -- ≈ DBA_SCHEDULER_JOBS
+SELECT * FROM cron.job_run_details ORDER BY start_time DESC LIMIT 20;  -- ≈ DBA_SCHEDULER_JOB_RUN_DETAILS
+SELECT cron.unschedule('calc_stats');                      -- ≈ DROP_JOB
+```
+Schedules use cron syntax (minute granularity, or `'30 seconds'` intervals) in UTC. Jobs run as the user who scheduled them. Purge `cron.job_run_details` periodically.
+
+**2. Amazon EventBridge Scheduler → AWS Lambda / Step Functions (external jobs).** Use this for `EXECUTABLE` jobs (shell scripts), event-based jobs, chains, and anything that calls outside the database. Step Functions replaces `DBMS_SCHEDULER` **chains** (steps, rules, parallel branches, retries). EventBridge rules replace **event-based** jobs (S3 object created, SQS message). See the playbook topic "Sending an Email from Aurora PostgreSQL using Lambda Integration".
 
 ## Conversion notes
 - No automation and lowest feature compatibility (one star) — scheduling must be re-architected.
-- Recommended pattern: schedule with **Amazon CloudWatch Events/EventBridge → AWS Lambda**, where Lambda connects to Aurora and runs the desired SQL/procedure.
-- Alternative community option (not in playbook) is the `pg_cron` extension; the playbook only documents the CloudWatch + Lambda approach.
-- Map Oracle constructs: PROGRAM/SCHEDULE/JOB and chains have no direct Aurora analog and must be expressed as Lambda logic and event rules.
+- **Default:** time-based jobs that run a stored procedure → `pg_cron` calling the converted procedure with `CALL`. Translate `repeat_interval` to cron syntax (`FREQ=DAILY;BYHOUR=23` → `0 23 * * *`), and convert time zones to UTC.
+- `EXECUTABLE` jobs, chains, event-based jobs, job classes/windows → EventBridge Scheduler + Lambda / Step Functions (Lambda connects to Aurora through RDS Proxy or the Data API).
+- `pg_cron` has no job classes, windows, chains, retry policies or resource priorities. Keep complex orchestration outside the database.
+- Calling AWS from SQL (for example a job that notifies a service): `aws_lambda.invoke()` (aws_lambda 2.1 on Aurora 18) with an IAM role attached to the cluster.
+- Oracle `DBMS_JOB` (legacy) maps the same way as `DBMS_SCHEDULER` time-based jobs.

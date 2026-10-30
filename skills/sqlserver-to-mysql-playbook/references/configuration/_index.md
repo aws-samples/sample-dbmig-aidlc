@@ -15,6 +15,8 @@ Reference content for configuring software and resource settings when migrating 
 ## Cross-cutting themes
 
 - Aurora MySQL manages runtime configuration through **DB cluster parameter groups** (cluster-wide) and **DB parameter groups** (per-instance), not config files or `sp_configure`.
-- The default parameter group is read-only; create a custom group (family `aurora-mysql5.7`) to change values.
+- The default parameter group is read-only; create a custom group (family `aurora-mysql8.4 / aurora-mysql8.0`) to change values.
 - "Database" and "schema" are synonymous in Aurora MySQL, so SQL Server database-level options have no equivalent.
 - Most SQL Server settings have no Aurora counterpart; a notable exception is `max server memory` ≈ `innodb_buffer_pool_size`.
+
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): parameter families `aurora-mysql8.4`/`8.0`, `SET GLOBAL` denied to the master user, removed `tx_isolation`/`date_format`, string `+` is numeric, 3 → 8.4 upgrade path.

@@ -14,7 +14,9 @@ of the general playbook context.
 
 ## What belongs here (one Markdown file per topic; all optional)
 
-- `environment.md` — Aurora MySQL version (8.0), `sql_mode`, `lower_case_table_names`,
+- `environment.md` — Aurora MySQL version (8.4 or 3.x; general references assume 8.4 with 3.x differences noted —
+  see `../../../oracle-to-mysql-playbook/references/target-baseline-aurora-mysql.md`), `sql_mode` (Aurora default is empty — record the
+  strict mode set in the parameter group), `lower_case_table_names` (creation-time only),
   charset/collation (utf8mb4 + which collation for case sensitivity), storage engine.
 - `naming-conventions.md` — identifier casing (SQL Server mixed-case → MySQL lower_case),
   schema→database mapping, object naming rules.

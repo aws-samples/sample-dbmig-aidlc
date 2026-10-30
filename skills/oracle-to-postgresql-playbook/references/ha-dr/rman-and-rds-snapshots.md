@@ -6,6 +6,8 @@
 **Conversion category:** Manual (Four-star feature compatibility — storage-level backup managed by Amazon RDS)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): current instance class, corrected snapshot quota, AWS Backup, PITR needs an instance, snapshot export to S3.
+
 ## Oracle
 
 Oracle Recovery Manager (RMAN) is the primary backup and recovery tool in Oracle, with its own scripting syntax. Backup types:
@@ -81,7 +83,7 @@ Snapshots are the primary backup mechanism for Amazon Aurora — fast and nonint
 
 Backup types:
 - **Automated Backups** — always enabled; no performance impact.
-- **Manual Backups** — create any time; no performance impact. Restoring requires a **new instance**. Up to **100 manual snapshots** per database.
+- **Manual Backups** — create any time; no performance impact. Restoring requires a **new cluster**. Default quota: 100 manual cluster snapshots per Region (adjustable). Automated backup retention is 1–35 days; use **AWS Backup** for longer retention, scheduled snapshots and cross-Region or cross-account copies.
 
 ```bash
 # Manual full backup (≈ BACKUP DATABASE PLUS ARCHIVELOG)
@@ -101,7 +103,7 @@ aws rds create-db-instance \
   --engine aurora-postgresql \
   --db-cluster-identifier clustername-restore \
   --db-instance-identifier newinstance-nodeA \
-  --db-instance-class db.r4.large
+  --db-instance-class db.r8g.large
 
 # Point-in-time restore (≈ SET UNTIL TIME ... RESTORE/RECOVER)
 aws rds restore-db-cluster-to-point-in-time \
@@ -135,4 +137,6 @@ Optionally swap with the old database using `ALTER DATABASE RENAME`.
 
 - Major gotcha: RMAN restores in place; Aurora restore always creates a **new cluster** — plan endpoint cutover.
 - Incremental/cumulative backups and archive-log management have no Aurora equivalent (managed automatically by RDS storage).
-- The AWS CLI is especially useful for migrating existing automated RMAN scripts to scheduled AWS automation.
+- The AWS CLI is especially useful for migrating existing automated RMAN scripts to scheduled AWS automation. AWS Backup plans replace most RMAN schedules and retention scripts without code.
+- After `restore-db-cluster-to-point-in-time` you must also run `create-db-instance` for the restored cluster; the restore creates only the storage volume.
+- Snapshots can be exported to S3 in Parquet (`aws rds start-export-task`) for analytics or long-term archive. This is not a restorable backup.

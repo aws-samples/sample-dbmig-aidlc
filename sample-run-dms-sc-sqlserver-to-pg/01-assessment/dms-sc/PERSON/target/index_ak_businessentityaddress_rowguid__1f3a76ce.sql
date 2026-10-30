@@ -1,3 +1,0 @@
-CREATE UNIQUE INDEX ix_businessentityaddress_ak_businessentityaddress_rowguid
-ON person.businessentityaddress
-USING BTREE (rowguid ASC);

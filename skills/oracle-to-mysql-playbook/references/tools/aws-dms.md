@@ -6,6 +6,8 @@
 **Conversion category:** N/A (data migration service)
 **SCT automation:** N/A — DMS handles data movement; AWS SCT handles schema/object conversion. DMS can create target tables and primary keys automatically if absent, or you can pre-create them (manually or via AWS SCT).
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): DMS supports MySQL 8.0 and 8.4 targets; DMS Schema Conversion only targets Aurora MySQL 8.0.32 (AWS docs); load pattern, auth plugin, binlog-off default (verified).
+
 ## Overview
 
 AWS DMS helps you migrate databases to AWS quickly and securely. The source database remains fully operational during migration, minimizing application downtime. DMS can migrate data to and from most widely-used commercial and open-source databases.
@@ -48,3 +50,11 @@ See "What is Database Migration Service?" and "Best practices for Database Migra
 - Source stays online during migration, enabling near-zero-downtime cutover via continuous replication (CDC).
 - Use SSL for in-flight encryption and KMS for at-rest encryption.
 - Automatic failover (backup replication server) provides resilience during long migrations.
+
+### Aurora MySQL 8.4 / 3 target notes
+- AWS DMS lists MySQL **8.0 and 8.4** (and Aurora MySQL, Aurora Serverless v2) as data-migration targets ([DMS targets](https://docs.aws.amazon.com/dms/latest/userguide/CHAP_Introduction.Targets.html), checked 2026-10-29). Use a current replication engine version.
+- **DMS Schema Conversion** lists only **Aurora MySQL 8.0.32** as its Aurora MySQL target data provider (same page). For an 8.4 target, convert against 8.0 and fix 8.4-specific breaks: foreign keys to non-unique keys (blocked in 8.4), `AUTO_INCREMENT` on `FLOAT`/`DOUBLE`, `MASTER`/`SLAVE` replication SQL. See `../target-baseline-aurora-mysql.md`.
+- Pre-create the schema (this toolkit's `apply-schema`, or SCT/DMS SC), load with DMS in **full load** using `TargetTablePrepMode=DO_NOTHING`, then create secondary indexes, foreign keys and triggers after the load. DMS does not migrate Oracle sequences, triggers or PL/SQL.
+- The DMS target user needs `caching_sha2_password` support on 8.4 (the default `authentication_policy`); current DMS engines support it.
+- `TIMESTAMP WITH TIME ZONE` loses the offset in MySQL (no tz-aware type); `NUMBER` without precision becomes `DECIMAL(38,10)` in this toolkit's datatype map — check DMS's own mapping or a table-mapping transformation if you let DMS create tables.
+- **Ongoing replication (CDC) from Oracle** needs supplemental logging on the source; for fallback replication *from* Aurora MySQL back to Oracle, enable binary logging (`binlog_format=ROW`) on the Aurora cluster — it is off by default (verified).

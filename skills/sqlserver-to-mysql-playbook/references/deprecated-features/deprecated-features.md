@@ -3,6 +3,8 @@
 > Source: SQL Server 2018 deprecated features list — Microsoft SQL Server 2019 to Amazon Aurora MySQL Migration Playbook
 > URL: https://docs.aws.amazon.com/dms/latest/sql-server-to-aurora-mysql-migration-playbook/chap-sql-server-aurora-mysql.deprecatedfeatures.html
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Toolkit mappings for deprecated SQL Server types and target-side MySQL deprecations/removals to avoid (8.4 removals verified).
+
 Reference list of SQL Server features deprecated as of SQL Server 2018/2019. When migrating
 to Aurora MySQL, these constructs must be rewritten — most have no direct equivalent and
 require the replacement noted below.
@@ -34,3 +36,9 @@ require the replacement noted below.
   [`../ansi-sql/`](../ansi-sql/).
 - Prefer ANSI-standard SQL wherever a deprecated SQL Server extension is encountered; this
   maximizes portability to Aurora MySQL and reduces the conversion surface.
+- Deprecated SQL Server types map as in the toolkit datatype map: `TEXT`/`NTEXT` → `LONGTEXT`,
+  `IMAGE` → `LONGBLOB`, `TIMESTAMP` (rowversion) → `BINARY(8)` / trigger counter — never MySQL `TIMESTAMP`.
+- Target-side deprecations to avoid in converted code: `utf8`/`utf8mb3` and MySQL `NCHAR`/`NVARCHAR`
+  (use `utf8mb4`), `VALUES()` in `ON DUPLICATE KEY UPDATE` (use a row alias), `SQL_CALC_FOUND_ROWS`/`FOUND_ROWS()`,
+  `information_schema.PROCESSLIST`, `mysqldump` (prefer MySQL Shell), `mysql_native_password`, and on 8.4 the removed
+  `MASTER`/`SLAVE` statements and `AUTO_INCREMENT` on `FLOAT`/`DOUBLE` (errors on 8.4.8, verified).

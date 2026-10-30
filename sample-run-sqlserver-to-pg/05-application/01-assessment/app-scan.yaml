@@ -71,10 +71,6 @@ sites:
   - file: app/Bookstore.Web/appsettings.Test.json
     line: 2
     text: '"ConnectionStrings": {'
-  - file: app/Bookstore.Web/appsettings.json
-    line: 19
-    kind: plaintext-secret
-    text: '"SaveToken": ***,'
   db_scripts: []
 entities:
 - orm: EF Core
@@ -221,6 +217,10 @@ type_crosscheck:
     target_type: boolean
     file: app/Bookstore.Domain/Addresses/Address.cs
     line: 39
+    obligation: 'integer field on boolean column (the source bit/NUMBER(1) accepted
+      `= 1`; PostgreSQL raises 42883 boolean = integer): .HasConversion(v => v !=
+      0, v => v ? 1 : 0) in OnModelCreating (keeps the int model; LINQ `x.Flag ==
+      1` then translates to a boolean comparison)'
     issue: 'identifier case: the ORM quotes "IsActive" but the target folded it to
       isactive — fold names in the model'
   - orm: EF Core
@@ -273,7 +273,7 @@ type_crosscheck:
     type: string
     table: Book
     column: Name
-    target_type: text
+    target_type: USER-DEFINED
     file: app/Bookstore.Domain/Books/Book.cs
     line: 37
     issue: 'identifier case: the ORM quotes "Name" but the target folded it to name
@@ -284,7 +284,7 @@ type_crosscheck:
     type: string
     table: Book
     column: Author
-    target_type: text
+    target_type: USER-DEFINED
     file: app/Bookstore.Domain/Books/Book.cs
     line: 39
     issue: 'identifier case: the ORM quotes "Author" but the target folded it to author
@@ -306,7 +306,7 @@ type_crosscheck:
     type: string
     table: Book
     column: ISBN
-    target_type: text
+    target_type: USER-DEFINED
     file: app/Bookstore.Domain/Books/Book.cs
     line: 43
     issue: 'identifier case: the ORM quotes "ISBN" but the target folded it to isbn
@@ -570,7 +570,7 @@ type_crosscheck:
     type: string
     table: Offer
     column: Author
-    target_type: text
+    target_type: USER-DEFINED
     file: app/Bookstore.Domain/Offers/Offer.cs
     line: 31
     issue: 'identifier case: the ORM quotes "Author" but the target folded it to author
@@ -592,7 +592,7 @@ type_crosscheck:
     type: string
     table: Offer
     column: BookName
-    target_type: text
+    target_type: USER-DEFINED
     file: app/Bookstore.Domain/Offers/Offer.cs
     line: 35
     issue: 'identifier case: the ORM quotes "BookName" but the target folded it to
@@ -925,7 +925,7 @@ type_crosscheck:
     type: string
     table: ReferenceData
     column: Text
-    target_type: text
+    target_type: USER-DEFINED
     file: app/Bookstore.Domain/ReferenceData/ReferenceDataItem.cs
     line: 19
     issue: 'identifier case: the ORM quotes "Text" but the target folded it to text
@@ -1071,6 +1071,10 @@ type_crosscheck:
     target_type: boolean
     file: app/Bookstore.Domain/Carts/ShoppingCartItem.cs
     line: 27
+    obligation: 'integer field on boolean column (the source bit/NUMBER(1) accepted
+      `= 1`; PostgreSQL raises 42883 boolean = integer): .HasConversion(v => v !=
+      0, v => v ? 1 : 0) in OnModelCreating (keeps the int model; LINQ `x.Flag ==
+      1` then translates to a boolean comparison)'
     issue: 'identifier case: the ORM quotes "WantToBuy" but the target folded it to
       wanttobuy — fold names in the model'
   - orm: EF Core

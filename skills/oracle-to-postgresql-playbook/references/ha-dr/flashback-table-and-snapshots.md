@@ -6,6 +6,8 @@
 **Conversion category:** Manual (Four-star feature compatibility — storage-level backup managed by Amazon RDS)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): fast-clone/PITR + `postgres_fdw` + `MERGE` row copy-back, Flashback Query gap, corrected snapshot quota.
+
 ## Oracle
 
 Oracle Flashback Table undoes changes to a table and rewinds it to a previous state (not from backup). While a Flashback Table operation runs, the affected tables are locked, but the rest of the database remains available.
@@ -43,9 +45,25 @@ Aurora has no table-level flashback. Snapshots are the primary backup mechanism 
 
 Backup types:
 - **Automated Backups** — always enabled; no performance impact.
-- **Manual Backups** — create any time; no performance impact. Restoring requires a **new instance**. Up to **100 manual snapshots** per database.
+- **Manual Backups** — create any time; no performance impact. Restoring requires a **new cluster**. Default quota: 100 manual cluster snapshots per Region (adjustable).
 
 Because Aurora restores create a new cluster/instance, the workflow to recover a single table is: restore a snapshot (or PITR) into a new cluster, then use `pg_dump`/`pg_restore` to copy the recovered table back to the original instance. (See the Flashback Database reference for full snapshot example commands.)
+
+Faster single-table recovery on Aurora PostgreSQL 18:
+1. Create a **point-in-time restore** (or a **fast clone**, `--restore-type copy-on-write`) of the cluster at the time before the bad change, and add one instance.
+2. Copy only the affected rows back with `postgres_fdw` (available on Aurora 18) instead of a full `pg_dump` of the table:
+   ```sql
+   CREATE EXTENSION IF NOT EXISTS postgres_fdw;
+   CREATE SERVER pitr FOREIGN DATA WRAPPER postgres_fdw OPTIONS (host '<pitr-cluster-endpoint>', dbname 'appdb');
+   CREATE USER MAPPING FOR CURRENT_USER SERVER pitr OPTIONS (user 'app_restore', password_required 'true');  -- supply the password from Secrets Manager, not a literal
+   IMPORT FOREIGN SCHEMA app LIMIT TO (employees) FROM SERVER pitr INTO restore_stage;
+   MERGE INTO app.employees t USING restore_stage.employees s ON t.employee_id = s.employee_id
+     WHEN MATCHED THEN UPDATE SET salary = s.salary
+     WHEN NOT MATCHED THEN INSERT VALUES (s.*);
+   ```
+3. Delete the restore cluster.
+
+There is no equivalent of Oracle **Flashback Query** (`SELECT … AS OF TIMESTAMP`). If the application relies on it, design history or audit tables (trigger-maintained), or use the PITR/clone approach above for ad-hoc lookups.
 
 ## Conversion notes
 
@@ -58,4 +76,4 @@ Because Aurora restores create a new cluster/instance, the workflow to recover a
 
 - Key gotcha: Oracle can rewind a single table in place (fast, surgical); Aurora has no equivalent. Recovering one table means restoring a whole new cluster and copying the table out with `pg_dump`/`pg_restore` — more time/resource intensive.
 - Oracle Flashback Table requires row movement enabled and sufficient undo retention; these have no Aurora analog.
-- Plan extra storage/time for single-table recovery on Aurora since a full cluster restore is involved.
+- Plan extra storage/time for single-table recovery on Aurora since a full cluster restore is involved. A fast clone is usually the quickest option when the bad change was recent.

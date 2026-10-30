@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (three-star feature compatibility)
 **SCT automation:** Four-star automation level; N/A action code
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): `CONVERT` style table and fixed style-109 example (verified), PG 16 `pg_input_is_valid` as the `TRY_CAST` equivalent (verified), `FORMAT`/`PARSE` mapping, implicit-conversion note.
+
 ## SQL Server
 
 `CAST` and `CONVERT` convert one data type to another and behave mostly the same. Differences:
@@ -62,9 +64,9 @@ SELECT 23 + 2.0;
 -- or
 SELECT CAST ( 23 AS numeric ) + 2.0;
 
--- Date format equivalent of CONVERT style 109:
-SELECT TO_CHAR(NOW(),'Mon DD YYYY HH:MI:SS:MSAM');
--- Jul 25 2018 5:20:10.8975085PM
+-- Date format equivalent of CONVERT style 109 (verified on 18.6):
+SELECT TO_CHAR(timestamp '2024-07-25 17:20:10.897', 'Mon DD YYYY HH12:MI:SS:MSAM');
+-- Jul 25 2024 05:20:10:897PM
 
 -- Using :: operator:
 SELECT '2.35'::DECIMAL + 4.5 AS results;
@@ -87,3 +89,28 @@ SELECT '2.35'::DECIMAL + 4.5 AS results;
 - Date-style `CONVERT(..., style)` calls must be rewritten as `TO_CHAR(...)` with an explicit format mask.
 - Not all SQL Server data types exist in PostgreSQL — you may need to change the target data type as well, not just the CAST/CONVERT call.
 - `::` operator is a concise PostgreSQL-idiomatic alternative to `CAST`.
+
+### `CONVERT` style codes → `to_char` / `to_timestamp` (verified on 18.6)
+
+| Style | SQL Server output | PostgreSQL |
+|---|---|---|
+| 101 | `07/25/2024` | `to_char(d, 'MM/DD/YYYY')` |
+| 103 | `25/07/2024` | `to_char(d, 'DD/MM/YYYY')` |
+| 109 | `Jul 25 2024  5:20:10:897PM` | `to_char(ts, 'Mon DD YYYY HH12:MI:SS:MSAM')` |
+| 112 | `20240725` | `to_char(d, 'YYYYMMDD')` |
+| 120 / 121 | `2024-07-25 17:20:10[.123]` | `to_char(ts, 'YYYY-MM-DD HH24:MI:SS[.MS]')` |
+| 126 (ISO 8601) | `2024-07-25T17:20:10.123` | `to_char(ts, 'YYYY-MM-DD"T"HH24:MI:SS.MS')` |
+
+The reverse direction (`CONVERT(datetime, '25/07/2024', 103)`) → `to_timestamp('25/07/2024', 'DD/MM/YYYY')` (or `to_date` for a date-only result).
+
+### `TRY_CAST` / `TRY_CONVERT` / `TRY_PARSE`
+
+PostgreSQL has no `TRY_CAST`, but **PostgreSQL 16 added `pg_input_is_valid(text, type)`** and `pg_input_error_info(text, type)` (verified on 18.6: `pg_input_is_valid('23x','integer') = false`). A safe conversion that needs no exception block:
+```sql
+CASE WHEN pg_input_is_valid(s, 'integer') THEN s::integer END        -- ≈ TRY_CAST(s AS int)
+CASE WHEN pg_input_is_valid(s, 'date')    THEN s::date END           -- invalid dates such as 2024-02-30 → NULL
+```
+This avoids a PL/pgSQL `EXCEPTION` block per row, which costs a subtransaction.
+- `PARSE(s AS datetime USING 'en-US')` → `to_timestamp(s, '<format>')` (culture-specific parsing has no equivalent).
+- `FORMAT(n, 'N2')` / `FORMAT(d, 'yyyy-MM-dd')` → `to_char(n, 'FM999G999D00')` / `to_char(d, 'YYYY-MM-DD')`. PostgreSQL's own `format()` is printf-style string formatting, not .NET formatting.
+- Implicit conversions: SQL Server converts strings to numbers and dates implicitly in comparisons and concatenation. PostgreSQL usually refuses (`operator does not exist: integer = text`). Add explicit casts, and treat failures as data-quality findings.

@@ -1,0 +1,13 @@
+results:
+- label: uspupdateemployeelogin
+  status: applied
+  error: null
+  pass: 1
+- label: uspupdateemployeepersonalinfo
+  status: applied
+  error: null
+  pass: 1
+- label: uspupdateemployeehireinfo
+  status: applied
+  error: null
+  pass: 1

@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (Four-star feature compatibility, two-star automation)
 **SCT automation:** Two-star automation level; SCT action code index N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): `INTO STRICT`, `RETURNING INTO` (verified), binds vs `%L`/`%s`, `ALTER SESSION` → `set_config`, transactional DDL.
+
 > **Security — dynamic SQL (mandatory, read before copying any example below):**
 > SQL *values* must always be passed as bind variables (`:1` in Oracle, `$1` in PostgreSQL) and
 > never concatenated. SQL *identifiers* (table/column names) cannot be bound, so when a statement
@@ -111,4 +113,7 @@ EXECUTE numplan(102, 'New number 102', 'f');
 - Bind placeholders change from `:1`, `:2` to `$1`, `$2`, still passed via `USING`.
 - Dynamic anonymous blocks (`EXECUTE IMMEDIATE 'BEGIN … END;'`) become a `DO $$ … $$;` block.
 - For repeated execution, prefer `PREPARE`/`EXECUTE` for performance.
-- Use `%I` for identifiers and `%L` for quoted literals to prevent SQL injection.
+- Use `%I` for identifiers and `%L` for quoted literals to prevent SQL injection. Prefer `USING $n` binds over `%L` for values: binds keep plan reuse and avoid quoting bugs. Do not use `%s` for user-supplied values.
+- `EXECUTE IMMEDIATE … INTO v` → `EXECUTE … INTO STRICT v` when the Oracle code relies on `NO_DATA_FOUND`/`TOO_MANY_ROWS`. `RETURNING … INTO` works inside the dynamic statement (`EXECUTE 'UPDATE … RETURNING id' INTO STRICT n USING …`, verified).
+- `EXECUTE IMMEDIATE 'ALTER SESSION SET …'` → `PERFORM set_config('param', 'value', false);` (or `SET`/`SET LOCAL` executed dynamically).
+- DDL is **transactional** in PostgreSQL: a dynamic `CREATE TABLE` is rolled back with the transaction. Oracle DDL commits implicitly, and code that relies on that implicit commit needs an explicit `COMMIT` (allowed only in procedures/`DO`).

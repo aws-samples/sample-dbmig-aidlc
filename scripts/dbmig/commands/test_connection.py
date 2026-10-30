@@ -30,6 +30,8 @@ def run(args) -> int:
         try:
             if eng.ping():
                 console.ok(f"{side}: connected — {eng.server_version()}")
+                for warning in eng.preflight_warnings():
+                    console.warn(f"{side}: {warning}")
             else:
                 console.err(f"{side}: ping query did not return expected value")
                 rc = 1

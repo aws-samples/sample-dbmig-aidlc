@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (Three star feature compatibility)
 **SCT automation:** Four star automation level
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Verified the boundary-vs-complete-unit difference between SQL Server DATEDIFF and TIMESTAMPDIFF (wrong results otherwise), boundary-correct formulas, reversed DATEDIFF argument order, EOMONTH/DATEFROMPARTS/ISDATE/weekday mappings (verified), time zones.
+
 ## SQL Server
 
 Date and time functions are scalar functions operating on temporal/numeric input. System date/time values derive from the server OS.
@@ -39,7 +41,17 @@ Aurora MySQL provides a richer set of scalar date/time functions than SQL Server
 ## Conversion notes
 
 - Time zone handling and locale differ between the engines — review carefully (see Data Types).
-- `DATEDIFF` semantics differ: Aurora MySQL `DATEDIFF` computes **days only**; use `TIMESTAMPDIFF` for other date parts.
+- `DATEDIFF` semantics differ: Aurora MySQL `DATEDIFF(a, b)` computes **days only** and as `a − b` (reversed argument order versus SQL Server `DATEDIFF(day, start, end)`).
+- **`TIMESTAMPDIFF` is not a drop-in for SQL Server `DATEDIFF`** (verified on 3.13 and 8.4.8): SQL Server counts **boundaries crossed**, MySQL counts **complete units**. `'2023-12-31'` → `'2024-01-01'`: SQL Server `DATEDIFF(year)` = 1, `TIMESTAMPDIFF(YEAR)` = 0; `'2024-01-31'` → `'2024-02-29'`: month 1 vs 0; `23:00` → `01:00` next day: day 1 vs 0. Boundary-correct conversions:
+  - `DATEDIFF(day, s, e)` → `DATEDIFF(e, s)` (date parts only, verified = 1 for the example)
+  - `DATEDIFF(month, s, e)` → `(YEAR(e) - YEAR(s)) * 12 + MONTH(e) - MONTH(s)`
+  - `DATEDIFF(year, s, e)` → `YEAR(e) - YEAR(s)`
+  - `DATEDIFF(hour, s, e)` → `TIMESTAMPDIFF(HOUR, DATE_FORMAT(s, '%Y-%m-%d %H:00:00'), DATE_FORMAT(e, '%Y-%m-%d %H:00:00'))`
+  Use `TIMESTAMPDIFF` only where the source logic really wants elapsed complete units.
+- `EOMONTH(d)` → `LAST_DAY(d)`; `DATEFROMPARTS(y, m, d)` → `MAKEDATE(y, 1) + INTERVAL m-1 MONTH + INTERVAL d-1 DAY` or `STR_TO_DATE(CONCAT_WS('-', y, m, d), '%Y-%m-%d')`; `ISDATE(s)` → `STR_TO_DATE(s, fmt) IS NOT NULL` (invalid dates return NULL, verified).
+- `DATEPART(weekday, d)` depends on `DATEFIRST` (default 7 = Sunday first → Sunday = 1); MySQL `DAYOFWEEK(d)` has Sunday = 1 (matches the default), `WEEKDAY(d)` has Monday = 0 (verified). Code that changed `DATEFIRST` needs explicit arithmetic.
+- `SYSDATETIMEOFFSET()`/`AT TIME ZONE` → `CONVERT_TZ(…, 'UTC', 'Europe/Paris')` (named zones are pre-loaded on Aurora); the server runs in UTC.
+- `GETDATE()` inside a long procedure: MySQL `NOW()` is fixed per **statement** (not per batch); use `SYSDATE()` for wall-clock time.
 - `DATEADD` → `DATE_ADD`/`DATE_SUB`/`TIMESTAMPADD`; argument order and syntax differ and require a rewrite (uses `INTERVAL n UNIT`).
 - `CAST`/`CONVERT` in Aurora MySQL are **not** used for style conversion; use `DATE_FORMAT` / `TIME_FORMAT`.
 - `DATEPART` → `EXTRACT` (e.g. `EXTRACT(YEAR FROM NOW())`) or individual part functions.

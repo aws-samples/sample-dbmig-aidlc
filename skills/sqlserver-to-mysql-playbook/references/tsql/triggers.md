@@ -6,6 +6,8 @@
 **Conversion category:** Manual (Two star feature compatibility)
 **SCT automation:** Four star automation level
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Fixed the example (CREATE OR REPLACE, AS, FROM OLD are invalid — verified working form); INSTEAD OF limits; verified trigger rules (one event per trigger, no self-table DML 1442, no COMMIT/dynamic SQL, AFTER can't set NEW); session-variable disable pattern; UPDATE() → NULL-safe comparison.
+
 ## SQL Server
 
 Triggers are special stored procedures that run automatically in response to events, mostly DML. SQL Server supports `AFTER`/`FOR` (synonymous) and `INSTEAD OF` triggers on tables and views, plus DDL/DCL/system event triggers at server and database levels. **No `FOR EACH ROW`** — SQL Server triggers are **statement-level**.
@@ -58,16 +60,13 @@ FOR EACH ROW
 ### Example
 
 ```sql
-CREATE OR REPLACE TRIGGER LogInvoiceDeletes
-ON Invoices
+-- (the original used CREATE OR REPLACE, AS and SELECT … FROM OLD, which are all invalid in MySQL — verified)
+CREATE TRIGGER LogInvoiceDeletes
+AFTER DELETE ON Invoices
 FOR EACH ROW
-AFTER DELETE
-AS
-    BEGIN
-    INSERT INTO InvoiceAuditLog (InvoiceID, Customer, TotalAmount, DeleteDate, DeletedBy)
-    SELECT InvoiceID, Customer, TotalAmount, NOW(), CURRENT_USER()
-    FROM OLD
-END;
+INSERT INTO InvoiceAuditLog (InvoiceID, Customer, TotalAmount, DeleteDate, DeletedBy)
+VALUES (OLD.InvoiceID, OLD.Customer, OLD.TotalAmount, NOW(), CURRENT_USER());
+-- a 2-row DELETE logged 2 audit rows (verified on 3.13 and 8.4.8)
 ```
 (Note: `GETDATE()` is not supported in MySQL — use `NOW()`.)
 
@@ -75,11 +74,20 @@ END;
 
 - Statement-level → `FOR EACH ROW`. A one-row set is still valid, so most code works unchanged. But you can't access other rows modified in the same statement (NEW/OLD reference only the current row) — aggregate-over-statement logic needs rework. If the SQL Server trigger loops/cursors over rows, remove the loop/cursor.
 - Change set: `INSERTED` → `NEW`, `DELETED` → `OLD`.
-- `INSTEAD OF` → `BEFORE` trigger; remove the explicit re-run of the DML (not needed). Modify `OLD`/`NEW` to change the change set (applied when trigger completes).
+- `INSTEAD OF` → `BEFORE` trigger only when the SQL Server trigger re-runs the same DML with adjusted values: modify `NEW` instead (applied when the row is written). A `BEFORE` trigger **cannot skip** the base DML except by raising an error (`SIGNAL`), so `INSTEAD OF` triggers that redirect writes elsewhere (or on views) must become stored procedures that the application calls.
 - Multi-trigger order: `sp_settriggerorder` → `PRECEDES`/`FOLLOWS`.
 - Not supported in Aurora MySQL: DDL/system event triggers, triggers on views, `ALTER TRIGGER` (modify), enable/disable triggers.
   - Modify: drop and recreate.
-  - Enable/disable workaround: a flags table + `IF` conditional flow control in the trigger body.
+  - Enable/disable workaround: a flags table, or a session user variable checked at the top of the body (`IF @disable_triggers = 1 THEN … ELSE … END IF`, verified) — the variable only affects the setting session, like `DISABLE TRIGGER` for a load.
+
+Verified on Aurora MySQL 3.13 and 8.4.8:
+- `CREATE OR REPLACE TRIGGER` is a syntax error; use `DROP TRIGGER IF EXISTS` + `CREATE TRIGGER`, or `CREATE TRIGGER IF NOT EXISTS` (accepted).
+- One event per trigger: `AFTER INSERT OR UPDATE` is a syntax error; split SQL Server `FOR INSERT, UPDATE` triggers into one trigger per event (they can call a shared procedure).
+- Triggers cannot modify the table that fired them (error 1442), cannot `COMMIT`, and cannot use dynamic SQL (errors 1422/1336); an `AFTER` trigger cannot assign `NEW` (error 1362).
+- Statement-level logic over `INSERTED`/`DELETED` (for example `IF (SELECT COUNT(*) FROM inserted) > 1`, set-based audit `INSERT … SELECT FROM inserted`) must be rewritten per row; `UPDATE(col)` / `COLUMNS_UPDATED()` → compare `NEW.col <=> OLD.col` (NULL-safe).
+- `ROLLBACK` in a trigger → `SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = …` (the statement fails and is rolled back).
+- Logon triggers / DDL triggers (`ON DATABASE FOR CREATE_TABLE`) → no equivalent; use CloudWatch audit logs (Advanced Auditing) or IAM policies.
+- The toolkit applies triggers after the data load (`apply-schema --post-data`), so loads are not slowed or double-processed.
 
 | Feature | SQL Server | Aurora MySQL | Workaround |
 |---|---|---|---|
@@ -89,6 +97,7 @@ END;
 | Trigger phase | `AFTER`, `INSTEAD OF` | `AFTER`, `BEFORE` | `INSTEAD OF`→`BEFORE`; OLD/NEW updatable |
 | Multi-trigger order | `sp_settriggerorder` (first/last) | `PRECEDES`/`FOLLOWS` (any order) | |
 | Drop trigger | `DROP TRIGGER <name>;` | `DROP TRIGGER <name>;` | Compatible |
-| Modify trigger | `ALTER TRIGGER` | Not supported | Drop and recreate |
+| Modify trigger | `ALTER TRIGGER` / `CREATE OR ALTER` | Not supported (`CREATE OR REPLACE` is a syntax error, verified) | Drop and recreate |
+| Multiple events | `FOR INSERT, UPDATE` | One event per trigger | one trigger per event |
 | Enable/disable | `ALTER TRIGGER … ENABLE/DISABLE` | Not supported | Flags table + `IF` |
 | Triggers on views | `INSTEAD OF` only | Not supported | — |

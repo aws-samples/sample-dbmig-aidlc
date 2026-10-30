@@ -14,8 +14,10 @@ ahead of the general playbook context.
 
 ## What belongs here (one Markdown file per topic; all optional)
 
-- `environment.md` — Aurora MySQL version (5.7/8.0), `sql_mode` (e.g. `only_full_group_by`,
-  `STRICT_TRANS_TABLES`), `lower_case_table_names`, charset/collation (utf8mb4), storage engine.
+- `environment.md` — Aurora MySQL version (8.4 or 3.x; the general references assume 8.4 with 3.x
+  differences noted — see `../target-baseline-aurora-mysql.md`), `sql_mode` (Aurora's default is empty — record the
+  strict mode set in the parameter group), `lower_case_table_names`, charset/collation (utf8mb4; case/accent sensitivity),
+  storage engine.
 - `naming-conventions.md` — identifier casing and object naming rules the customer requires.
 - `datatype-overrides.md` — mappings that override the generic Oracle→MySQL map (e.g. how
   `NUMBER(1)` flags map; money columns; how DATE-only columns map).

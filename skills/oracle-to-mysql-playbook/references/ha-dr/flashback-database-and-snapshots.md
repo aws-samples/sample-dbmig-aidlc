@@ -6,6 +6,8 @@
 **Conversion category:** Manual (three-star feature compatibility — storage-level backup is managed by Amazon RDS)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Backtrack is supported on Aurora MySQL 2/3/8.4 (corrected from 5.6); fixed the CLI mapping (backtrack-db-cluster rewinds, modify-db-cluster only sets the window); retention, AWS Backup, current instance classes.
+
 ## Oracle
 
 Oracle Flashback Database reverts an entire database to a previous point in time using SQL. It self-logs all changes, storing previous versions of modifications in the Fast Recovery Area. You can restore to a user-created restore point, a timestamp, or a System Change Number (SCN).
@@ -43,12 +45,15 @@ Snapshots are the primary backup mechanism for Aurora — fast, nonintrusive, no
 - **Automated backups** — always enabled; no performance impact.
 - **Manual backups** — create a snapshot anytime; restore creates a **new instance**; up to 100 manual snapshots per database.
 
-On Aurora MySQL 5.6 compatible, the **Aurora Backtrack** feature is the equivalent of Oracle Flashback Database. It must be opted into at cluster **create or restore** time — it cannot be enabled on a running cluster.
-
-Backtrack one day (86,400 seconds):
+**Aurora Backtrack** — supported on Aurora MySQL 2, 3 and 8.4 (the original said 5.6 only) — is the equivalent of Oracle Flashback Database. It must be opted into at cluster **create or restore/clone** time; it cannot be enabled on a running cluster that was created without it. Details and limits: `../tools/aurora-backtrack.md`.
 
 ```
+# at creation: keep 24 hours of change records (the window, max 72 h)
+aws rds create-db-cluster … --backtrack-window 86400
+# change the window later (only on a backtrack-enabled cluster)
 aws rds modify-db-cluster --db-cluster-identifier sample-cluster --backtrack-window 86400
+# rewind the cluster in place (≈ FLASHBACK DATABASE TO TIMESTAMP)
+aws rds backtrack-db-cluster --db-cluster-identifier sample-cluster --backtrack-to 2026-10-29T10:00:00Z
 ```
 
 Monitor backtrack:
@@ -114,10 +119,13 @@ aws rds create-db-instance
 | Create a restore point | `CREATE RESTORE POINT before_update GUARANTEE FLASHBACK DATABASE;` | `aws rds create-db-cluster-snapshot --db-cluster-snapshot-identifier Snapshot_name --db-cluster-identifier Cluster_Name` |
 | Configure retention | `ALTER SYSTEM SET db_flashback_retention_target=2880;` | Set **Backup retention window** (console or CLI) |
 | Flashback to a restore point | `flashback database to restore point before_update;` | Create a new cluster from a snapshot (`restore-db-cluster-from-snapshot` + `create-db-instance`) |
-| Flashback to a point in time | `FLASHBACK DATABASE TO TIME "TO_DATE('01/01/2017','MM/DD/YY')";` | `aws rds modify-db-cluster --db-cluster-identifier sample-cluster --backtrack-window 86400` |
+| Flashback to a point in time | `FLASHBACK DATABASE TO TIME "TO_DATE('01/01/2017','MM/DD/YY')";` | `aws rds backtrack-db-cluster --backtrack-to <time>` (in place, Backtrack-enabled clusters) or `restore-db-cluster-to-point-in-time` (new cluster). The original listed `modify-db-cluster --backtrack-window`, which only sets the window |
 
 ## Conversion notes
-- No SQL-level equivalent — Oracle's in-place `FLASHBACK DATABASE` is replaced by RDS-managed snapshots, point-in-time restore, and (on Aurora MySQL 5.6) Backtrack.
+- No SQL-level equivalent — Oracle's in-place `FLASHBACK DATABASE` is replaced by RDS-managed snapshots, point-in-time restore, and Backtrack (Aurora MySQL 2, 3, 8.4).
+- Backup retention is 1–35 days; automated backups are continuous and incremental at the storage layer. Use AWS Backup for longer retention or cross-account/cross-Region copies.
+- Instance class examples `db.r4.large` are retired; use current classes (for example `db.r7g.large`) or `db.serverless`.
+- A Backtrack conflicts with binlog replication (forced backtracks break replicas); a PITR to a new cluster does not.
 - Key difference: snapshot/PITR restores create a **new cluster/instance** rather than rewinding in place; Backtrack is the closest in-place rewind but must be enabled at create/restore time and cannot be turned on for a running cluster.
 - Oracle retention is set via `db_flashback_retention_target` (minutes) and the Fast Recovery Area; Aurora uses the backup retention window plus the backtrack window.
 - No `shutdown immediate; startup mount;` step — Aurora operations are online via console/CLI.

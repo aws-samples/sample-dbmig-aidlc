@@ -6,6 +6,8 @@
 **Conversion category:** Automatic (four-star feature compatibility; four-star automation)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Fixed the example (missing FROM); verified FORCE unsupported, CHECK OPTION, join-view and aggregate-view update limits, CTEs in views, WITH READ ONLY unsupported, SELECT * expansion.
+
 ## Oracle
 
 A view stores a named SQL query in the data dictionary with a predefined structure; it stores no data (virtual/logical table over one or more physical tables).
@@ -78,6 +80,7 @@ Example:
 CREATE VIEW TotalSales
 AS
 SELECT Customer, SUM(TotalAmount) AS CustomerTotalAmount
+FROM Orders                      -- the original example omitted the FROM clause
 GROUP BY Customer;
 
 SELECT * FROM TotalSales ORDER BY CustomerTotalAmount DESC;
@@ -91,3 +94,12 @@ SELECT * FROM TotalSales ORDER BY CustomerTotalAmount DESC;
 - `WITH CHECK OPTION` maps directly (add `LOCAL`/`CASCADED` scope).
 - Watch the 64-character alias limit and the view restrictions (no variables, no TEMPORARY tables, objects must exist).
 - Consider `ALGORITHM` (MERGE vs TEMPTABLE) and `SQL SECURITY` (DEFINER vs INVOKER) — Oracle has no direct equivalents.
+
+Verified on Aurora MySQL 3.13 and 8.4.8:
+- `CREATE FORCE VIEW` is a syntax error, and a view over a missing table fails (error 1146). Create base tables (and dependent views) first; the toolkit's apply order handles this.
+- `WITH CHECK OPTION` is enforced (error 1369).
+- Join views are updatable for **one** base table per statement; updating columns of two tables fails (error 1393). Aggregate views are not updatable (error 1288). Oracle `INSTEAD OF` triggers on such views have no MySQL equivalent; route DML to the base tables (stored procedure).
+- CTEs (`WITH …`) inside a view are allowed (MySQL 8.0). An `ORDER BY` in the view is accepted.
+- `WITH READ ONLY` is a syntax error; revoke DML privileges on the view instead.
+- Views store `SELECT *` expanded to the column list at creation; recreate them after adding base-table columns.
+- Views run with the definer's privileges by default (`SQL SECURITY DEFINER`); Oracle views also use the owner's rights, so keep `DEFINER` but make sure that account exists on the target.

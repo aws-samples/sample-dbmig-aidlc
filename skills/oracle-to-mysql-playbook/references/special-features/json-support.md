@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (three-star feature compatibility; three-star automation) — different paradigm/syntax requires application or driver rewrite.
 **SCT automation:** N/A
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Added verified functional and multi-valued JSON indexes, JSON_SCHEMA_VALID check constraints, Oracle SQL/JSON function equivalents; fixed the dot-notation example (missing $.); ->> typing notes.
+
 ## Oracle
 
 Oracle supports JSON storage and retrieval for semi-structured data, plus full-text search and JSON query functions. JSON is stored in `VARCHAR2`, `CLOB`, or `BLOB` columns (not a dedicated type). Oracle recommends an `IS JSON` check constraint to validate. Oracle 19 adds `JSON_SERIALIZE`.
@@ -72,15 +74,26 @@ Query/search functions: `JSON_CONTAINS`, `JSON_CONTAINS_PATH`, `JSON_EXTRACT`, `
 
 ### JSON indexes
 
-JSON columns are a BINARY-family type and **cannot be indexed directly**. Workaround: add generated columns extracting a value from the document and index the generated column (`CREATE TABLE`/`ALTER TABLE`). The optimizer can then use these indexes for matching JSON expressions.
+JSON columns cannot be indexed directly. Options on Aurora MySQL 3 / 8.4 (all verified on 3.13 and 8.4.8):
+- **Generated column + index:** `addr VARCHAR(100) AS (d->>'$.address') STORED, INDEX (addr)`.
+- **Functional index:** `INDEX ((CAST(d->>'$.address' AS CHAR(100)) COLLATE utf8mb4_bin))` — the expression in queries must match.
+- **Multi-valued index** on a JSON array (8.0.17+): `INDEX ix_tags ((CAST(d->'$.tags' AS CHAR(20) ARRAY)))`, used by `MEMBER OF`, `JSON_CONTAINS` and `JSON_OVERLAPS` (verified: `EXPLAIN` shows *Index lookup on jt using ix_tags*).
+
+Validation: invalid JSON is rejected on insert (error 3140, verified). Oracle `IS JSON` check constraints are implicit; Oracle JSON schema checks → `CHECK (JSON_SCHEMA_VALID('{…schema…}', d))` (verified, error 3819 on violation).
+
+Oracle SQL/JSON functions that exist in MySQL 8: `JSON_VALUE(d, '$.a' RETURNING type)`, `JSON_TABLE`, `JSON_OBJECT`, `JSON_ARRAYAGG`/`JSON_OBJECTAGG`, `JSON_EXISTS` → `JSON_CONTAINS_PATH(d, 'one', '$.a')`, `JSON_QUERY` → `JSON_EXTRACT`/`->`, `JSON_MERGEPATCH` → `JSON_MERGE_PATCH` (verified).
 
 ## Conversion notes
 
 - Storage model differs: Oracle stores JSON in `VARCHAR2`/`CLOB`/`BLOB` with an `IS JSON` constraint; MySQL has a validated native `JSON` type.
 - Rewrite Oracle **dot-notation** access to MySQL operators/functions:
-  - `SELECT e.emp_data.address FROM employees e;` → `SELECT emp_data->>'address' FROM employees WHERE emp_id = 1;`
+  - `SELECT e.emp_data.address FROM employees e;` → `SELECT emp_data->>'$.address' FROM employees;` (the path needs the `$.` prefix; the original example omitted it)
   - Field filter: `... WHERE e.data.active = 'true';` → `... WHERE emp_data->>"$.active" = 'true';`
 - Returning the whole document is identical: `SELECT emp_data FROM employees;`
 - Pattern search across all fields with `LIKE '%pattern%'` works the same in both.
-- Indexing JSON requires generated columns in MySQL.
+- Indexing JSON requires a generated column, a functional index or a multi-valued index.
+- `->>` returns text: booleans come back as `'true'`/`'false'` strings and numbers as text (verified); compare with `JSON_TYPE()` or `JSON_VALUE(… RETURNING …)` when the type matters.
+- `->`/`->>` work only on column references; on a literal or expression use `JSON_EXTRACT`/`JSON_UNQUOTE`.
+- MySQL `JSON` columns cannot have a non-expression default; use `DEFAULT (JSON_OBJECT())`.
+- Oracle 21c native `JSON` type and `JSON_TRANSFORM` → `JSON` + `JSON_SET`/`JSON_REPLACE`/`JSON_REMOVE`.
 - Application code and drivers relying on Oracle JSON functions need rewriting to MySQL's function set.

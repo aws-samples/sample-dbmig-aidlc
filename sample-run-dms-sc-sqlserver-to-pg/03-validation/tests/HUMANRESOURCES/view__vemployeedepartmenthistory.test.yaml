@@ -1,0 +1,18 @@
+object: vEmployeeDepartmentHistory
+schema: HUMANRESOURCES
+type: function
+notes: ACCEPT view, compared in full (296 history rows, including closed ones with EndDate set).
+cases:
+- id: c1
+  description: row count
+  source_sql: SELECT COUNT(*) FROM HumanResources.vEmployeeDepartmentHistory
+  target_sql: SELECT count(*) FROM adventureworks_humanresources.vemployeedepartmenthistory
+- id: c2
+  description: every row and column
+  compare: resultset
+  source_sql: >
+    SELECT BusinessEntityID, Title, FirstName, MiddleName, LastName, Suffix, Shift,
+           Department, GroupName, StartDate, EndDate FROM HumanResources.vEmployeeDepartmentHistory
+  target_sql: >
+    SELECT businessentityid, title, firstname, middlename, lastname, suffix, shift,
+           department, groupname, startdate, enddate FROM adventureworks_humanresources.vemployeedepartmenthistory

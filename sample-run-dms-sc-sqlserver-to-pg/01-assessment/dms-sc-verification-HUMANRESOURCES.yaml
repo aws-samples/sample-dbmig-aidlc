@@ -1,74 +1,87 @@
 items:
-  ? Servers.SQLSERVER_SOURCE.Databases.AdventureWorks.Schemas.HumanResources.Tables.Employee.Constraints.CK_Employee_Gender
+  ? Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.HumanResources.Tables.Employee.Constraints.CK_Employee_Gender
   : object: HumanResources.CK_Employee_Gender
     type: CONSTRAINT
     codes:
     - '7795'
-    status: pending
-    method: ''
-    by: ''
-    at: ''
-    note: ''
-  ? Servers.SQLSERVER_SOURCE.Databases.AdventureWorks.Schemas.HumanResources.Procedures.uspUpdateEmployeePersonalInfo
-  : object: HumanResources.uspUpdateEmployeePersonalInfo
-    type: PROCEDURE
-    codes:
-    - '7744'
-    status: pending
-    method: ''
-    by: ''
-    at: ''
-    note: ''
-  Servers.SQLSERVER_SOURCE.Databases.AdventureWorks.Schemas.HumanResources.Views.vJobCandidateEmployment:
-    object: HumanResources.vJobCandidateEmployment
-    type: VIEW
-    codes:
-    - '7744'
-    status: pending
-    method: ''
-    by: ''
-    at: ''
-    note: ''
-  Servers.SQLSERVER_SOURCE.Databases.AdventureWorks.Schemas.HumanResources.Views.vJobCandidate:
-    object: HumanResources.vJobCandidate
-    type: VIEW
-    codes:
-    - '7744'
-    - '9997'
-    status: pending
-    method: ''
-    by: ''
-    at: ''
-    note: ''
-  Servers.SQLSERVER_SOURCE.Databases.AdventureWorks.Schemas.HumanResources.Views.vEmployee:
+    status: verified
+    method: equivalence-test
+    by: migration-engineer
+    at: '2026-10-30T09:37:44Z'
+    note: 'run-tests HUMANRESOURCES 16/16: vEmployee 290 rows identical; lowercase
+      m/f accepted and X rejected+logged on both; Department ModifiedDate defaulted'
+  Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.HumanResources.Views.vEmployee:
     object: HumanResources.vEmployee
     type: VIEW
     codes:
     - '7795'
-    status: pending
-    method: ''
-    by: ''
-    at: ''
-    note: ''
-  Servers.SQLSERVER_SOURCE.Databases.AdventureWorks.Schemas.HumanResources.Views.vJobCandidateEducation:
-    object: HumanResources.vJobCandidateEducation
-    type: VIEW
-    codes:
-    - '7744'
-    status: pending
-    method: ''
-    by: ''
-    at: ''
-    note: ''
-  ? Servers.SQLSERVER_SOURCE.Databases.AdventureWorks.Schemas.HumanResources.Tables.Employee.Constraints.CK_Employee_MaritalStatus
+    status: verified
+    method: equivalence-test
+    by: migration-engineer
+    at: '2026-10-30T09:37:44Z'
+    note: 'run-tests HUMANRESOURCES 16/16: vEmployee 290 rows identical; lowercase
+      m/f accepted and X rejected+logged on both; Department ModifiedDate defaulted'
+  ? Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.HumanResources.Tables.Employee.Constraints.CK_Employee_MaritalStatus
   : object: HumanResources.CK_Employee_MaritalStatus
     type: CONSTRAINT
     codes:
     - '7795'
-    status: pending
-    method: ''
-    by: ''
-    at: ''
-    note: ''
-project: adventureworks-hr-person
+    status: verified
+    method: equivalence-test
+    by: migration-engineer
+    at: '2026-10-30T09:37:44Z'
+    note: 'run-tests HUMANRESOURCES 16/16: vEmployee 290 rows identical; lowercase
+      m/f accepted and X rejected+logged on both; Department ModifiedDate defaulted'
+  Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.HumanResources.Tables.EmployeePayHistory:
+    object: HumanResources.EmployeePayHistory
+    type: TABLE
+    codes:
+    - '7826'
+    status: verified
+    method: catalog-check
+    by: migration-engineer
+    at: '2026-10-30T09:37:53Z'
+    note: same DEFAULT clock_timestamp() as Department (proven by test); compare 6/6
+  Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.HumanResources.Tables.Department:
+    object: HumanResources.Department
+    type: TABLE
+    codes:
+    - '7826'
+    status: verified
+    method: equivalence-test
+    by: migration-engineer
+    at: '2026-10-30T09:37:44Z'
+    note: 'run-tests HUMANRESOURCES 16/16: vEmployee 290 rows identical; lowercase
+      m/f accepted and X rejected+logged on both; Department ModifiedDate defaulted'
+  Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.HumanResources.Tables.Shift:
+    object: HumanResources.Shift
+    type: TABLE
+    codes:
+    - '7826'
+    status: verified
+    method: catalog-check
+    by: migration-engineer
+    at: '2026-10-30T09:37:53Z'
+    note: same DEFAULT clock_timestamp() as Department (proven by test); compare 6/6
+  Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.HumanResources.Tables.EmployeeDepartmentHistory:
+    object: HumanResources.EmployeeDepartmentHistory
+    type: TABLE
+    codes:
+    - '7826'
+    status: verified
+    method: catalog-check
+    by: migration-engineer
+    at: '2026-10-30T09:37:53Z'
+    note: same DEFAULT clock_timestamp() as Department (proven by test); compare 6/6
+  Servers.<SOURCE_DATA_PROVIDER_ID>.Databases.AdventureWorks.Schemas.HumanResources.Tables.JobCandidate:
+    object: HumanResources.JobCandidate
+    type: TABLE
+    codes:
+    - '7826'
+    status: verified
+    method: catalog-check
+    by: migration-engineer
+    at: '2026-10-30T09:37:53Z'
+    note: same DEFAULT clock_timestamp() as Department (proven by test); compare 6/6
+project: aw-dms-sc-20261030
 schema: HUMANRESOURCES

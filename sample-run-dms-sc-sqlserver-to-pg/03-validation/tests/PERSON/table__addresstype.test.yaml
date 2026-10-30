@@ -1,0 +1,25 @@
+object: AddressType
+schema: PERSON
+type: procedure
+notes: >
+  VERIFY 7826 (DEFAULT getdate() on ModifiedDate) and 7831 (DEFAULT newid() on rowguid).
+  DMS SC wrote DEFAULT clock_timestamp() and DEFAULT uuid_generate_v4() (uuid-ossp is
+  installed). An INSERT that omits both columns must fill them on both engines. The same
+  two defaults are on all 19 ModifiedDate and 10 rowguid columns of PERSON +
+  HUMANRESOURCES (checked in the catalog), so one table proves the conversion.
+cases:
+- id: c1
+  description: insert without rowguid / ModifiedDate -> both defaulted
+  call_source: INSERT INTO Person.AddressType (Name) VALUES (N'dbmig-test')
+  call_target: INSERT INTO adventureworks_person.addresstype (name) VALUES ('dbmig-test')
+  verify:
+  - name: defaulted_rows
+    source_sql: >
+      SELECT COUNT(*) FROM Person.AddressType WHERE Name = N'dbmig-test' AND rowguid IS NOT NULL
+         AND ABS(DATEDIFF(second, ModifiedDate, GETDATE())) <= 60
+    target_sql: >
+      SELECT count(*) FROM adventureworks_person.addresstype WHERE name = 'dbmig-test' AND rowguid IS NOT NULL
+         AND abs(extract(epoch FROM (localtimestamp - modifieddate))) <= 60
+  - name: rows
+    source_sql: SELECT COUNT(*) FROM Person.AddressType
+    target_sql: SELECT count(*) FROM adventureworks_person.addresstype

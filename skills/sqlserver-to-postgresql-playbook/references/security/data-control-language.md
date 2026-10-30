@@ -6,6 +6,8 @@
 **Conversion category:** Automatic (five-star compatibility — similar syntax and similar functionality)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): `GRANT … ON PROCEDURE` (verified), EXECUTE default to PUBLIC, fixed-role mapping incl. cluster-wide predefined roles, PG 15 public-schema change, RLS mapping.
+
 ## SQL Server
 
 The ANSI standard uses `GRANT` and `REVOKE` to control permissions. SQL Server additionally provides a `DENY` command to explicitly restrict access. `DENY` takes precedence over `GRANT` and resolves conflicting permissions for users with multiple logins (e.g., a user DENY'd via group membership but GRANT'd via personal login is denied).
@@ -112,6 +114,21 @@ REVOKE EXECUTE ON FUNCTION EmployeeReport FROM John;
 
 - `GRANT` and `REVOKE` are largely portable — syntax and functionality are very similar between the engines.
 - **No `DENY` in PostgreSQL.** SQL Server's `DENY` (which takes precedence over GRANT) has no direct equivalent. Re-model deny logic by not granting the permission, or by carefully structuring role membership. Review any DENY usage during migration since revoking is not the same as explicit deny.
-- SQL Server stored procedures map to PostgreSQL functions, so `EXECUTE` grants apply to `FUNCTION` objects.
+- SQL Server stored procedures map to PostgreSQL **procedures** or functions: `GRANT EXECUTE ON PROCEDURE p(int) TO r` (verified) or `ON FUNCTION`. Include argument types when the name is overloaded. `ALL PROCEDURES IN SCHEMA` / `ALL ROUTINES IN SCHEMA` cover both.
+- `EXECUTE` is granted to `PUBLIC` by default on new functions and procedures (SQL Server grants nothing by default). Run `REVOKE EXECUTE ON … FROM PUBLIC` for sensitive routines, or `ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON ROUTINES FROM PUBLIC`.
+- SQL Server fixed database roles → PostgreSQL:
+
+  | SQL Server | Aurora PostgreSQL 18 |
+  |---|---|
+  | `db_owner` | owner of the database (`pg_database_owner` refers to it) plus ownership of the schemas |
+  | `db_datareader` | `GRANT SELECT ON ALL TABLES IN SCHEMA s` + default privileges per schema. `pg_read_all_data` (PG 14) is **cluster-wide** (every database), so use it only when that scope is intended |
+  | `db_datawriter` | `GRANT INSERT, UPDATE, DELETE …` per schema; `pg_write_all_data` (PG 14) is cluster-wide |
+  | `db_ddladmin` | `GRANT CREATE ON SCHEMA s` |
+  | `db_securityadmin` | `CREATEROLE` (PG 16 semantics: only manages roles it created or holds `ADMIN` on) |
+  | `db_backupoperator` | N/A (backups are managed by Aurora) |
+  | `VIEW SERVER STATE` | `pg_monitor`, `pg_read_all_stats` |
+  | `ALTER ANY` maintenance | `pg_maintain` (PG 17) or `GRANT MAINTAIN ON t` |
+- Since PostgreSQL 15, `PUBLIC` cannot create objects in the `public` schema (verified on 18.6), which matches SQL Server's default where users cannot create in `dbo`.
+- **Row-Level Security** (SQL Server security policies + predicate functions) → PostgreSQL RLS: `ALTER TABLE t ENABLE ROW LEVEL SECURITY; CREATE POLICY … USING (…) WITH CHECK (…);` (verified).
 - Use `ALL TABLES|SEQUENCES|FUNCTIONS IN SCHEMA` for bulk grants. Note these apply only to existing objects; use `ALTER DEFAULT PRIVILEGES` for future objects.
 - `WITH GRANT OPTION` maps directly; role-to-role grants use `WITH ADMIN OPTION`.

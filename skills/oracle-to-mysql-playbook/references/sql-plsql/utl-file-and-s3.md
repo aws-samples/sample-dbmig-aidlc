@@ -12,6 +12,8 @@
 **Conversion category:** Manual (★★ feature compatibility, no automation)
 **SCT automation:** N/A — MySQL doesn't support `UTL_FILE`; Aurora MySQL has built-in S3 integration.
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): S3 integration verified on both versions (roles, parameters, FORMAT CSV HEADER; no PARQUET/COMPRESSION), server-side file I/O unavailable, staging-table patterns.
+
 ## Oracle
 
 `UTL_FILE` accesses files outside the database (OS, DB server, attached storage). Key procedures: `FOPEN`, `GET_LINE`, `PUT_LINE`, `FCLOSE`. `FOPEN` modes: `'R'` read, `'W'` write, `'A'` append.
@@ -96,3 +98,7 @@ LOAD XML FROM S3 's3://<your-bucket>/data.xml'
 - Requires an IAM role on the Aurora cluster granting S3 access, plus the `aurora_select_into_s3_role`/`aurora_load_from_s3_role` (or `aws_default_s3_role`) cluster parameters.
 - No row-by-row file streaming like `GET_LINE`/`PUT_LINE` — operations are bulk/set-based. Refactor line-oriented logic into set-based loads/unloads.
 - Use `MANIFEST ON` for multi-file coordination and `aurora_s3_load_history` for idempotency/auditing.
+- Verified on Aurora MySQL 3.13 and 8.4.8: `SELECT … INTO OUTFILE S3 … FORMAT CSV HEADER` and `LOAD DATA FROM S3` parse on both and fail only because no IAM role is associated (errors name the missing `aurora_select_into_s3_role` / `aurora_load_from_s3_role` / `aws_default_s3_role` parameter). Grant `AWS_SELECT_S3_ACCESS` / `AWS_LOAD_S3_ACCESS` (both roles exist on 3 and 8.4) to the database user and activate it (`SET DEFAULT ROLE ALL TO user`, since `activate_all_roles_on_login` is OFF).
+- `FORMAT PARQUET` and a `COMPRESSION` clause are **not** accepted by `SELECT … INTO OUTFILE S3` (syntax errors, verified); for Parquet exports use an Aurora snapshot export to S3 or a zero-ETL integration. `mysql.aurora_s3_load_history` exists on both versions (verified).
+- Server-side file I/O (`SELECT … INTO OUTFILE '/path'`, `LOAD DATA INFILE '/path'`) is not usable on Aurora; `LOAD DATA LOCAL INFILE` reads from the client and needs `local_infile` enabled on both client and server.
+- `UTL_FILE.FOPEN … 'W'` + many `PUT_LINE` calls → build the rows in a (temporary) table, then one `SELECT … INTO OUTFILE S3`. Line-by-line reads (`GET_LINE`) → `LOAD DATA FROM S3` into a staging table, then process with SQL.

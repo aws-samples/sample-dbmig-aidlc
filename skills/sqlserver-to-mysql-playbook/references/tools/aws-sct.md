@@ -6,6 +6,8 @@
 **Conversion category:** N/A (tooling)
 **SCT automation:** This is the SCT tool itself — it auto-converts most compatible objects and flags the rest with action codes.
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Target-version guidance (SCT/DMS SC emit Aurora MySQL 8.0 code; modernize 5.7-era output; 8.4 checks), extension pack decision, toolkit relationship.
+
 ## SQL Server
 AWS SCT is a Java utility that connects to source and target databases, scans the source schema objects (tables, views, indexes, procedures, etc.) and converts them to target objects. For SQL Server sources, it connects via a JDBC driver (Microsoft SQL Server JDBC driver) you download and configure.
 
@@ -25,3 +27,6 @@ The Aurora MySQL (MySQL-compatible) side requires the MySQL JDBC driver (Connect
 - **Convert schema:** right-click database → **Convert schema**. Uncheck `sys` and `information_schema` system schemas. This makes no changes to the target — it builds a virtual target schema on the right pane; drill into objects to see generated syntax.
 - **Apply:** right-click target database → **Apply to database** (runs conversion script against target) **or** **Save as SQL** (export to file).
 - **Recommendation:** Save to SQL file so you can verify/QA the converted code and adjust objects that couldn't be auto-converted.
+- **Target version:** SCT/DMS SC generate Aurora MySQL **8.0** code (DMS SC's MySQL target provider is 8.0.32). Output written for 5.7 avoids CTEs, window functions, `CHECK`, `JSON_TABLE` and roles; on Aurora MySQL 3 / 8.4 these are native — modernize the converted code. For 8.4 also review the 8.4 breaks in `../../../oracle-to-mysql-playbook/references/target-baseline-aurora-mysql.md`.
+- SCT installs the `aws_sqlserver_ext` extension-pack schema for emulated T-SQL functions; decide whether to keep it or replace calls with native MySQL functions, and record the decision.
+- In this toolkit the AI-driven `convert-schema`/`convert-code` path replaces SCT for conversion; an existing DMS SC project can be imported with the `db-migration-dms-sc-ingest` skill.

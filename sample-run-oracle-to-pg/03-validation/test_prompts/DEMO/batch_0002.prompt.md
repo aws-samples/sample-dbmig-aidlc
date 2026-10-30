@@ -91,17 +91,18 @@ BEGIN
         RAISE EXCEPTION 'Insufficient inventory' USING ERRCODE = 'U0001';
     END IF;
     UPDATE demo.listings
-    SET quantity = quantity - p_quantity, updated_on = current_timestamp
+    SET quantity = quantity - p_quantity, updated_on = localtimestamp
     WHERE id = p_listing_id;
 END $$;
 
+-- Oracle: an unhandled NO_DATA_FOUND in a function called from SQL returns NULL, so a missing
+-- listing returns NULL here instead of raising.
 CREATE OR REPLACE FUNCTION demo.inventory_pkg_has_sufficient_inventory(p_listing_id numeric, p_quantity numeric)
 RETURNS numeric LANGUAGE plpgsql STABLE AS $$
 DECLARE
     v_current_qty demo.listings.quantity%TYPE;
 BEGIN
     SELECT quantity INTO v_current_qty FROM demo.listings WHERE id = p_listing_id;
-    -- Oracle: unhandled NO_DATA_FOUND inside a function called from SQL yields NULL.
     IF NOT FOUND THEN
         RETURN NULL;
     END IF;
@@ -111,7 +112,7 @@ END $$;
 CREATE OR REPLACE FUNCTION demo.inventory_pkg_get_low_stock_count(p_threshold numeric DEFAULT 5)
 RETURNS numeric LANGUAGE plpgsql STABLE AS $$
 DECLARE
-    v_count bigint;       -- PLS_INTEGER
+    v_count bigint;   -- PLS_INTEGER
 BEGIN
     SELECT count(*) INTO v_count
     FROM demo.listings
@@ -220,14 +221,15 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "DEMO"."ORDER_PKG" AS
 END order_pkg;
 
 --- CONVERTED TARGET CODE (PostgreSQL) — use these exact routine names and signatures in target_sql / call_target ---
--- Package ORDER_PKG (spec + body) flattened to <package>_<subprogram>. Caller owns the transaction.
+-- Package ORDER_PKG (spec + body) flattened to <package>_<subprogram>.
 CREATE OR REPLACE FUNCTION demo.order_pkg_calculate_order_total(p_order_id numeric)
 RETURNS numeric LANGUAGE plpgsql STABLE AS $$
 DECLARE
     v_total numeric := 0;
 BEGIN
     SELECT coalesce(sum(book_price * quantity - coalesce(discount, 0)), 0) INTO v_total
-    FROM demo.order_items WHERE order_id = p_order_id;
+    FROM demo.order_items
+    WHERE order_id = p_order_id;
     RETURN v_total;
 END $$;
 
@@ -240,14 +242,14 @@ BEGIN
     RETURN v_count;
 END $$;
 
--- VOLATILE (inserts). Returns the new identity value.
+-- INSERT ... RETURNING id INTO works the same. VOLATILE (writes).
 CREATE OR REPLACE FUNCTION demo.order_pkg_create_order(p_customer_id numeric, p_address_id numeric)
 RETURNS numeric LANGUAGE plpgsql AS $$
 DECLARE
     v_order_id demo.orders.id%TYPE;
 BEGIN
     INSERT INTO demo.orders (customer_id, address_id, created_on, status, total_amount)
-    VALUES (p_customer_id, p_address_id, current_timestamp, 'PENDING', 0)
+    VALUES (p_customer_id, p_address_id, localtimestamp, 'PENDING', 0)
     RETURNING id INTO v_order_id;
     RETURN v_order_id;
 END $$;
@@ -262,17 +264,17 @@ BEGIN
     INSERT INTO demo.order_items (order_id, book_id, listing_id, quantity, book_price)
     VALUES (p_order_id, v_book_id, p_listing_id, p_quantity, v_price);
     UPDATE demo.orders
-    SET total_amount = demo.order_pkg_calculate_order_total(p_order_id), updated_on = current_timestamp
+    SET total_amount = demo.order_pkg_calculate_order_total(p_order_id), updated_on = localtimestamp
     WHERE id = p_order_id;
 END $$;
 
--- SYSDATE (DATE, seconds precision) -> localtimestamp(0)
+-- SYSDATE into DATE columns (timestamp(0) on the target) -> localtimestamp(0).
 CREATE OR REPLACE PROCEDURE demo.order_pkg_update_order_status(p_order_id numeric, p_status varchar)
 LANGUAGE plpgsql AS $$
 BEGIN
     UPDATE demo.orders
     SET status = p_status,
-        updated_on = current_timestamp,
+        updated_on = localtimestamp,
         shipped_date   = CASE WHEN p_status = 'SHIPPED'   THEN localtimestamp(0) END,
         delivered_date = CASE WHEN p_status = 'DELIVERED' THEN localtimestamp(0) END,
         cancelled_date = CASE WHEN p_status = 'CANCELLED' THEN localtimestamp(0) END
@@ -281,6 +283,6 @@ END $$;
 
 --- SAMPLED REAL DATA (use these actual values) ---
 ### LISTINGS  (columns: ID, BOOK_ID, SELLER_ID, PRICE, QUANTITY, CONDITION_ID, STATUS, LISTING_TYPE, ADMIN_NOTES, PROCESSED_AT, PROCESSED_BY, IS_FEATURED, IS_BESTSELLER, IS_NEW_ARRIVAL, CREATED_ON, UPDATED_ON)
-  1 | 1 | 1 | 10.95 | 25 | 2 | 1 | SYSTEM |  |  |  | 1 | 0 | 1 | 2026-09-28 02:05:26.204692 | 
-  2 | 2 | 1 | 13.95 | 3 | 3 | 1 | SYSTEM |  |  |  | 0 | 1 | 0 | 2026-09-28 02:05:26.208513 | 
-  3 | 3 | 1 | 6.5 | 10 | 1 | 1 | SYSTEM |  |  |  | 1 | 1 | 0 | 2026-09-28 02:05:26.212295 | 
+  1 | 1 | 1 | 10.95 | 25 | 2 | 1 | SYSTEM |  |  |  | 1 | 0 | 1 | 2026-10-30 01:53:57.004066 | 
+  2 | 2 | 1 | 13.95 | 3 | 3 | 1 | SYSTEM |  |  |  | 0 | 1 | 0 | 2026-10-30 01:53:57.008985 | 
+  3 | 3 | 1 | 6.5 | 10 | 1 | 1 | SYSTEM |  |  |  | 1 | 1 | 0 | 2026-10-30 01:53:57.013576 | 

@@ -1,0 +1,1 @@
+CREATE DOMAIN adventureworks_dbo.ordernumber AS VARCHAR(50) NULL;

@@ -6,6 +6,8 @@
 **Conversion category:** Manual (two-star feature compatibility — different paradigm requires rewrite; three-star automation)
 **SCT automation:** Three-star automation level; N/A action code
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): TRY…CATCH patterns with GET STACKED DIAGNOSTICS, THROW→RAISE…USING ERRCODE and safe custom SQLSTATE choice, @@ERROR mapping, and the verified rollback-scope difference (EXCEPTION blocks roll back the whole block, not just the failing statement) added.
+
 ## SQL Server
 
 From SQL Server 2008, .NET-like error handling: `TRY…CATCH`, `THROW`, `FORMATMESSAGE`, and error-state functions. Pre-2008 used `RAISERROR`.
@@ -134,6 +136,37 @@ END;
 | `FORMATMESSAGE` | `RAISE [level] 'format'` or `ASSERT` |
 | Error state functions | `GET STACKED DIAGNOSTICS` |
 | Proprietary error messages in `sys.messages` | `RAISE` |
+| `@@ERROR` | No equivalent — wrap the statement in `BEGIN … EXCEPTION` and read `SQLSTATE`, or use `GET DIAGNOSTICS … ROW_COUNT` / `FOUND` for row checks |
+
+## PostgreSQL 18 conversion patterns (verified on Aurora PostgreSQL 18.6)
+
+```sql
+-- TRY…CATCH + ERROR_MESSAGE()/ERROR_NUMBER()/ERROR_PROCEDURE()/ERROR_LINE()
+DO $$
+DECLARE v_msg text; v_state text; v_ctx text; v_detail text;
+BEGIN
+  PERFORM 1/0;
+EXCEPTION WHEN OTHERS THEN
+  GET STACKED DIAGNOSTICS v_msg    = MESSAGE_TEXT,
+                          v_state  = RETURNED_SQLSTATE,
+                          v_detail = PG_EXCEPTION_DETAIL,
+                          v_ctx    = PG_EXCEPTION_CONTEXT;   -- routine name + line (ERROR_PROCEDURE/ERROR_LINE)
+  RAISE NOTICE '% %', v_state, v_msg;
+END $$;
+
+-- THROW 50001, 'Order 42 invalid', 1;
+RAISE EXCEPTION 'Order % invalid', 42 USING ERRCODE = 'P0001', DETAIL = '...', HINT = '...';
+
+-- THROW;   (rethrow inside CATCH)
+EXCEPTION WHEN division_by_zero THEN RAISE;   -- bare RAISE re-raises the original SQLSTATE
+```
+
+- **Custom error numbers.** SQL Server's integer error numbers become 5-character SQLSTATEs. Use `P0001` (`raise_exception`) or a class that PostgreSQL never uses (for example `U0001`…`U9999`, verified). Do **not** map `50001` to `'50001'` or `54321` to `'54321'`: those land in real classes (`54` = program_limit_exceeded) and get caught by the wrong `WHEN` handlers. Keep the original number in `DETAIL` or `MESSAGE` if callers parse it.
+- **`RAISERROR` severity.** Severity ≤ 10 is informational → `RAISE NOTICE`/`WARNING`; severity 11–19 → `RAISE EXCEPTION`; `WITH NOWAIT` → `RAISE NOTICE` (notices are sent immediately). `WITH LOG` → `RAISE LOG`.
+- **`ASSERT`** raises SQLSTATE `P0004` (`assert_failure`) and can be disabled with `plpgsql.check_asserts = off`, so never use it for business rules.
+- **Rollback scope differs (verified).** SQL Server rolls back only the failing *statement*; the example above keeps rows 1 and 2. In PL/pgSQL an `EXCEPTION` block rolls back **everything done since the block's `BEGIN`**: `INSERT 1; BEGIN INSERT 2; INSERT 1(dup); EXCEPTION … END` keeps only row 1. To keep SQL Server semantics, put each statement that may fail in its own `BEGIN … EXCEPTION … END` sub-block. Each sub-block is a subtransaction, so avoid them inside tight loops (subtransaction overhead and SLRU pressure).
+- **`XACT_ABORT`.** Outside an exception block an error aborts the whole transaction; this matches `SET XACT_ABORT ON`. There is no `XACT_STATE()`; inside the handler the subtransaction has already been rolled back.
+- **`COMMIT`/`ROLLBACK` inside a block with an `EXCEPTION` clause raises an error** (`cannot commit while a subtransaction is active`). If that block also has `WHEN OTHERS`, the handler catches the error and the COMMIT is silently lost. Move transaction control outside exception blocks (see `transactions.md`).
 
 ## Conversion notes
 - Rewrite `TRY…CATCH` as a `BEGIN ... EXCEPTION` block; PL/pgSQL exception handling implicitly rolls back to the block start (a sub-transaction).

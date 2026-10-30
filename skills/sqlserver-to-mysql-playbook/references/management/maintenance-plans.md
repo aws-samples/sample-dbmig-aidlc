@@ -6,6 +6,8 @@
 **Conversion category:** Automatic (Three star feature compatibility)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Master user cannot modify innodb_*_stats (verified); OPTIMIZE = recreate + analyze (verified); SHOWCONTIG → DATA_FREE; dynamic resizing instead of shrink; histograms; events for custom jobs.
+
 ## SQL Server
 
 A maintenance plan is a set of automated tasks to optimize a database, run regular backups, and ensure consistency. Plans are implemented as SSIS packages run by SQL Server Agent jobs (manual or scheduled). Typical tasks:
@@ -85,18 +87,19 @@ CHECK TABLE <table name> [FOR UPGRADE | QUICK]
 |---|---|
 | `DBCC DBREINDEX` | `ALTER TABLE … FORCE` |
 | `DBCC INDEXDEFRAG` | `OPTIMIZE TABLE` |
-| `DBCC SHOWCONTIG` | `CHECK TABLE` |
+| `DBCC SHOWCONTIG` | `information_schema.tables.DATA_FREE` (free space in the tablespace) — `CHECK TABLE` checks consistency, not fragmentation |
 
 ### Shrinking data files
 
-Aurora MySQL uses one file per table (not one set per database), so there's no need to shrink an entire database — rebuilding a table optimizes its file size.
+There is no `DBCC SHRINK*`: Aurora storage is a shared cluster volume that grows automatically, and space freed by dropping or truncating tables is reclaimed by **dynamic resizing** (current Aurora MySQL versions). Rebuilding a table (`OPTIMIZE TABLE`) releases free space inside it.
 
 ### Update statistics
 
 Aurora MySQL uses persistent and non-persistent statistics. Persistent statistics survive restarts and give better plan stability. Controls:
 * `innodb_stats_auto_recalc` — auto-update statistics when table changes cross a threshold.
 * `STATS_PERSISTENT`, `STATS_AUTO_RECALC`, `STATS_SAMPLE_PAGES` clauses in `CREATE TABLE`/`ALTER TABLE`.
-* View stats in `mysql.innodb_table_stats` / `mysql.innodb_index_stats` (and `last_update` column); modify these tables to force/test plans.
+* View stats in `mysql.innodb_table_stats` / `mysql.innodb_index_stats` (and `last_update` column). *(corrected)* The Aurora master user **cannot modify** these tables (error 1044, verified on 3.13 and 8.4.8); use `ANALYZE TABLE`, `STATS_SAMPLE_PAGES` or histograms instead.
+* `UPDATE STATISTICS … WITH FULLSCAN` on columns → `ANALYZE TABLE t UPDATE HISTOGRAM ON col WITH n BUCKETS` (MySQL 8; refreshed only manually, `AUTO UPDATE` ignored on 8.4.7+).
 
 ## Summary
 
@@ -107,7 +110,7 @@ Aurora MySQL uses persistent and non-persistent statistics. Persistent statistic
 | Update statistics | `UPDATE STATISTICS` / `sp_updatestats` | Set `innodb_stats_auto_recalc = ON` in parameter group | |
 | Consistency checks | `DBCC CHECKDB` / `CHECKTABLE` | `CHECK TABLE` | |
 | Back up DB and log files | `BACKUP DATABASE` / `BACKUP LOG` | Automated backups and snapshots | RDS-managed |
-| Run Agent jobs for custom actions | `sp_start_job`, scheduled | Not supported | |
+| Run Agent jobs for custom actions | `sp_start_job`, scheduled | `CREATE EVENT` (scheduler ON by default on Aurora, verified) or EventBridge Scheduler | |
 
 ## Conversion notes
 - AWS service replacement: SQL Server Agent maintenance plans / backups → **Amazon RDS automated backups and snapshots**; table maintenance → SQL commands.
@@ -115,4 +118,6 @@ Aurora MySQL uses persistent and non-persistent statistics. Persistent statistic
 - Consistency: `DBCC CHECKDB/CHECKTABLE` → `CHECK TABLE`.
 - No database shrink needed (per-table files).
 - Statistics auto-recalc via `innodb_stats_auto_recalc`.
-- No equivalent to running Agent jobs for custom scheduled actions — use Aurora MySQL Events or external schedulers (see Agent reference).
+- Run custom scheduled actions with Aurora MySQL Events or external schedulers (see Agent reference).
+- `OPTIMIZE TABLE` on InnoDB performs "recreate + analyze" (verified note on both versions), an online rebuild; `CHECK TABLE` returned OK on both versions. Schedule rebuilds only for tables with high `DATA_FREE` — Aurora has no page-split fragmentation problem worth weekly rebuilds.
+- Backup maintenance-plan tasks are unnecessary: Aurora backups are continuous; use AWS Backup for retention beyond 35 days.

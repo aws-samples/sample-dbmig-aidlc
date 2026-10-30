@@ -6,6 +6,8 @@
 **Conversion category:** Manual
 **SCT automation:** N/A (two-star feature compatibility; no native role support — use AWS IAM accounts with the AWS Authentication Plugin)
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Roles are native on 3 / 8.4 (corrected, verified); default roles must be set; fixed-role mappings, rds_superuser_role, auth plugin defaults per version, password policy options (verified), corrected the IAM AS 'RDS' example.
+
 ## SQL Server
 
 SQL Server has two layers of security principals: **Logins** at the server level and **Users** at the database level. Logins map to users in one or more databases. Server-level permissions not mapped to databases include Database Creator, System Administrator, and Security Administrator.
@@ -34,7 +36,7 @@ ALTER ROLE db_datareader ADD MEMBER 'MyUser';
 
 ## MySQL
 
-Aurora MySQL supports only **Users**; Roles aren't supported (in the base engine). Administrators specify privileges for individual users. Aurora MySQL uses database user accounts to authenticate sessions and authorize access to objects. Wildcards can specify multiple privileges for multiple objects.
+*(corrected)* **Aurora MySQL 3 and 8.4 support roles** (`CREATE ROLE`, `GRANT … TO role`, `GRANT role TO user`, verified). Only Aurora MySQL 2 (5.7) lacked them. Administrators specify privileges for individual users. Aurora MySQL uses database user accounts to authenticate sessions and authorize access to objects. Wildcards can specify multiple privileges for multiple objects.
 
 > In Aurora MySQL, a database is equivalent to a SQL Server schema.
 
@@ -48,7 +50,7 @@ IAM database authentication benefits:
 
 > IAM database authentication limits new connections to 20 connections/second.
 
-Amazon RDS for MySQL 8 supports **roles** (named collections of privileges) that can be created/dropped, granted/revoked privileges, and granted/revoked to user accounts. Active roles for an account can be selected and changed during sessions:
+Aurora MySQL 3 and 8.4 support **roles** (verified) (named collections of privileges) that can be created/dropped, granted/revoked privileges, and granted/revoked to user accounts. Active roles for an account can be selected and changed during sessions:
 
 ```sql
 CREATE ROLE 'app_developer', 'app_read', 'app_write';
@@ -92,7 +94,7 @@ PASSWORD EXPIRE;
 
 -- Create a user with IAM authentication
 CREATE USER LocalUser
-IDENTIFIED WITH AWSAuthenticationPlugin AS 'IAMUser';
+IDENTIFIED WITH AWSAuthenticationPlugin AS 'RDS';   -- the AS value is the literal 'RDS'; the user name must match the IAM policy's dbuser
 ```
 
 ## Summary
@@ -101,17 +103,21 @@ IDENTIFIED WITH AWSAuthenticationPlugin AS 'IAMUser';
 |---|---|---|
 | View database users | `SELECT Name FROM sys.sysusers` | `SELECT User FROM mysql.user` |
 | Create a user and password | `CREATE USER <User Name> WITH PASSWORD = <PassWord>;` | `CREATE USER <User Name> IDENTIFIED BY <Password>` |
-| Create a role | `CREATE ROLE <Role Name>` | Use AWS IAM Roles |
+| Create a role | `CREATE ROLE <Role Name>` | `CREATE ROLE <Role Name>` (3 / 8.4) |
 | Change a user's password | `ALTER LOGIN <SQL Login> WITH PASSWORD = <PassWord>;` | `ALTER USER <User Name> IDENTIFIED BY <Password>` |
 | External authentication | Windows Authentication | AWS IAM (Identity and Access Management) |
-| Add a user to a role | `ALTER ROLE <Role Name> ADD MEMBER <User Name>` | Use AWS IAM Roles |
+| Add a user to a role | `ALTER ROLE <Role Name> ADD MEMBER <User Name>` | `GRANT <Role> TO <User>; SET DEFAULT ROLE ALL TO <User>;` |
 | Lock a user | `ALTER LOGIN <Login Name> DISABLE` | `ALTER User <User Name> ACCOUNT LOCK` |
 | Grant SELECT on a schema | `GRANT SELECT ON SCHEMA::<Schema Name> to <User Name>` | `GRANT SELECT ON <Schema Name>.* TO <User Name>` |
 
 ## Conversion notes
 - SQL Server's two-tier model (server Logins + database Users) collapses to a single Aurora MySQL **User** that combines authentication and authorization. MySQL users include a host part (`'user'@'host'`).
 - A SQL Server database == an Aurora MySQL **database/schema**.
-- **No native roles** in the base Aurora MySQL engine — replicate role-based design with AWS IAM roles + the AWS Authentication Plugin, or use RDS for MySQL 8 native roles where available.
+- Map SQL Server database roles to MySQL roles. **Granted roles are inactive by default** (`activate_all_roles_on_login` is OFF, verified): run `SET DEFAULT ROLE ALL TO user` after granting (verified), or the user sees none of the role's privileges.
+- Fixed database roles: `db_datareader` → `GRANT SELECT ON db.* TO role`; `db_datawriter` → `INSERT, UPDATE, DELETE`; `db_ddladmin` → `CREATE, ALTER, DROP, INDEX, CREATE VIEW, CREATE ROUTINE, ALTER ROUTINE, TRIGGER`; `db_owner` → `ALL ON db.*`. The Aurora master user holds `rds_superuser_role`, not `SUPER` (verified) — the closest to `sysadmin`, with limits (no `SET GLOBAL`, resource groups).
+- **Authentication plugins:** new users get `caching_sha2_password` on Aurora MySQL 8.4 and `mysql_native_password` on 3.x (verified). The `IDENTIFIED WITH mysql_native_password` example above still works on 8.4 but is discouraged; drivers must support `caching_sha2_password`.
+- Password policy (≈ `CHECK_POLICY`/`CHECK_EXPIRATION`): `PASSWORD EXPIRE INTERVAL n DAY`, `FAILED_LOGIN_ATTEMPTS n PASSWORD_LOCK_TIME d`, `PASSWORD HISTORY n` all work on both versions (verified); 8.4 also has the `validate_password` component (policy MEDIUM, verified). `CREATE USER x` without a password is still accepted (verified) — forbid it in review.
+- Windows/Active Directory authentication → IAM database authentication, or Kerberos via AWS Directory Service where supported for the engine version.
 - Windows Authentication → AWS IAM database authentication (token-based, SSL-encrypted, 15-min token lifetime, 20 new connections/sec limit).
 - Built-in SQL Server roles (`db_datareader`, `db_owner`, etc.) have no direct equivalent; reproduce them as explicit privilege grants or IAM roles.
 - SQL Server resource governance maps to MySQL per-user resource options (`MAX_QUERIES_PER_HOUR`, etc.).

@@ -17,7 +17,8 @@ For a FUNCTION (compare the return value for the same inputs on both engines):
         description: <what this case covers>
         source_sql: "SELECT <schema>.<fn>(<real args>) FROM dual"
         target_sql: "SELECT <schema>.<fn>(<real args>)"
-        compare: scalar          # scalar | resultset
+        compare: scalar          # scalar | resultset (all rows/columns; add
+                                 # `ordered: true` only when row order is defined)
 
 For a PROCEDURE (no return value — verify the NET EFFECT is identical). YOU decide
 which probe queries capture the procedure's effect (the rows/columns/aggregates it
@@ -52,6 +53,9 @@ Rules:
   `SELECT COUNT(*) FROM <schema>.<fn>(<args>)`, plus a checksum/aggregate over a
   returned column. A declared RETURNS TABLE column type that differs from the query's
   actual type (e.g. `numeric` vs `bigint`) compiles fine and fails only at execution.
+- A routine converted to a procedure that RETURNS A RESULT SET (e.g. a PIPELINED function on
+  MySQL) is compared with a function-shape case: `compare: resultset`, source
+  `SELECT * FROM TABLE(<fn>(...))`, target `CALL <proc>(...)`.
 - If the tables an object reads are EMPTY in the sampled data, say so in `notes:` —
   the case only exercises the empty/default path (reported as LOW_COVERAGE).
 - For packages, generate cases for the public subprograms a caller would use. A package
@@ -116,3 +120,31 @@ the converted object and the relevant `sqlserver-to-postgresql-playbook` referen
 ## 6. Transaction caveat
 A stored procedure that issues its own `COMMIT`, or T-SQL DDL, cannot be rolled back —
 flag such procedures and test them only against a disposable target.
+
+---
+
+# Target-version behavior differences to test for (verified on the target version)
+
+Source: `skills/sqlserver-to-postgresql-playbook/references/target-baseline-aurora-postgresql-18.md`
+
+## Behavior differences to test for (verified on SQL Server 2022 and PG 18.6)
+
+- **Case and trailing spaces:** under `SQL_Latin1_General_CP1_CI_AS`, `'abc' = 'ABC'` and `'a ' = 'a'` are
+  true; in PostgreSQL both are false for `varchar`/`text` (`char(n)` ignores trailing spaces).
+- `LEN('ab  ')` = 2 (ignores trailing spaces); PostgreSQL `length('ab  ')` = 4. `DATALENGTH(N'ab')` = 4
+  (UTF-16) vs `octet_length('ab')` = 2.
+- `CAST('' AS int)` = 0; PostgreSQL `''::int` raises `invalid input syntax`.
+- `CAST(2.5 AS int)` = 2 and `CAST(-2.5 AS int)` = -2 (truncation); PostgreSQL `2.5::int` = 3 (rounds).
+  `ROUND(CAST(2.5 AS float), 0)` = 3; PostgreSQL `round(2.5::float8)` = 2 (banker's rounding on float).
+- `DATEDIFF(month, '2024-01-31', '2024-02-01')` = 1 (boundaries crossed); an `age()`-based rewrite gives 0.
+  `DATEDIFF(day, …)` counts midnights: use `d2::date - d1::date`.
+- `datetime` rounds to 1/300 s (`.002` → `.003`); `timestamp(3)` keeps `.002`.
+- `NULL` sorts **first** ascending in SQL Server, **last** in PostgreSQL — add `NULLS FIRST` where order matters.
+- A `UNIQUE` index allows one `NULL` in SQL Server and many in PostgreSQL (use `NULLS NOT DISTINCT`).
+- `'a' + NULL` is NULL in both (`CONCAT_NULL_YIELDS_NULL ON`); `CONCAT` skips NULLs in both. Integer `/` and
+  `%` agree (`-7/2` = -3, `7 % -3` = 1); division by zero raises in both.
+- `IIF(NULL = NULL, …)` is false in both; `GREATEST(1, NULL, 3)` = 3 in both (SQL Server 2022+).
+- `now()` / `CURRENT_TIMESTAMP` are fixed at transaction start (verified on 18.6); `GETDATE()` is evaluated per
+  statement (documented) — use `clock_timestamp()` where code measures elapsed time inside a transaction.
+- A procedure with its own `BEGIN TRAN`/`COMMIT` must keep transaction control out of functions; PL/pgSQL
+  `COMMIT` fails inside a block with an `EXCEPTION` clause.

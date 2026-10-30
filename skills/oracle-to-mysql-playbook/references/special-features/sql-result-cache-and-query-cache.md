@@ -6,6 +6,8 @@
 **Conversion category:** Manual (three-star feature compatibility; no automation) — similar functionality but the MySQL Query Cache is deprecated/off-roadmap and should not be used.
 **SCT automation:** No automation.
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): SQL_CACHE is now a syntax error, SQL_NO_CACHE a no-op, query_cache_type removed (all verified on 3 / 8.4); function result cache → memoization.
+
 ## Oracle
 
 The SQL Result Cache reduces I/O by skipping the fetch step and retrieving rows from the buffer cache. Results are stored in the SGA and reused across sessions for identical statements. Most useful in data warehouses (scan many rows, return few). Related caching categories: global temporary tables, materialized views, PL/SQL collections, the `WHEN` clause.
@@ -39,5 +41,6 @@ SELECT SQL_NO_CACHE count(*) FROM bigdata_smallres_tbl;
 ## Conversion notes
 
 - Do not migrate Oracle Result Cache usage to the MySQL Query Cache — it is deprecated/removed and off the roadmap.
-- Remove `/*+ RESULT_CACHE */` and `/*+ NO_RESULT_CACHE */` hints; the `SQL_CACHE`/`SQL_NO_CACHE` keywords have no effect on MySQL 8 / Aurora MySQL.
+- Remove `/*+ RESULT_CACHE */` and `/*+ NO_RESULT_CACHE */` hints. On Aurora MySQL 3 and 8.4, **`SELECT SQL_CACHE …` is a syntax error** and `SQL_NO_CACHE` is accepted but does nothing (both verified); `query_cache_type` no longer exists (error 1193, verified). Remove both keywords from converted SQL.
+- `DBMS_RESULT_CACHE` / `RESULT_CACHE` on PL/SQL functions → memoize in a table or in the application cache. Aurora's own query-result caching does not exist in version 3 / 8.4 (the Aurora MySQL 2 query cache is gone with MySQL 5.7).
 - Achieve equivalent performance through other means: proper indexing, summary tables, Aurora Parallel Query, the InnoDB buffer pool, or an external cache (e.g., Amazon ElastiCache) at the application layer.

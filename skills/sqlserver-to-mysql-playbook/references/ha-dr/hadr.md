@@ -3,6 +3,8 @@
 > Source: AWS SQL Server→Aurora MySQL Migration Playbook
 > URL: https://docs.aws.amazon.com/dms/latest/sql-server-to-aurora-mysql-migration-playbook/chap-sql-server-aurora-mysql.hadr.html
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Pointer to current equivalents (Global Database, Backtrack on 2/3/8.4, fast clones).
+
 **Conversion category:** N/A (infrastructure topic)
 **SCT automation:** N/A
 
@@ -26,3 +28,5 @@ transaction logs, filegroups, and backup purging manually.
   - **High availability essentials** — see `essentials.md`
 - The comparison highlights similarities and differences, emphasizing Aurora MySQL's
   managed, storage-level backup and multi-AZ clustering model.
+- Current equivalents (Aurora MySQL 3 / 8.4): Always On AGs → Aurora replicas + Global Database;
+  database snapshots → Backtrack (versions 2, 3, 8.4) or fast clones; log shipping → none needed.

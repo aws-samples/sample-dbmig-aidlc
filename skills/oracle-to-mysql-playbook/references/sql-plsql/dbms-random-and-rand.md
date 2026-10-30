@@ -6,6 +6,8 @@
 **Conversion category:** Manual (★★★ feature compatibility, no automation)
 **SCT automation:** N/A — different syntax and missing options may require code rewrite.
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Constant-seed RAND behavior (verified), RANDOM_BYTES for secure values (verified), STRING replacement.
+
 ## Oracle
 
 `DBMS_RANDOM` generates random numbers/strings in SQL or PL/SQL. Subprograms:
@@ -63,3 +65,6 @@ SELECT concat(
 
 - `RAND()` only produces numbers — random strings must be built from `MD5`/`SUBSTRING`/`CONCAT` expressions.
 - No standard-normal-distribution function in MySQL; implement manually if `NORMAL` is needed.
+- `RAND(n)` with a constant seed returns the same value every call in a statement (verified: two `RAND(1)` calls both gave the same value); Oracle `DBMS_RANDOM.SEED` seeds the session stream instead. Call `RAND(n)` once to seed and plain `RAND()` afterwards only if reproducibility matters.
+- `RAND()` is not cryptographically secure. For tokens, keys and passwords use `RANDOM_BYTES(n)` (Aurora MySQL 3 / 8.4, verified) with `HEX()` / `TO_BASE64()`, or `UUID()`.
+- `DBMS_RANDOM.STRING('X', 8)` → `UPPER(LEFT(HEX(RANDOM_BYTES(8)), 8))` (hex characters only).

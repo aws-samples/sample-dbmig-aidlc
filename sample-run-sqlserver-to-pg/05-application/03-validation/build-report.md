@@ -1,11 +1,23 @@
-# Build & validation report — .NET app on Aurora PostgreSQL
+# Build & validation report — Bob's Used Bookstore → Aurora PostgreSQL 18.6
 
-1. `dotnet build` → succeeded (net8.0; run with `DOTNET_ROLL_FORWARD=Major` on a .NET 10 host).
-2. Boot (Development profile, connection from env) → `Now listening`; EF queries against `dbo`.
-3. Found only at runtime (not by compile): `42883 boolean = integer` on `/Address` → fix #5 (app-scan
-   now reports int-on-boolean as a required fix); search for `gold` returned nothing → citext decision,
-   then `citext` in `public` not on `SearchPath=dbo` → extension moved to `dbo`.
-4. Endpoints: `/` · `/Search?SearchString=gold|GOLD|children of` (hits) · `/Search/Details/1` ·
-   `/ShoppingCart` · `/Wishlist` · `/Address` · `/Admin/Dashboard|Inventory|Offers|Orders|ReferenceData` → 200; 0 PostgreSQL errors.
+| Check | Result |
+|---|---|
+| `dotnet build` (net8.0 on a .NET 10 SDK host, `DOTNET_ROLL_FORWARD=Major`) | **pass**, 0 errors |
+| Run (Development profile, connection from the environment, bound to 127.0.0.1) | **pass** — `Now listening`; 0 PostgreSQL errors in the log |
 
-UNVERIFIED: write paths (checkout, offers) — read-only validation.
+## Verification matrix
+
+| Path | Result |
+|---|---|
+| `/` | 200 |
+| `/Search?SearchString=gold` / `GOLD` / `children of` | 200, each returns the expected book (case-insensitive via `citext` on `SearchPath=dbo`) |
+| `/Search/Details/1` | 200 |
+| `/ShoppingCart`, `/Wishlist` | 200 |
+| `/Address` (the `int` ↔ `boolean` conversion) | 200 |
+| `/Admin/Dashboard`, `/Admin/Inventory`, `/Admin/Offers`, `/Admin/Orders`, `/Admin/ReferenceData` | 200 |
+
+All required fixes were known before the first run (app-scan C1 + the previous run's findings); no runtime-only
+fix was needed this time. The app redirects HTTP to HTTPS, so the smoke run used the HTTPS listener.
+
+**UNVERIFIED:** write paths (checkout, offers) — read-only smoke.
+**Pre-existing (unchanged):** `/Authentication/Login` without `redirectUri` throws a NullReferenceException.

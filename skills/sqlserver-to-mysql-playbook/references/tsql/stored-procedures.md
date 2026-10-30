@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (Three star feature compatibility)
 **SCT automation:** Four star automation level
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Fixed the broken RETURN-value example (still T-SQL syntax); corrected the binary-logging note (affects creating functions/triggers); JSON_TABLE for TVPs (toolkit convention); verified no defaults, no named calls, no overloading, 64-char names, DEFINER behavior.
+
 ## SQL Server
 
 Stored procedures are persisted code modules run via `EXECUTE`. Multiple IN/OUT parameters; table-valued user-defined types allowed as input. `IN` is default direction; `OUT` must be explicit. Can run under any security context via `EXECUTE AS`, recompile via `RECOMPILE`, and encrypt via `ENCRYPTION`. Can serve as input to an `INSERT` (only first row evaluated). Supports a default integer output via `RETURN`, retrievable with `EXEC @Parameter = <proc>`.
@@ -80,7 +82,7 @@ EXECUTE <MyStoredProcedure>;
 
 ## MySQL
 
-Aurora MySQL stored procedures offer similar functionality, supporting security run context and IN/OUT/INOUT parameters. Stored procedures, triggers, and UDFs are collectively *stored routines*. With binary logging enabled, `SUPER` privilege is required to run stored routines — or set `log_bin_trust_function_creators` = true in the DB parameter group. Routines may contain control flow, DML, DDL, and transaction management (`START TRANSACTION`, `COMMIT`, `ROLLBACK`).
+Aurora MySQL stored procedures offer similar functionality, supporting security run context and IN/OUT/INOUT parameters. Stored procedures, triggers, and UDFs are collectively *stored routines*. *(corrected)* With binary logging enabled, **creating stored functions and triggers** that are not `DETERMINISTIC`/`NO SQL`/`READS SQL DATA` requires `log_bin_trust_function_creators` = 1 in the DB cluster parameter group (the Aurora master user has no `SUPER`; the parameter is 0 and binary logging is off by default — verified). Procedures are not affected. Functions and triggers cannot commit or run DDL (error 1422, verified). Routines may contain control flow, DML, DDL, and transaction management (`START TRANSACTION`, `COMMIT`, `ROLLBACK`).
 
 ### Syntax
 
@@ -99,16 +101,19 @@ SQL SECURITY { DEFINER | INVOKER }
 
 ```sql
 -- Replace RETURN value with OUT parameter
-CREATE PROCEDURE ProcessImportBatch()
-IN @BatchID INT, OUT @ErrorNumber INT
+-- (the original example kept T-SQL syntax: @-prefixed parameters outside the parentheses, no semicolons)
+CREATE PROCEDURE ProcessImportBatch(IN BatchID INT, OUT ErrorNumber INT)
 BEGIN
-    CALL Step1 (@BatchID)
-    CALL Step2 (@BatchID)
-    CALL Step3 (@BatchID)
-IF error_count > 1
-    SET @ErrorNumber = -1 -- indicate special condition
-END
-
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        GET DIAGNOSTICS CONDITION 1 ErrorNumber = MYSQL_ERRNO;
+    END;
+    SET ErrorNumber = 0;
+    CALL Step1(BatchID);
+    CALL Step2(BatchID);
+    CALL Step3(BatchID);
+END;
+-- CALL ProcessImportBatch(42, @err); SELECT @err;
 -- Replace table-valued parameter with a LOOP cursor over a source table
 CREATE PROCEDURE LoopItems()
 BEGIN
@@ -141,10 +146,20 @@ CALL LoopItems();
 - Parameter direction: `OUTPUT` → `OUT`; use `INOUT` for bidirectional. `IN` is default in both.
 - Security context: `EXECUTE AS 'user'` → `DEFINER = 'user'` + `SQL SECURITY DEFINER`; `CALLER` → `SQL SECURITY INVOKER`; `SELF` → `DEFINER = CURRENT_USER` + `SQL SECURITY DEFINER`. `OWNER` must be named explicitly.
 - Not supported in Aurora MySQL: `WITH ENCRYPTION`, `WITH RECOMPILE`, table-valued parameters, `INSERT…EXEC`, `RETURN <int>`.
-  - Table-valued params → use a source/temp table + cursor loop.
+  - Table-valued params → a **JSON parameter** expanded with `JSON_TABLE(p_items, '$[*]' COLUMNS (…))` inside the procedure (set-based; MySQL 8 — the toolkit's preferred mapping, `engines/sqlserver-to-mysql/checks/non-portable-constructs.md`), or a temporary table filled by the caller.
   - `INSERT…EXEC` → use tables, or pass CSV/XML/JSON strings and parse before insert.
   - `RETURN` value → use a standard `OUT` parameter.
-- `LOAD DATA` is not allowed inside stored procedures (SQL Server allows `BULK INSERT`).
+- `LOAD DATA` is not allowed inside stored procedures (SQL Server allows `BULK INSERT`); `LOAD DATA FROM S3` must also run outside routines.
+
+Verified on Aurora MySQL 3.13 and 8.4.8:
+- **No parameter defaults** (`IN a INT DEFAULT 1` is a syntax error) — every caller passes all arguments; T-SQL optional parameters → pass `NULL` and `COALESCE` inside.
+- **No named-parameter calls** (`EXEC p @x = 1`) — `CALL p(1)` positionally; reorder call sites.
+- **No overloading** (error 1304) and routine names ≤ **64 characters** (error 1059).
+- Result sets: a procedure returns each `SELECT` as a result set to the caller, like SQL Server; `INSERT … EXEC p` → have `p` write into a temporary table that the caller reads (temporary tables persist for the session).
+- `OUT`/`INOUT` arguments must be user or local variables: `CALL p(42, @err); SELECT @err;`.
+- `SET NOCOUNT ON` → remove. `@@ROWCOUNT` → `ROW_COUNT()` immediately after the DML.
+- `EXECUTE AS OWNER` → `SQL SECURITY DEFINER` with a `DEFINER` account that exists; the master user can set any `DEFINER` (verified), and on 8.4 that needs `SET_ANY_DEFINER`.
+- Recursion is off (`max_sp_recursion_depth` = 0); raise it per session for recursive procedures.
 
 | Feature | SQL Server | Aurora MySQL | Workaround |
 |---|---|---|---|
@@ -153,7 +168,8 @@ CALL LoopItems();
 | Encryption | `WITH ENCRYPTION` | Not supported | — |
 | Parameter direction | `IN`, `OUT\|OUTPUT` | `IN`, `OUT`, `INOUT` | `OUT` for `OUTPUT`; `INOUT` bidirectional |
 | Recompile | `WITH RECOMPILE` | Not supported | — |
-| Table-valued params | declared table types | Not supported | source table + cursor loop |
-| `INSERT…EXEC` | supported | Not supported | tables or CSV/XML/JSON parse |
+| Table-valued params | declared table types | Not supported | JSON parameter + `JSON_TABLE`, or a temporary table |
+| `INSERT…EXEC` | supported | Not supported | procedure writes to a temporary table |
+| Parameter defaults / named calls | supported | Not supported | pass every argument positionally |
 | Additional | `BULK INSERT` | `LOAD DATA` not allowed in procedures | — |
 | `RETURN` value | `RETURN <int>` | Not supported | use `OUT` parameter |

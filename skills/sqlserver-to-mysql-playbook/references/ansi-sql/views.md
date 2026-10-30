@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (Four star feature compatibility)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Fixed the example (missing FROM); verified CHECK OPTION, join-view and aggregate-view limits, CTEs in views; SCHEMABINDING and indexed-view replacements.
+
 **Key differences:** Minor syntax and handling differences. Indexes, triggers, and temporary views aren't supported.
 
 ## SQL Server
@@ -85,6 +87,7 @@ CREATE VIEW TotalSales
 AS
 SELECT Customer,
     SUM(TotalAmount) AS CustomerTotalAmount
+FROM Orders                      -- the original omitted the FROM clause
 GROUP BY Customer;
 ```
 
@@ -104,3 +107,6 @@ GROUP BY Customer;
 - `ORDER BY` allowed in Aurora MySQL view definition but ignored if outer SELECT has its own.
 - Aurora MySQL has explicit security context (`DEFINER`/`SQL SECURITY`) to work around ownership-chain permissions.
 - Unlike SQL Server, an Aurora MySQL view can invoke functions that change the database.
+- Verified on 3.13 and 8.4.8: `WITH CHECK OPTION` is enforced (error 1369); join views update only one base table per statement (error 1393); aggregate views are not updatable (1288); CTEs inside views work; `SELECT *` is expanded at creation, so recreate views after base-table changes (`sp_refreshview` equivalent).
+- `WITH SCHEMABINDING` has no equivalent: dropping a referenced table leaves an invalid view that fails at query time (`CHECK TABLE v` reports it).
+- Indexed views → summary tables maintained by triggers or events (see `../physical-storage/storage.md`), or a zero-ETL integration to Redshift for reporting.

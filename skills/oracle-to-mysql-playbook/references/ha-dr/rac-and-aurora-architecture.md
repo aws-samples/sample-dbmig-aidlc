@@ -6,6 +6,8 @@
 **Conversion category:** N/A (infrastructure / HA topic — three-star feature compatibility)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): One writer per cluster on 3 / 8.4 (multi-master retired), local write forwarding, custom endpoints for RAC services, AWS driver wrappers / RDS Proxy for FAN/TAF.
+
 ## Oracle
 
 Oracle Real Application Clusters (RAC) lets multiple Oracle instances access a single database in Active-Active mode, providing high availability, scalability, and load balancing.
@@ -77,3 +79,7 @@ While Aurora scales out reads (not writes) and RAC can scale both, most OLTP wor
 - RAC concepts with no Aurora equivalent: GCS/GES cache fusion, interconnect, SCAN IP, ASM. Map SCAN IP → cluster endpoint, read load balancing → reader endpoint.
 - Aurora reduces operational overhead (automatic storage growth, managed failover) and total cost of ownership.
 - See [Amazon Aurora as an Alternative to Oracle RAC](https://aws.amazon.com/blogs/database/amazon-aurora-as-an-alternative-to-oracle-rac).
+- Still one writer per cluster on Aurora MySQL 3 and 8.4 (multi-master was retired; Aurora Limitless Database is PostgreSQL-only). Write scale-out needs application sharding across clusters (see `../physical-storage/sharding.md`).
+- Readers can accept writes through **local write forwarding** (supported on both versions), which helps applications that cannot split read and write connections — but writes still execute on the single writer.
+- **Custom endpoints** group specific readers (for example, reporting readers) — the analog of RAC services pinned to certain nodes.
+- Application failover: use the AWS JDBC/Python/Go wrappers (fast failover plugin, topology awareness) or RDS Proxy rather than RAC FAN/TAF. DNS-based failover alone takes longer because of DNS TTLs.

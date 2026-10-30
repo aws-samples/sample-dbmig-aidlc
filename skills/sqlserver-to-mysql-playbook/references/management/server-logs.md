@@ -6,6 +6,8 @@
 **Conversion category:** Automatic (Three star feature compatibility)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): log_output default is FILE (corrected, verified); binlog off by default, CloudWatch export types, error-log path, Advanced Auditing — verified.
+
 ## SQL Server
 
 SQL Server logs system and user events to the **SQL Server Error Log** and the **Windows Application Log** (recovery, kernel, security, maintenance, and general server messages). The Windows Application Log contains events from all Windows applications including SQL Server and SQL Server Agent.
@@ -38,8 +40,8 @@ Log-control parameters (in the DB parameter group):
 * `long_query_time` — seconds; minimum runtime for a query to be logged (default 10, min 0).
 * `log_queries_not_using_indexes` — `1` to log all queries not using indexes to the slow query log (default `0`).
 * `log_output`:
-  * **TABLE** — general queries → `mysql.general_log`, slow queries → `mysql.slow_log` (default).
-  * **FILE** — both logs to the file system; rotated hourly.
+  * **TABLE** — general queries → `mysql.general_log`, slow queries → `mysql.slow_log`.
+  * **FILE** — *(corrected)* the **default** on Aurora MySQL 3 and 8.4 (verified); required for CloudWatch Logs export; rotated hourly.
   * **NONE** — disable logging.
 
 ### Example (view error logs in the RDS console)
@@ -51,4 +53,7 @@ Log-control parameters (in the DB parameter group):
 - AWS service replacement: SSMS Log Viewer / Windows Application Log → **Amazon RDS console / RDS API / AWS CLI / AWS SDKs**.
 - Slow query and general logs are off by default; enable via DB parameter group (`slow_query_log`, `general_log`, `long_query_time`, `log_output`).
 - Logs can be written to tables (`mysql.general_log`, `mysql.slow_log`) and queried with SQL, or written to rotating files.
-- Use `mysqlbinlog` to download binary logs.
+- Use `mysqlbinlog` to download binary logs. Binary logging is **off by default** (`log_bin` = 0, verified); enable `binlog_format` in the cluster parameter group only when needed.
+- Export logs to **CloudWatch Logs** (`--cloudwatch-logs-export-configuration EnableLogTypes=error,slowquery,general,audit`); export types available on both versions: `audit`, `error`, `general`, `iam-db-auth-error`, `instance`, `slowquery` (verified with `describe-db-engine-versions`).
+- Error-log path is managed (`/rdsdbdata/log/error/mysql-error.log`, verified) and `log_error_verbosity` is 3 by default.
+- SQL Server Audit → Aurora **Advanced Auditing** (`server_audit_logging` = 1, off by default, verified) exported as the `audit` log type.

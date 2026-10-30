@@ -1,0 +1,60 @@
+object: uspUpdateEmployeeLogin
+schema: HUMANRESOURCES
+type: procedure
+notes: >
+  MANUAL reconversion (DMS SC left the UPDATE commented out: the converted procedure did
+  nothing). Real employee 4 (rob0, '/1/1/1/', level 3) is moved in the org tree. The
+  OrganizationLevel probe also proves the Employee reconversion: on the source it is the
+  computed GetLevel(); on the target the STORED generated column.
+cases:
+- id: c1
+  description: move employee 4 to '/1/1/5/' (same level) and change the job title
+  call_source: >
+    EXEC HumanResources.uspUpdateEmployeeLogin @BusinessEntityID = 4, @OrganizationNode = '/1/1/5/',
+         @LoginID = N'adventure-works\rob0', @JobTitle = N'Lead Tool Designer',
+         @HireDate = '2007-12-05', @CurrentFlag = 1
+  call_target: >
+    CALL adventureworks_humanresources.uspupdateemployeelogin(4, '/1/1/5/', 'adventure-works\rob0',
+         'Lead Tool Designer', '2007-12-05', 1)
+  verify:
+  - name: jobtitle
+    source_sql: SELECT JobTitle FROM HumanResources.Employee WHERE BusinessEntityID = 4
+    target_sql: SELECT jobtitle FROM adventureworks_humanresources.employee WHERE businessentityid = 4
+  - name: node
+    source_sql: SELECT OrganizationNode.ToString() FROM HumanResources.Employee WHERE BusinessEntityID = 4
+    target_sql: SELECT organizationnode FROM adventureworks_humanresources.employee WHERE businessentityid = 4
+  - name: level
+    source_sql: SELECT OrganizationLevel FROM HumanResources.Employee WHERE BusinessEntityID = 4
+    target_sql: SELECT organizationlevel FROM adventureworks_humanresources.employee WHERE businessentityid = 4
+- id: c2
+  description: promote employee 4 one level up ('/1/9/'), so the computed level changes 3 -> 2
+  call_source: >
+    EXEC HumanResources.uspUpdateEmployeeLogin @BusinessEntityID = 4, @OrganizationNode = '/1/9/',
+         @LoginID = N'adventure-works\rob0', @JobTitle = N'Senior Tool Designer',
+         @HireDate = '2007-12-05', @CurrentFlag = 1
+  call_target: >
+    CALL adventureworks_humanresources.uspupdateemployeelogin(4, '/1/9/', 'adventure-works\rob0',
+         'Senior Tool Designer', '2007-12-05', 1)
+  verify:
+  - name: node
+    source_sql: SELECT OrganizationNode.ToString() FROM HumanResources.Employee WHERE BusinessEntityID = 4
+    target_sql: SELECT organizationnode FROM adventureworks_humanresources.employee WHERE businessentityid = 4
+  - name: level
+    source_sql: SELECT OrganizationLevel FROM HumanResources.Employee WHERE BusinessEntityID = 4
+    target_sql: SELECT organizationlevel FROM adventureworks_humanresources.employee WHERE businessentityid = 4
+- id: c3
+  description: duplicate LoginID (david0 belongs to employee 16) -> unique violation, row unchanged, error logged
+  call_source: >
+    EXEC HumanResources.uspUpdateEmployeeLogin @BusinessEntityID = 4, @OrganizationNode = '/1/1/1/',
+         @LoginID = N'adventure-works\david0', @JobTitle = N'Senior Tool Designer',
+         @HireDate = '2007-12-05', @CurrentFlag = 1
+  call_target: >
+    CALL adventureworks_humanresources.uspupdateemployeelogin(4, '/1/1/1/', 'adventure-works\david0',
+         'Senior Tool Designer', '2007-12-05', 1)
+  verify:
+  - name: login
+    source_sql: SELECT LoginID FROM HumanResources.Employee WHERE BusinessEntityID = 4
+    target_sql: SELECT loginid FROM adventureworks_humanresources.employee WHERE businessentityid = 4
+  - name: errorlog_rows
+    source_sql: SELECT COUNT(*) FROM dbo.ErrorLog
+    target_sql: SELECT count(*) FROM adventureworks_dbo.errorlog

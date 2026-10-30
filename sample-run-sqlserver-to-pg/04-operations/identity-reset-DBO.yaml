@@ -1,7 +1,7 @@
 schema: DBO
 target_schema: dbo
-generated_at: '2026-09-28T16:26:39Z'
-applied: false
+generated_at: '2026-10-30T07:44:54Z'
+applied: true
 identity_columns:
 - table: address
   column: id
@@ -9,6 +9,7 @@ identity_columns:
   max_id: null
   next_before: 1
   status_before: OK
+  next_after: 1
   status: OK
 - table: author
   column: businessentityid
@@ -16,6 +17,7 @@ identity_columns:
   max_id: 290
   next_before: 291
   status_before: OK
+  next_after: 291
   status: OK
 - table: billofmaterials
   column: billofmaterialsid
@@ -23,6 +25,7 @@ identity_columns:
   max_id: 982
   next_before: 983
   status_before: OK
+  next_after: 983
   status: OK
 - table: book
   column: id
@@ -30,6 +33,7 @@ identity_columns:
   max_id: 8
   next_before: 9
   status_before: OK
+  next_after: 9
   status: OK
 - table: customer
   column: id
@@ -37,6 +41,7 @@ identity_columns:
   max_id: 1
   next_before: 2
   status_before: OK
+  next_after: 2
   status: OK
 - table: databaselog
   column: databaselogid
@@ -44,13 +49,15 @@ identity_columns:
   max_id: 30
   next_before: 31
   status_before: OK
+  next_after: 31
   status: OK
 - table: errorlog
   column: errorlogid
   sequence: dbo.errorlog_errorlogid_seq
   max_id: null
-  next_before: 1
+  next_before: 7
   status_before: OK
+  next_after: 1
   status: OK
 - table: offer
   column: id
@@ -58,6 +65,7 @@ identity_columns:
   max_id: null
   next_before: 1
   status_before: OK
+  next_after: 1
   status: OK
 - table: order
   column: id
@@ -65,6 +73,7 @@ identity_columns:
   max_id: null
   next_before: 1
   status_before: OK
+  next_after: 1
   status: OK
 - table: orderitem
   column: id
@@ -72,6 +81,7 @@ identity_columns:
   max_id: null
   next_before: 1
   status_before: OK
+  next_after: 1
   status: OK
 - table: product
   column: productid
@@ -79,6 +89,7 @@ identity_columns:
   max_id: 999
   next_before: 1000
   status_before: OK
+  next_after: 1000
   status: OK
 - table: referencedata
   column: id
@@ -86,6 +97,7 @@ identity_columns:
   max_id: 24
   next_before: 25
   status_before: OK
+  next_after: 25
   status: OK
 - table: shoppingcart
   column: id
@@ -93,6 +105,7 @@ identity_columns:
   max_id: null
   next_before: 1
   status_before: OK
+  next_after: 1
   status: OK
 - table: shoppingcartitem
   column: id
@@ -100,6 +113,7 @@ identity_columns:
   max_id: null
   next_before: 1
   status_before: OK
+  next_after: 1
   status: OK
 standalone_sequences:
   source: []

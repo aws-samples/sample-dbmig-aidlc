@@ -2,13 +2,15 @@
 
 Reference files distilled from the AWS *Oracle Database 19c to Amazon Aurora MySQL Migration Playbook*, HA/DR chapter. Each file maps an Oracle HA/DR or backup/load capability to its Aurora MySQL equivalent, preserving the original code and command examples.
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29). Baseline: `../target-baseline-aurora-mysql.md`.
+
 | Reference | Topic | Conversion category |
 |---|---|---|
-| [active-data-guard-and-replicas.md](active-data-guard-and-replicas.md) | Oracle Active Data Guard → Aurora read replicas / Multi-AZ | N/A (HA infra) |
+| [active-data-guard-and-replicas.md](active-data-guard-and-replicas.md) | Oracle Active Data Guard → Aurora replicas, Global Database, write forwarding | N/A (HA infra) |
 | [rac-and-aurora-architecture.md](rac-and-aurora-architecture.md) | Oracle RAC → Aurora MySQL cluster architecture | N/A (HA infra) |
-| [aurora-mysql-serverless.md](aurora-mysql-serverless.md) | Aurora MySQL Serverless as a RAC alternative | N/A (deployment option) |
+| [aurora-mysql-serverless.md](aurora-mysql-serverless.md) | Aurora Serverless **v2** (v1, described originally, is retired) | N/A (deployment option) |
 | [traffic-director-and-rds-proxy.md](traffic-director-and-rds-proxy.md) | Oracle CMAN Traffic Director → Amazon RDS Proxy | Manual (no automation) |
-| [data-pump-and-mysqldump.md](data-pump-and-mysqldump.md) | Oracle Data Pump (expdp/impdp) → mysqldump / mysql / mysqlimport | Manual (non-compatible tool) |
+| [data-pump-and-mysqldump.md](data-pump-and-mysqldump.md) | Oracle Data Pump → MySQL Shell dump/load utilities, mysqldump, snapshots/clones | Manual (non-compatible tool) |
 | [flashback-database-and-snapshots.md](flashback-database-and-snapshots.md) | Oracle Flashback Database → snapshots / PITR / Backtrack | Manual (RDS-managed) |
 | [flashback-table-and-snapshots.md](flashback-table-and-snapshots.md) | Oracle Flashback Table → snapshots + selective table copy | Manual (RDS-managed) |
 | [rman-and-rds-snapshots.md](rman-and-rds-snapshots.md) | Oracle RMAN → Amazon RDS snapshots / automated backups | Manual (RDS-managed) |
@@ -16,9 +18,9 @@ Reference files distilled from the AWS *Oracle Database 19c to Amazon Aurora MyS
 
 ## Key themes
 - **No SCT automation** applies to HA/DR topics — these are architectural and operational substitutions, not schema/code translations.
-- **Backup & recovery** (RMAN, Flashback Database/Table) is replaced by RDS-managed snapshots, automated backups, point-in-time restore, and (Aurora MySQL 5.6) Backtrack. Restores generally create a **new cluster/instance** rather than rewinding in place.
-- **Clustering & replication** (RAC, ADG) map to Aurora's single-primary + up-to-15-read-replica model over distributed 6-copy/3-AZ storage; Aurora scales out reads, not writes.
+- **Backup & recovery** (RMAN, Flashback Database/Table) is replaced by RDS-managed snapshots, automated backups, point-in-time restore, and Backtrack (Aurora MySQL 2, 3 and 8.4; `aws rds backtrack-db-cluster`). Restores generally create a **new cluster/instance** rather than rewinding in place.
+- **Clustering & replication** (RAC, ADG) map to Aurora's single-primary + up-to-15-read-replica model over distributed 6-copy/3-AZ storage; Aurora scales out reads, not writes (one writer; multi-master is retired). Cross-Region DR → Aurora Global Database.
 - **Connection management** (Traffic Director/CMAN) maps to Amazon RDS Proxy.
-- **Bulk load/unload tools** (Data Pump, SQL*Loader) are not cross-compatible; use mysqldump/mysql/mysqlimport, `LOAD DATA`, or Aurora's `LOAD DATA FROM S3`. For cross-engine data movement, use AWS DMS.
+- **Bulk load/unload tools** (Data Pump, SQL*Loader) are not cross-compatible; use MySQL Shell dump/load utilities, mysqldump/mysql, `LOAD DATA`, or Aurora's `LOAD DATA FROM S3`. For cross-engine data movement, use AWS DMS.
 
 > Source playbook chapter root: https://docs.aws.amazon.com/dms/latest/oracle-to-aurora-mysql-migration-playbook/chap-oracle-aurora-mysql.html

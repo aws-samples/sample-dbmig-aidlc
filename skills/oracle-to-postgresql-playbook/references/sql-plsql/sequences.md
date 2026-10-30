@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (Four-star feature compatibility, four-star automation; only minor syntax differences for a few options)
 **SCT automation:** Four-star automation level; SCT action code index → Sequences
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): per-session `CACHE` semantics, bigint `MAXVALUE` limit (verified), `NOCACHE` syntax error (verified), unlogged sequences, `uuidv7()` alternative to scalable sequences, `setval` semantics.
+
 ## Oracle
 
 Sequences are independent objects that generate unique numeric identifiers (often PK values). The same sequence can feed multiple tables. Concurrent users may see gaps. Oracle 18c adds **scalable sequences** (`SCALE`/`NOSCALE`, with `EXTEND`/`NOEXTEND`) optimized for high concurrency.
@@ -47,7 +49,7 @@ CREATE SEQUENCE SESSION_SEQ GLOBAL;   -- global is default
 
 ## PostgreSQL
 
-PostgreSQL sequences serve the same purpose and `CREATE SEQUENCE` is mostly Oracle-compatible. A sequence is owned by its creator. No native scalable-sequence feature (18c) — high-concurrency needs require app-layer changes/other services.
+PostgreSQL sequences serve the same purpose and `CREATE SEQUENCE` is mostly Oracle-compatible. A sequence is owned by its creator. No native scalable-sequence feature (18c). For high-concurrency keys that must not be a hot spot, use `uuidv7()` (PG 18, time-ordered UUID) or increase `CACHE`.
 
 Synopsis:
 
@@ -64,7 +66,10 @@ Parameter notes:
 - `TEMPORARY`/`TEMP` — session-scoped sequence, dropped at session end (maps to Oracle `SESSION` sequence).
 - `IF NOT EXISTS`, `AS data_type` (PG 10+: `smallint`/`integer`/`bigint`(default)).
 - `INCREMENT BY` default 1; `START WITH` default 1.
-- `NOCACHE` is NOT supported; omitting `CACHE` = no pre-cache (equivalent to Oracle `NOCACHE`); min CACHE value is 1.
+- `NOCACHE` is NOT supported (syntax error, verified); omitting `CACHE` = no pre-cache (equivalent to Oracle `NOCACHE`); min CACHE value is 1.
+- **`CACHE` semantics differ:** Oracle caches per instance, while PostgreSQL caches **per session**. With `CACHE 20`, two sessions get interleaved blocks (1–20, 21–40, …), so values are not ordered by time across sessions, and unused cached values are lost at disconnect (gaps). Oracle's default is `CACHE 20`; PostgreSQL's is `1`. Keep `CACHE 1` unless sequence contention is measured.
+- **Range:** PostgreSQL sequences are at most `bigint` (max 9223372036854775807). Oracle's default `MAXVALUE` of 28 nines fails (`out of range for type bigint`, verified). Drop `MAXVALUE` values above the bigint limit (use `NO MAXVALUE`).
+- `UNLOGGED` sequences (PG 15+, verified) suit unlogged staging tables.
 - `OWNED BY` associates sequence with a column (no Oracle equivalent); dropping such a sequence errors due to the association.
 
 ```sql
@@ -110,11 +115,15 @@ CREATE TABLE SERIAL_SEQ_TST(COL1 SERIAL PRIMARY KEY, COL2 VARCHAR(10));
 | `CACHE`/`NOCACHE` | Partial | `NOCACHE` unsupported but default behavior identical; `CACHE` compatible |
 | 12c default-via-sequence | Supported | `DEFAULT NEXTVAL('SEQ_1')` |
 | 12c session/global | Supported | use `TEMPORARY` for session sequence |
-| 12c identity columns | Supported | use `SERIAL` (or `GENERATED … AS IDENTITY`) |
+| 12c identity columns | Supported | use `GENERATED … AS IDENTITY` (preferred over `SERIAL`) |
+| `MAXVALUE` > 9.2e18 | Not supported | clamp to `NO MAXVALUE` (bigint) |
+| `CACHE n` | Partial | per-session cache, not per-instance |
 
 ## Conversion notes
 
 - Mechanical syntax rewrites: `NOMAXVALUE`→`NO MAXVALUE`, `NOMINVALUE`→`NO MINVALUE`, `NOCYCLE`→`NO CYCLE`, drop `NOCACHE` (default behavior matches).
 - `seq.NEXTVAL`/`seq.CURRVAL` (Oracle dot syntax) → function calls `NEXTVAL('seq')`/`CURRVAL('seq')`. Also `SETVAL('seq', n)` exists in PG.
 - Oracle 18c scalable sequences (`SCALE`) have no PG equivalent — redesign for high concurrency if needed.
-- After data loads with explicit IDs, reset sequences with `SETVAL` to avoid duplicate-key errors.
+- After data loads with explicit IDs, reset sequences with `SETVAL` to avoid duplicate-key errors. Use `setval('seq', n, false)` so the next `nextval` returns `n` (verified), or `setval('seq', max_id)` so it returns `max_id + 1`.
+- Oracle 12c `DEFAULT seq.NEXTVAL` → `DEFAULT nextval('seq')`. When the sequence feeds a single column, an identity column is usually the cleaner target.
+- Sequences used by several tables stay as standalone sequences (no `OWNED BY`).

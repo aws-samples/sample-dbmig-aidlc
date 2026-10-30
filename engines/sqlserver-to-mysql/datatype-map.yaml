@@ -116,7 +116,7 @@ gotchas:
   - "IDENTITY -> AUTO_INCREMENT (one per table); SCOPE_IDENTITY()/@@IDENTITY -> LAST_INSERT_ID()."
   - "No CLUSTERED index concept; PK is a normal index (InnoDB clusters on PK physically)."
   - "GETDATE()->NOW(), ISNULL->IFNULL/COALESCE, LEN->CHAR_LENGTH, TOP n->LIMIT, + concat->CONCAT()."
-  - "No MERGE -> INSERT ... ON DUPLICATE KEY UPDATE; no sequences pre-8.0 -> AUTO_INCREMENT."
+  - "No MERGE -> INSERT ... ON DUPLICATE KEY UPDATE; no sequences in any MySQL version -> AUTO_INCREMENT or a sequence table."
   - "T-SQL procedures/functions/triggers -> MySQL stored programs; TRY/CATCH -> DECLARE HANDLER."
   - "money/datetime rounding; rowversion is NOT a timestamp; bit vs tinyint(1)."
   - "Case-insensitivity differs; choose collation (e.g. utf8mb4_0900_ai_ci) to match app expectations."

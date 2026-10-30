@@ -6,6 +6,8 @@
 **Conversion category:** Blocked (One star feature compatibility — not supported, no generic workaround)
 **SCT automation:** No automation
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Still no synonyms; updatable view synonyms (verified), database-qualified names, wrapper routines.
+
 ## SQL Server
 
 Synonyms are alternative identifiers for other database objects (the *base object*), which may reside in the same database, another database on the instance, or a remote server. They provide an abstraction layer isolating application code from changes to the base object's name or location — often used to simplify four-part identifiers when accessing remote instances (e.g. transparently redirecting from Server A to Server B without code changes).
@@ -50,3 +52,6 @@ Partial workarounds:
 
 - No direct equivalent — abstraction must be rebuilt with views and/or stored routines.
 - Synonyms are often paired with linked servers, which Aurora MySQL also does not support — cross-instance access must be handled at the application level.
+- Still no `CREATE SYNONYM` on Aurora MySQL 3 / 8.4. A single-table view is updatable, so `INSERT`/`UPDATE`/`DELETE` through a "synonym view" work (verified on both versions); recreate the view after base-table column changes (`SELECT *` is expanded at creation).
+- Synonyms pointing to another database in the same instance → a database-qualified name (`otherdb.table`) or a view in the local database; cross-database joins work in one cluster.
+- Synonyms for procedures/functions → wrapper routines that `CALL`/return the target (no overloading or defaults, see `stored-procedures.md`).

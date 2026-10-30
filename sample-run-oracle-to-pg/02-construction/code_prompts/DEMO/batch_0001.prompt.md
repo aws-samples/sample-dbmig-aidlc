@@ -12,11 +12,11 @@
 Shared code context for this run: `migrations/<project>/02-construction/_context-code.md`. Read it once per session if you have not already — it holds the customer-specific rules (highest precedence), datatype map, engine checks and playbook index this task relies on. Do not skip it.
 
 === TASK ===
-Convert the following Oracle stored code object to PostgreSQL (procedural SQL — e.g. PL/pgSQL). Return only valid PostgreSQL, ready to execute. Packages/modules have no direct equivalent: map each routine to its own function/procedure. Note any construct that needs human review in a SQL comment. Qualify every created object with the target schema `demo` (derived from the source schema — do NOT use the connection's database/catalog name for qualification). Each object below is independent: convert each one and save it to its own output file (listed in the header).
+Convert the following Oracle stored code object to PostgreSQL (PL/pgSQL). Return only valid PostgreSQL, ready to execute. Packages/modules have no direct equivalent: map each routine to its own function/procedure. Note any construct that needs human review in a SQL comment. Qualify every created object with the target schema `demo` (derived from the source schema — do NOT use the connection's database/catalog name for qualification). Each object below is independent: convert each one and save it to its own output file (listed in the header).
 
-=== CONSTRUCTS DETECTED IN THIS OBJECT (apply the matching guidance in the context) ===
-- anchored types → explicit target types or table rowtype
-- DECODE/NVL → CASE/COALESCE (NULL-safe comparison)
+=== CONSTRUCTS DETECTED IN THIS PROMPT'S SOURCE (apply the matching guidance; open the named playbook file when the context is not enough, and cite it in the conversion log) ===
+- anchored types → explicit target types or table rowtype — see `skills/oracle-to-postgresql-playbook/references/sql-plsql/procedures-and-functions.md`
+- DECODE/NVL → CASE/COALESCE (NULL-safe comparison) — see `skills/oracle-to-postgresql-playbook/references/sql-plsql/single-row-and-aggregate-functions.md`
 
 --- SOURCE (FUNCTION) — DEMO.CALCULATE_DISCOUNT_PCT ---
 CREATE OR REPLACE EDITIONABLE FUNCTION "DEMO"."CALCULATE_DISCOUNT_PCT" (

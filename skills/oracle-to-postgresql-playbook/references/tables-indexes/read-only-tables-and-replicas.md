@@ -6,6 +6,8 @@
 **Conversion category:** Manual (three-star feature compatibility)
 **SCT automation:** No automation. N/A.
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): `default_transaction_read_only` is not a security boundary, privilege-based enforcement, per-partition triggers, `EXECUTE FUNCTION`.
+
 ## Oracle
 Beginning with Oracle 11g, tables can be marked read-only to block DML. Before 11g the only option was restricting privileges to `SELECT` (owner could still write).
 
@@ -41,7 +43,7 @@ CREATE TABLE EMP_READ_ONLY (
   EMP_ID NUMERIC PRIMARY KEY,
   EMP_FULL_NAME VARCHAR(60) NOT NULL);
 
-CREATE USER aws_readonly PASSWORD 'aws_readonly';
+CREATE USER aws_readonly PASSWORD '<from Secrets Manager>';
 ALTER USER aws_readonly SET DEFAULT_TRANSACTION_READ_ONLY=ON;
 GRANT SELECT ON EMP_READ_ONLY TO aws_readonly;
 
@@ -76,10 +78,13 @@ $$ language 'plpgsql';
 CREATE TRIGGER EMP_READONLY_TRIGGER
   BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE
   ON EMP_READ_ONLY FOR EACH STATEMENT
-  EXECUTE PROCEDURE READONLY_TRIGGER_FUNCTION();
+  EXECUTE FUNCTION READONLY_TRIGGER_FUNCTION();   -- EXECUTE PROCEDURE is the legacy spelling
 ```
 
 ## Conversion notes
 - No native read-only table/partition setting in PostgreSQL — choose user/role, database, or trigger workaround based on granularity needed.
 - Role/database approaches are coarse-grained (per-session/per-database); the trigger approach gives per-table control and a clear error message.
+- **`default_transaction_read_only` is not a security control.** Any session can run `SET default_transaction_read_only = off` or `BEGIN READ WRITE` and then write. Real enforcement is **privileges**: grant only `SELECT` (or `pg_read_all_data`) and revoke `INSERT/UPDATE/DELETE/TRUNCATE`. The table owner and `rds_superuser` members bypass both, so the trigger is the only option that also stops the owner (until someone disables it).
+- **Read-only partitions** (Oracle 12.2): put the statement-level trigger on the individual partition. Triggers on a partition fire for DML routed through the parent.
+- PostgreSQL 18 has no `ALTER TABLE … READ ONLY`. Check for it in later major versions before an upgrade.
 - For minimal-downtime migration, Oracle read-only tables/partitions support ongoing replication from source, while Aurora PostgreSQL **read replicas** provide read scaling on the target.

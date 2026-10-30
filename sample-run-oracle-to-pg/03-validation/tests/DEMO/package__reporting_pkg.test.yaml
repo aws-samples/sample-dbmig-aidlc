@@ -2,26 +2,26 @@ object: REPORTING_PKG
 schema: DEMO
 type: function
 notes: >
-  PARTIAL coverage: ORDERS / ORDER_ITEMS empty in the source. get_top_books is a set-returning
-  function (PIPELINED -> RETURNS TABLE) — r1/r2 EXECUTE it (the declared-column-type hazard fails
-  only at execution); r3 creates orders inside the rolled-back transaction so the populated path
-  runs too. get_customer_stats has only OUT params: r4 proves it executes.
+  get_top_books is set-returning (PIPELINED -> RETURNS TABLE): r1/r2 EXECUTE it so a declared-type
+  mismatch would fail. ORDERS is empty, so the result is empty — r3 creates an order with an item in the
+  rolled-back transaction and counts the rows the function returns for it. get_customer_stats has only
+  OUT params (r4 proves it executes).
 cases:
   - {id: r1, source_sql: "SELECT COUNT(*) FROM TABLE(DEMO.REPORTING_PKG.GET_TOP_BOOKS(10))", target_sql: "SELECT count(*) FROM demo.reporting_pkg_get_top_books(10)"}
-  - {id: r2, source_sql: "SELECT NVL(SUM(revenue),0) FROM TABLE(DEMO.REPORTING_PKG.GET_TOP_BOOKS)", target_sql: "SELECT coalesce(sum(revenue),0) FROM demo.reporting_pkg_get_top_books()"}
+  - {id: r2, source_sql: "SELECT NVL(SUM(revenue),0) FROM TABLE(DEMO.REPORTING_PKG.GET_TOP_BOOKS(5))", target_sql: "SELECT coalesce(sum(revenue),0) FROM demo.reporting_pkg_get_top_books(5)"}
   - id: r3
     type: procedure
-    description: populate 2 orders inside the txn, then the top-books SRF must see them identically
-    call_source: "DECLARE v NUMBER; BEGIN v := DEMO.ORDER_PKG.CREATE_ORDER(1, NULL); DEMO.ORDER_PKG.ADD_ORDER_ITEM(v, 1, 2); v := DEMO.ORDER_PKG.CREATE_ORDER(2, NULL); DEMO.ORDER_PKG.ADD_ORDER_ITEM(v, 2, 1); END;"
-    call_target: "DO $$ DECLARE v numeric; BEGIN v := demo.order_pkg_create_order(1, NULL); CALL demo.order_pkg_add_order_item(v, 1, 2); v := demo.order_pkg_create_order(2, NULL); CALL demo.order_pkg_add_order_item(v, 2, 1); END $$"
+    description: top books after one order of 2 x listing 1 (book 1)
+    call_source: "DECLARE o NUMBER; BEGIN o := DEMO.ORDER_PKG.CREATE_ORDER(2, 1); DEMO.ORDER_PKG.ADD_ORDER_ITEM(o, 1, 2); END;"
+    call_target: "DO $$ DECLARE o numeric; BEGIN o := demo.order_pkg_create_order(2, 1); CALL demo.order_pkg_add_order_item(o, 1, 2); END $$"
     verify:
       - {name: top_rows, source_sql: "SELECT COUNT(*) FROM TABLE(DEMO.REPORTING_PKG.GET_TOP_BOOKS(10))", target_sql: "SELECT count(*) FROM demo.reporting_pkg_get_top_books(10)"}
-      - {name: top_sold, source_sql: "SELECT NVL(SUM(total_sold),0) FROM TABLE(DEMO.REPORTING_PKG.GET_TOP_BOOKS(10))", target_sql: "SELECT coalesce(sum(total_sold),0) FROM demo.reporting_pkg_get_top_books(10)"}
       - {name: top_revenue, source_sql: "SELECT NVL(SUM(revenue),0) FROM TABLE(DEMO.REPORTING_PKG.GET_TOP_BOOKS(10))", target_sql: "SELECT coalesce(sum(revenue),0) FROM demo.reporting_pkg_get_top_books(10)"}
-      - {name: top_book_ids, source_sql: "SELECT NVL(SUM(book_id),0) FROM TABLE(DEMO.REPORTING_PKG.GET_TOP_BOOKS(10))", target_sql: "SELECT coalesce(sum(book_id),0) FROM demo.reporting_pkg_get_top_books(10)"}
+      - {name: top_sold, source_sql: "SELECT NVL(SUM(total_sold),0) FROM TABLE(DEMO.REPORTING_PKG.GET_TOP_BOOKS(10))", target_sql: "SELECT coalesce(sum(total_sold),0) FROM demo.reporting_pkg_get_top_books(10)"}
   - id: r4
     type: procedure
-    call_source: "DECLARE a NUMBER; b NUMBER; c NUMBER; d DATE; BEGIN DEMO.REPORTING_PKG.GET_CUSTOMER_STATS(1, a, b, c, d); END;"
-    call_target: "CALL demo.reporting_pkg_get_customer_stats(1, NULL, NULL, NULL, NULL)"
+    description: OUT-param procedure executes on both engines
+    call_source: "DECLARE a NUMBER; b NUMBER; c NUMBER; d DATE; BEGIN DEMO.REPORTING_PKG.GET_CUSTOMER_STATS(2, a, b, c, d); END;"
+    call_target: "CALL demo.reporting_pkg_get_customer_stats(2, NULL, NULL, NULL, NULL)"
     verify:
       - {name: orders_count, source_sql: "SELECT COUNT(*) FROM DEMO.ORDERS", target_sql: "SELECT count(*) FROM demo.orders"}

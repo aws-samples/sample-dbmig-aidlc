@@ -166,6 +166,21 @@ class MySQLEngine(TargetEngine):
     def server_version(self) -> str:
         return server_version(self.connection)
 
+    def preflight_warnings(self):
+        out = []
+        glob = str(self.scalar("SELECT @@GLOBAL.sql_mode") or "")
+        if "STRICT_TRANS_TABLES" not in glob and "STRICT_ALL_TABLES" not in glob:
+            sess = _connections.mysql_session_sql_mode(self.model)
+            out.append(
+                f"server GLOBAL sql_mode is '{glob}' (not strict): the APPLICATION will "
+                "silently truncate long values, store invalid dates as 0000-00-00 and turn "
+                "NULLs in multi-row inserts into 0/''. dbmig itself uses "
+                + (f"sql_mode='{sess}' per session" if sess else "the server sql_mode "
+                   "(sql_mode: server)")
+                + ". Set sql_mode in the cluster parameter group before cutover "
+                "(see target-baseline-aurora-mysql.md).")
+        return out
+
     def ensure_schema(self, schema):
         ensure_schema(self.connection, schema)
 

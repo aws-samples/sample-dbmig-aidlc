@@ -10,17 +10,18 @@ BEGIN
         RAISE EXCEPTION 'Insufficient inventory' USING ERRCODE = 'U0001';
     END IF;
     UPDATE demo.listings
-    SET quantity = quantity - p_quantity, updated_on = current_timestamp
+    SET quantity = quantity - p_quantity, updated_on = localtimestamp
     WHERE id = p_listing_id;
 END $$;
 
+-- Oracle: an unhandled NO_DATA_FOUND in a function called from SQL returns NULL, so a missing
+-- listing returns NULL here instead of raising.
 CREATE OR REPLACE FUNCTION demo.inventory_pkg_has_sufficient_inventory(p_listing_id numeric, p_quantity numeric)
 RETURNS numeric LANGUAGE plpgsql STABLE AS $$
 DECLARE
     v_current_qty demo.listings.quantity%TYPE;
 BEGIN
     SELECT quantity INTO v_current_qty FROM demo.listings WHERE id = p_listing_id;
-    -- Oracle: unhandled NO_DATA_FOUND inside a function called from SQL yields NULL.
     IF NOT FOUND THEN
         RETURN NULL;
     END IF;
@@ -30,7 +31,7 @@ END $$;
 CREATE OR REPLACE FUNCTION demo.inventory_pkg_get_low_stock_count(p_threshold numeric DEFAULT 5)
 RETURNS numeric LANGUAGE plpgsql STABLE AS $$
 DECLARE
-    v_count bigint;       -- PLS_INTEGER
+    v_count bigint;   -- PLS_INTEGER
 BEGIN
     SELECT count(*) INTO v_count
     FROM demo.listings

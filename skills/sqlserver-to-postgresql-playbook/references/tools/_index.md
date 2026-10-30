@@ -8,16 +8,16 @@ are **Conversion category: N/A (tooling)**.
 
 | File | Topic | Summary |
 |---|---|---|
-| [aws-sct.md](aws-sct.md) | AWS Schema Conversion Tool | Java utility that connects source/target, assesses, and converts schema objects. Step-by-step project setup, assessment report, convert + apply/save-as-SQL. |
-| [sct-action-code-index.md](sct-action-code-index.md) | SCT Action Code Index | Master index of SCT automation levels (5★→none) and all action codes per feature (tables, data types, cursors, triggers, indexes, partitioning, etc.). |
-| [aws-dms.md](aws-dms.md) | AWS Database Migration Service | Managed data migration/replication. Full-load, full-load+CDC, CDC-only. Source/target support, HA failover, KMS/SSL/Secrets Manager security. |
+| [aws-sct.md](aws-sct.md) | AWS Schema Conversion Tool | Java utility that connects source/target, assesses, and converts schema objects; DMS Schema Conversion; **Babelfish** (in Aurora 18.6) as an alternative path. |
+| [sct-action-code-index.md](sct-action-code-index.md) | SCT Action Code Index | Master index of SCT automation levels (5★→none), all action codes per feature, and the codes whose limitation no longer exists on PG 18. |
+| [aws-dms.md](aws-dms.md) | AWS Database Migration Service | Managed data migration/replication. Full-load, full-load+CDC, CDC-only. **PG 17/18 targets need DMS 3.5.4+.** |
 | [rds-on-outposts.md](rds-on-outposts.md) | Amazon RDS on Outposts | Managed RDS on premises (SQL Server, MySQL, PostgreSQL). Not supported with Aurora. KMS-encrypted; backups to Region. |
 | [rds-proxy.md](rds-proxy.md) | Amazon RDS Proxy | Managed connection-pooling proxy for Aurora/RDS PostgreSQL & MySQL. Cuts fail-over time up to 66% ([AWS RDS Proxy](https://aws.amazon.com/rds/proxy/)); Secrets Manager/IAM integration; no code changes. |
-| [aurora-serverless-v1.md](aurora-serverless-v1.md) | Amazon Aurora Serverless v1 | On-demand autoscaling Aurora config for intermittent/unpredictable workloads. Scaling thresholds, encrypted storage, provisioning steps. |
+| [aurora-serverless-v1.md](aurora-serverless-v1.md) | **Aurora Serverless v2** (v1 end-of-life 2025-03-31; filename kept) | ACU autoscaling 0–256 ACU, scale-to-zero, mixing with provisioned instances. |
 | [native-tools.md](native-tools.md) | dbmig native-tools note | Informational: dbmig uses Python drivers (pytds for SQL Server, psycopg for PostgreSQL), not sqlcmd/bcp/psql. |
 
 ## Key takeaways
 - **AWS SCT** converts schema/code objects; **AWS DMS** moves data. They are complementary.
 - The **SCT Action Code Index** is the go-to map for what auto-converts vs. needs manual work.
-- **RDS Proxy**, **RDS on Outposts**, and **Aurora Serverless v1** are target-side deployment/runtime options, not conversion tools.
+- **RDS Proxy**, **RDS on Outposts**, and **Aurora Serverless v2** are target-side deployment/runtime options, not conversion tools.
 - `dbmig` itself relies on Python drivers, independent of these AWS GUI/managed services (see native-tools.md).

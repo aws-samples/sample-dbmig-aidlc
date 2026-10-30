@@ -119,8 +119,9 @@ BEGIN
 END;
 
 --- CONVERTED TARGET CODE (PostgreSQL) — use these exact routine names and signatures in target_sql / call_target ---
--- tinyint -> smallint
-CREATE OR REPLACE FUNCTION dbo.ufngetdocumentstatustext(p_status smallint)
+-- tinyint (0-255) -> integer parameter: a smallint parameter does not resolve for callers passing an
+-- integer literal (PostgreSQL will not implicitly narrow integer -> smallint in function lookup).
+CREATE OR REPLACE FUNCTION dbo.ufngetdocumentstatustext(p_status integer)
 RETURNS varchar(16) LANGUAGE sql IMMUTABLE AS $$
     SELECT CASE p_status WHEN 1 THEN 'Pending approval' WHEN 2 THEN 'Approved' WHEN 3 THEN 'Obsolete' ELSE '** Invalid **' END::varchar(16)
 $$;
@@ -146,8 +147,9 @@ BEGIN
 END;
 
 --- CONVERTED TARGET CODE (PostgreSQL) — use these exact routine names and signatures in target_sql / call_target ---
--- tinyint -> smallint
-CREATE OR REPLACE FUNCTION dbo.ufngetpurchaseorderstatustext(p_status smallint)
+-- tinyint (0-255) -> integer parameter: a smallint parameter does not resolve for callers passing an
+-- integer literal (PostgreSQL will not implicitly narrow integer -> smallint in function lookup).
+CREATE OR REPLACE FUNCTION dbo.ufngetpurchaseorderstatustext(p_status integer)
 RETURNS varchar(15) LANGUAGE sql IMMUTABLE AS $$
     SELECT CASE p_status WHEN 1 THEN 'Pending' WHEN 2 THEN 'Approved' WHEN 3 THEN 'Rejected' WHEN 4 THEN 'Complete' ELSE '** Invalid **' END::varchar(15)
 $$;
@@ -175,8 +177,9 @@ BEGIN
 END;
 
 --- CONVERTED TARGET CODE (PostgreSQL) — use these exact routine names and signatures in target_sql / call_target ---
--- tinyint -> smallint
-CREATE OR REPLACE FUNCTION dbo.ufngetsalesorderstatustext(p_status smallint)
+-- tinyint (0-255) -> integer parameter: a smallint parameter does not resolve for callers passing an
+-- integer literal (PostgreSQL will not implicitly narrow integer -> smallint in function lookup).
+CREATE OR REPLACE FUNCTION dbo.ufngetsalesorderstatustext(p_status integer)
 RETURNS varchar(15) LANGUAGE sql IMMUTABLE AS $$
     SELECT CASE p_status WHEN 1 THEN 'In process' WHEN 2 THEN 'Approved' WHEN 3 THEN 'Backordered' WHEN 4 THEN 'Rejected' WHEN 5 THEN 'Shipped' WHEN 6 THEN 'Cancelled' ELSE '** Invalid **' END::varchar(15)
 $$;

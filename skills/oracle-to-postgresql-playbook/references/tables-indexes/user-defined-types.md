@@ -11,6 +11,8 @@ and associative arrays. Do not carry the four-star rating into an effort estimat
 with collection-heavy PL/SQL.)
 **SCT automation:** User-Defined Types action code index. PostgreSQL doesn't support the `FORALL` statement, the `DEFAULT` option, or collection-type constructors.
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): `ALTER TYPE` evolution and enum `ADD VALUE` (verified), cast-style constructor, flattening guidance, method and object-table mapping.
+
 > **Collections in PL/SQL → see
 > [`../sql-plsql/collections-and-bulk-operations.md`](../sql-plsql/collections-and-bulk-operations.md).**
 > This file covers types as **DDL**. The companion file covers the harder half — mapping
@@ -104,7 +106,7 @@ CREATE TYPE name (
 ```
 
 Differences from Oracle `CREATE TYPE`:
-- PostgreSQL does **not** support `CREATE OR REPLACE TYPE`.
+- PostgreSQL does **not** support `CREATE OR REPLACE TYPE`. Evolve types with `ALTER TYPE … ADD/DROP/ALTER ATTRIBUTE`, `RENAME ATTRIBUTE`, and for enums `ALTER TYPE … ADD VALUE … [BEFORE|AFTER]` (verified), which corresponds to Oracle `ALTER TYPE … ADD ATTRIBUTE … CASCADE`.
 - PostgreSQL does **not** accept `AS OBJECT`.
 
 Composite type equivalent of the phone example (note `ROW(...)` on insert, parenthesized attribute access):
@@ -116,6 +118,8 @@ CREATE TABLE EMPLOYEES (
   EMP_PHONE EMP_PHONE_NUM NOT NULL);
 
 INSERT INTO EMPLOYEES VALUES(1, ROW('111-222-333'));
+-- or with an explicit cast, which is clearer for multi-attribute types (verified):
+-- INSERT INTO EMPLOYEES VALUES(1, ('111-222-333')::EMP_PHONE_NUM);
 SELECT a.EMP_ID, (a.EMP_PHONE).PHONE_NUM FROM EMPLOYEES a;
 ```
 
@@ -123,6 +127,9 @@ SELECT a.EMP_ID, (a.EMP_PHONE).PHONE_NUM FROM EMPLOYEES a;
 - Replace Oracle `CREATE OR REPLACE TYPE ... AS OBJECT (...)` with PostgreSQL `CREATE TYPE ... AS (...)` (composite). Drop `OR REPLACE` and `AS OBJECT`.
 - Constructor calls (e.g. `EMP_PHONE_NUM('...')`) become `ROW(...)`; attribute access requires parentheses: `(col).attr`.
 - PostgreSQL lacks collection-type constructors, the `FORALL` statement, and the `DEFAULT` option for types.
+- **Design choice for object-typed table columns:** a composite column converts directly, but ORMs, BI tools and AWS DMS handle plain columns far better. When the application allows it, consider flattening `EMP_ADDRESS` into `emp_address_state`, `emp_address_city`, … and record that decision in `customer-specific/decisions.md`. Keep composite types for function signatures and return types.
+- Object methods (`MEMBER FUNCTION`) → standalone functions taking the composite as the first argument (`f(emp_address)`), callable as `f(t.col)`.
+- `CREATE TABLE … OF type` (object tables) is supported (`CREATE TABLE t OF composite_type`), but object identifiers and `REF` columns are not.
 - Oracle varray/nested-table collection types do **not** map to a single PostgreSQL type. The
   mapping depends on the element type and on how the collection is used:
   `TABLE OF <object_type>` → a function returning `SETOF <composite>` (no collection type is

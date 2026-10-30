@@ -6,6 +6,8 @@
 **Conversion category:** N/A (chapter overview)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Chapter overview only; added the target-baseline pointer.
+
 ## SQL Server
 
 This chapter provides reference information for ANSI SQL operations required to migrate
@@ -32,3 +34,4 @@ Topics in this chapter:
 - [Views for ANSI SQL](views.md)
 - [Window functions for ANSI SQL](window-functions.md)
 - [Temporary tables for ANSI SQL](temporary-tables.md)
+- Target baseline for Aurora MySQL 8.4 / 3: `../../../oracle-to-mysql-playbook/references/target-baseline-aurora-mysql.md`

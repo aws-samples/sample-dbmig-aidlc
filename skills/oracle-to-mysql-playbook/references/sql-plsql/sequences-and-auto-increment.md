@@ -6,6 +6,8 @@
 **Conversion category:** Manual (★★ feature compatibility, ★ automation)
 **SCT automation:** Action code "Sequences" — MySQL doesn't support sequences; identity columns have different syntax/options.
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Corrected counter persistence (persisted since MySQL 8.0; the playbook described 5.7); verified AUTO_INCREMENT rules (first index column, no DEFAULT, 8.4 rejects FLOAT/DOUBLE, 0/NULL, ALTER below max), added a verified LAST_INSERT_ID sequence-table pattern and the toolkit identity convention.
+
 ## Oracle
 
 Sequences are independent objects that generate unique values (often PKs); the same sequence can feed multiple tables. Options: `INCREMENT BY` (default 1, not 0), `START WITH` (default 1), `MAXVALUE`/`NOMAXVALUE`, `MINVALUE`/`NOMINVALUE`, `CYCLE`/`NOCYCLE` (default `NOCYCLE`), `CACHE`/`NOCACHE` (default caches 20; min 2). Oracle 18c adds scalable sequences (`SCALE`/`NOSCALE`, `EXTEND`/`NOEXTEND`).
@@ -45,7 +47,7 @@ INSERT INTO IDENTITY_TST(COL1, COL2) VALUES(DEFAULT, 'B');
 
 ## MySQL
 
-Aurora MySQL supports `AUTO_INCREMENT` (like Oracle `IDENTITY`) but **NOT** table-independent `SEQUENCE` objects. Any numeric column can be `AUTO_INCREMENT`; one per table, must be indexed (or PK). Use only positive numbers. Get last value with `LAST_INSERT_ID()`. Server params `auto_increment_increment` (interval) and `auto_increment_offset` (start) are **global**, not per-column. Reseed with `ALTER TABLE t AUTO_INCREMENT = n`.
+Aurora MySQL supports `AUTO_INCREMENT` (like Oracle `IDENTITY`) but **NOT** table-independent `SEQUENCE` objects (`CREATE SEQUENCE` is a syntax error on 3.13 and 8.4, verified). One `AUTO_INCREMENT` column per table; it must be the **first column of an index** (error 1075 otherwise, verified) and cannot have a `DEFAULT` (error 1067, verified). Use an integer type: Aurora MySQL 8.4 rejects `AUTO_INCREMENT` on `FLOAT`/`DOUBLE` (error 1063, verified). Use only positive numbers. Get last value with `LAST_INSERT_ID()`. Server params `auto_increment_increment` (interval) and `auto_increment_offset` (start) are **global**, not per-column. Reseed with `ALTER TABLE t AUTO_INCREMENT = n`.
 
 ```sql
 CREATE TABLE MyTable (Col1 INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -60,7 +62,26 @@ ALTER TABLE MyTable AUTO_INCREMENT = 30;
 INSERT INTO MyTable (Col2) VALUES ('Post ALTER TABLE');        -- 30
 ```
 
-**Key behavioral difference — value persistence:** Oracle `IDENTITY` metadata is stored on disk and survives restarts. Aurora MySQL `AUTO_INCREMENT` counter lives in cache memory only; after restart, on first INSERT it runs `SELECT MAX(<col>) FROM <table> FOR UPDATE` and continues from there. Every restart cancels any `AUTO_INCREMENT = <value>` table option. Aurora MySQL also *allows* explicit values (unlike Oracle by default); inserting a value greater than the counter reinitializes the counter to that value.
+**Value persistence (corrected):** since MySQL 8.0 the `AUTO_INCREMENT` counter is **persisted** (written to the redo log and data dictionary), so it survives restarts and failovers on Aurora MySQL 3 and 8.4. The original playbook described MySQL 5.7, where the counter was recomputed from `MAX(col)` after a restart. Gaps still occur (rolled-back inserts, `innodb_autoinc_lock_mode` = 2 — interleaved — on both versions, verified), as with Oracle sequences.
+
+Explicit values (verified on both versions):
+- Inserting `NULL` or **`0`** generates the next value (`0` does unless `NO_AUTO_VALUE_ON_ZERO` is in `sql_mode`). Oracle `GENERATED ALWAYS` rejects explicit values; MySQL always accepts them.
+- Inserting a value above the counter moves the counter past it (`10` → next is `11`).
+- `ALTER TABLE t AUTO_INCREMENT = n` with `n` ≤ `MAX(col)` is silently raised to `MAX(col)+1` (verified: `= 5` after `11` gave `12`).
+- `information_schema.tables.AUTO_INCREMENT` is cached for `information_schema_stats_expiry` (86400 s); query `SHOW CREATE TABLE` or set the session expiry to 0 for a current value.
+
+**Sequence emulation** (shared or table-independent Oracle sequences). A one-row table with the `LAST_INSERT_ID(expr)` trick is concurrency-safe and per-session (verified):
+
+```sql
+CREATE TABLE seq_orders (id BIGINT NOT NULL);
+INSERT INTO seq_orders VALUES (0);          -- START WITH 1 → seed with start-1
+
+-- seq_orders.NEXTVAL
+UPDATE seq_orders SET id = LAST_INSERT_ID(id + 1);   -- INCREMENT BY 1
+SELECT LAST_INSERT_ID();                             -- value for this session (CURRVAL)
+```
+
+Wrap it in a procedure or function per sequence (`<schema>.seq_orders_nextval()`). The `UPDATE` row lock serializes callers for the length of their transaction, so call it in its own short transaction (or with autocommit) for high-concurrency sequences, and use `CACHE`-like blocks (`id + 20`) if contention shows up.
 
 ## Conversion notes
 
@@ -71,11 +92,13 @@ INSERT INTO MyTable (Col2) VALUES ('Post ALTER TABLE');        -- 30
 | Set starting number | `START WITH` | `ALTER TABLE ... AUTO_INCREMENT=n` or `auto_increment_offset` |
 | Set interval | `INCREMENT BY` | `auto_increment_increment` (global) |
 | Reseed | Recreate sequence | `ALTER TABLE` |
-| Column restrictions | Numeric | Numeric, indexed, no `DEFAULT` |
+| Column restrictions | Numeric | Integer (8.4 rejects `FLOAT`/`DOUBLE`), first column of an index, no `DEFAULT` |
 | Seed/interval control | per CREATE/ALTER TABLE | global params (not per-column) |
-| Setting persistence | survives restarts | re-initialized each restart |
+| Setting persistence | survives restarts | survives restarts (MySQL 8.0+) |
 | Explicit values | Not supported (by default) | Supported; larger value reinitializes sequence |
 
-- Use `AUTO_INCREMENT` to replace `IDENTITY` in most cases. For shared/table-independent sequences, build a custom solution.
+- Use `AUTO_INCREMENT` to replace `IDENTITY` (toolkit convention: `bigint AUTO_INCREMENT` with `AUTO_INCREMENT=<start>`; `./dbmig migrate-data` reseeds to `MAX+1` after the load — see `engines/oracle-to-mysql/checks/non-portable-constructs.md` §2). Do not migrate the internal `ISEQ$$_*` sequences.
+- Standalone Oracle sequences → the sequence-table pattern above; `seq.CURRVAL` → `LAST_INSERT_ID()` in the same session.
+- `CYCLE`, `MAXVALUE`, `MINVALUE`, negative `INCREMENT BY`, and per-column `INCREMENT BY` have no `AUTO_INCREMENT` equivalent; implement them in the sequence function.
 - `auto_increment_increment`/`auto_increment_offset` are global — cannot vary per column as in Oracle.
 - To trigger a value, INSERT NULL/0 or omit the column from the INSERT list.

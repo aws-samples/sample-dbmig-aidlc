@@ -6,6 +6,8 @@
 **Conversion category:** Automatic (Four star feature compatibility — syntax rewrite; convert `PERCENT`/`TIES` to subqueries)
 **SCT automation:** Four star automation level
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): WITH TIES via RANK() (verified), PERCENT workaround fixed to round up (verified), LIMIT with variables, FETCH FIRST unsupported, UPDATE/DELETE TOP, LIMIT in IN-subqueries (1235).
+
 ## SQL Server
 
 Two ways to limit/page results: legacy `TOP`, and ANSI `OFFSET…FETCH` (since SQL Server 2012).
@@ -74,7 +76,7 @@ ORDER BY Quantity DESC;
 CREATE PROCEDURE P(Percent INT)
 BEGIN
 DECLARE N INT;
-SELECT COUNT(*) * Percent / 100 FROM OrderItems INTO N;
+SELECT CEIL(COUNT(*) * Percent / 100) FROM OrderItems INTO N;   -- CEIL: SQL Server rounds PERCENT up; without it 10% of 4 rows gives 0 (verified)
 SELECT * FROM OrderItems
 ORDER BY Quantity DESC
 LIMIT N OFFSET 0;
@@ -87,11 +89,15 @@ CALL P(50);
 - `TOP (n)` → `LIMIT n`; `OFFSET…FETCH` → `LIMIT… OFFSET`. AWS SCT auto-converts these.
 - `WITH TIES` and `PERCENT` are **not** supported — require manual workarounds.
   - `PERCENT`: compute row count first, then `LIMIT` a fixed number (two table accesses). Consider switching to a fixed number.
-  - `WITH TIES`: add a query for rows tied with the last returned row (three table accesses). Consider adding a tie-breaker to `ORDER BY` instead.
+  - `WITH TIES`: *(updated)* on Aurora MySQL 3 / 8.4 use a window function — `SELECT * FROM (SELECT t.*, RANK() OVER (ORDER BY Quantity DESC) AS rk FROM OrderItems t) x WHERE rk <= 3` (verified) — instead of the three-access UNION workaround.
+- `LIMIT` accepts routine parameters and local variables inside procedures (verified `LIMIT n`), but not user variables or expressions; compute the value into a local variable first. Outside routines use a prepared statement (`LIMIT ?`).
+- `OFFSET n ROWS FETCH NEXT m ROWS ONLY` → `LIMIT m OFFSET n`; `FETCH FIRST` syntax does not exist in MySQL (verified).
+- `UPDATE TOP (n)` / `DELETE TOP (n)` → single-table `… ORDER BY … LIMIT n`; multi-table forms reject `LIMIT` (error 1221, verified).
+- `LIMIT` inside an `IN`/`ANY`/`ALL` subquery is not supported (error 1235, verified) — wrap it in a derived table.
 
 | SQL Server | Aurora MySQL | Comments |
 |---|---|---|
 | `TOP (n)` | `LIMIT n` | |
-| `TOP (n) WITH TIES` | Not supported | Workaround via UNION of tied rows |
-| `TOP (n) PERCENT` | Not supported | Workaround via computed count |
+| `TOP (n) WITH TIES` | Not supported | `RANK() OVER (…) <= n` in a derived table (verified) |
+| `TOP (n) PERCENT` | Not supported | computed count with `CEIL` |
 | `OFFSET… FETCH` | `LIMIT… OFFSET` | |

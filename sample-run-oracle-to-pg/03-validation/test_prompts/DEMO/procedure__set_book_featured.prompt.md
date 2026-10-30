@@ -27,17 +27,19 @@ BEGIN
 END;
 
 --- CONVERTED TARGET CODE (PostgreSQL) — use these exact routine names and signatures in target_sql / call_target ---
--- COMMIT removed: caller owns the transaction.
+-- DEMO.SET_BOOK_FEATURED. COMMIT removed (caller owns the transaction).
 CREATE OR REPLACE PROCEDURE demo.set_book_featured(p_book_id numeric, p_is_featured numeric)
 LANGUAGE plpgsql AS $$
 BEGIN
     UPDATE demo.listings
-    SET is_featured = p_is_featured, updated_on = current_timestamp
-    WHERE book_id = p_book_id AND listing_type = 'STORE' AND status = 1;
+    SET is_featured = p_is_featured, updated_on = localtimestamp
+    WHERE book_id = p_book_id
+      AND listing_type = 'STORE'
+      AND status = 1;
 END $$;
 
 --- SAMPLED REAL DATA (use these actual values) ---
 ### LISTINGS  (columns: ID, BOOK_ID, SELLER_ID, PRICE, QUANTITY, CONDITION_ID, STATUS, LISTING_TYPE, ADMIN_NOTES, PROCESSED_AT, PROCESSED_BY, IS_FEATURED, IS_BESTSELLER, IS_NEW_ARRIVAL, CREATED_ON, UPDATED_ON)
-  1 | 1 | 1 | 10.95 | 25 | 2 | 1 | SYSTEM |  |  |  | 1 | 0 | 1 | 2026-09-28 02:05:26.204692 | 
-  2 | 2 | 1 | 13.95 | 3 | 3 | 1 | SYSTEM |  |  |  | 0 | 1 | 0 | 2026-09-28 02:05:26.208513 | 
-  3 | 3 | 1 | 6.5 | 10 | 1 | 1 | SYSTEM |  |  |  | 1 | 1 | 0 | 2026-09-28 02:05:26.212295 | 
+  1 | 1 | 1 | 10.95 | 25 | 2 | 1 | SYSTEM |  |  |  | 1 | 0 | 1 | 2026-10-30 01:53:57.004066 | 
+  2 | 2 | 1 | 13.95 | 3 | 3 | 1 | SYSTEM |  |  |  | 0 | 1 | 0 | 2026-10-30 01:53:57.008985 | 
+  3 | 3 | 1 | 6.5 | 10 | 1 | 1 | SYSTEM |  |  |  | 1 | 1 | 0 | 2026-10-30 01:53:57.013576 | 

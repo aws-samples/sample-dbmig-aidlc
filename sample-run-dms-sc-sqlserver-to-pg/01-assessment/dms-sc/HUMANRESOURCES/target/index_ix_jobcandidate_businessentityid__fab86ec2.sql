@@ -1,3 +1,0 @@
-CREATE INDEX ix_jobcandidate_ix_jobcandidate_businessentityid
-ON humanresources.jobcandidate
-USING BTREE (businessentityid ASC);

@@ -6,6 +6,8 @@
 **Conversion category:** Automatic (four-star feature compatibility, five-star automation)
 **SCT automation:** N/A (no action code index listed; high automation).
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): PG 18 `VIRTUAL` generated columns (default) with a verified VIRTUAL-vs-STORED capability matrix (no index/unique/FK/UDF on virtual), DML/load restrictions, `SET EXPRESSION`.
+
 ## Oracle
 Virtual columns appear as normal columns but their values are **calculated, not stored**. Rules:
 - Can't be based on other virtual columns; can only reference columns of the same table.
@@ -45,9 +47,40 @@ SELECT email FROM EMPLOYEES;   -- jsmith@example.com, FINAL_SALARY 10250
 ```
 
 ## PostgreSQL
-Before PostgreSQL 12 there was no direct equivalent. **PostgreSQL 12+ adds generated columns** (computed on the fly, or computed and stored) — similar to Oracle virtual columns.
+Before PostgreSQL 12 there was no direct equivalent. PostgreSQL 12 added **stored** generated columns, and **PostgreSQL 18 adds `VIRTUAL` generated columns and makes `VIRTUAL` the default**. They are computed on read, which is the same model as Oracle virtual columns.
 
-Pre-12 workarounds:
+```sql
+-- Aurora PostgreSQL 18 (verified on 18.6)
+CREATE TABLE employees (
+  employee_id  numeric PRIMARY KEY,
+  user_name    varchar(25),
+  base_salary  numeric,
+  sales_count  numeric,
+  email        text    GENERATED ALWAYS AS (lower(user_name) || '@example.com'),          -- VIRTUAL (default)
+  final_salary numeric GENERATED ALWAYS AS (CASE WHEN sales_count >= 10
+                 THEN base_salary + base_salary * sales_count * 0.05 END) STORED          -- STORED: indexable
+);
+-- INSERT … (1, 'JSmith', 5000, 21) → email = 'jsmith@example.com', final_salary = 10250.00
+```
+
+**VIRTUAL vs STORED on PG 18 (all verified on 18.6):**
+
+| Oracle virtual column used with… | PG 18 `VIRTUAL` | PG 18 `STORED` |
+|---|---|---|
+| plain `SELECT` / `WHERE` | yes | yes |
+| `CHECK` / `NOT NULL` constraint | yes | yes |
+| index (function-based index) | **no** (`indexes on virtual generated columns are not supported`) | yes |
+| `UNIQUE` / `PRIMARY KEY` / referenced by FK | **no** | yes |
+| partition key | **no** (neither kind; partition by the expression instead: `PARTITION BY RANGE ((lower(user_name)))`) | no |
+| user-defined function in the expression | **no** (`generation expression uses user-defined function`) | yes (function must be `IMMUTABLE`) |
+| storage cost / write cost | none | stored on every write |
+| `ALTER TABLE … ADD COLUMN` | instant | rewrites the table |
+
+**Rule of thumb:** convert to `VIRTUAL` (the default) unless the Oracle column is indexed, unique, referenced by a foreign key, or uses a user-defined function, in which case use `STORED`. Alternatively, keep it `VIRTUAL` and create an **expression index on the expression itself** (`CREATE INDEX ON employees ((lower(user_name) || '@example.com'))`), which the planner uses for queries written against the expression.
+
+Like Oracle, generated columns cannot be written by DML (`cannot insert a non-DEFAULT value`, verified). Inserts must omit them or use `DEFAULT`, and AWS DMS / `COPY` loads must exclude them from the column list.
+
+Pre-12 workarounds (legacy, for reference):
 - **Views** — include the function in the view definition.
 - **Function as a column** — a function takes table row values and returns the derived value; can also back an **expression index** (≈ Oracle function-based index).
 
@@ -102,7 +135,7 @@ CREATE OR REPLACE FUNCTION FUNC_USER_FULL_NAME ()
 
 CREATE TRIGGER TRG_USER_FULL_NAME BEFORE INSERT OR UPDATE
   ON EMPLOYEES FOR EACH ROW
-  EXECUTE PROCEDURE FUNC_USER_FULL_NAME();
+  EXECUTE FUNCTION FUNC_USER_FULL_NAME();
 
 INSERT INTO EMPLOYEES (EMPLOYEE_ID, FIRST_NAME, LAST_NAME)
   VALUES(1, 'John', 'Smith'),(2, 'Steven', 'King');
@@ -112,7 +145,9 @@ CREATE INDEX IDX_USER_FULL_NAME ON EMPLOYEES(FULL_NAME);
 ```
 
 ## Conversion notes
-- On Aurora PostgreSQL 12+, convert Oracle virtual columns to **generated columns** directly (closest match).
-- Pre-12: use a view + SQL/PL-pgSQL function, or a `BEFORE INSERT/UPDATE` trigger to populate a stored column.
+- On Aurora PostgreSQL 18, convert Oracle virtual columns to **`GENERATED ALWAYS AS (…)` columns**: `VIRTUAL` by default, `STORED` when they are indexed, unique, FK targets or use user-defined functions (table above).
+- Every function in the expression must be `IMMUTABLE` (Oracle's "deterministic" requirement). `to_char(date, …)` and timezone-dependent casts are not.
+- `ALTER TABLE … ALTER COLUMN … SET EXPRESSION AS (…)` (PG 17+) changes the expression. On PG 18 it is refused for virtual columns in tables that have CHECK constraints (verified), so drop and re-add the column in that case.
+- Pre-12 workarounds (view + function, or `BEFORE INSERT/UPDATE` trigger) are obsolete on Aurora PostgreSQL 18; use them only when the expression needs a non-immutable function.
 - Oracle function-based indexes on virtual columns map to PostgreSQL **expression indexes**.
 - Note PostgreSQL function-as-column access uses `function_name(table_alias)` syntax with a row-type parameter.

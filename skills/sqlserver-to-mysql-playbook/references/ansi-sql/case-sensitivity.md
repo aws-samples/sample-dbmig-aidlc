@@ -6,6 +6,8 @@
 **Conversion category:** Assisted
 **SCT automation:** N/A (use AWS DMS transformations to change names to lowercase)
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Corrected 'stored in lowercase by default' (default lower_case_table_names=0: names are case-sensitive — verified), creation-time-only setting, data-collation differences vs SQL Server CI_AS.
+
 In SQL Server, object name case sensitivity is determined by the collation. In Aurora
 MySQL, names are case sensitive and controlled by the `lower_case_table_names` parameter.
 
@@ -34,7 +36,7 @@ CREATE TABLE EMPLOYEES (
 
 ## MySQL
 
-By default, object names are stored in lowercase. MySQL looks for object names with the exact case as written in the query (when `lower_case_table_names = 0`).
+On Aurora MySQL 3 and 8.4 the default is `lower_case_table_names = 0` (verified): **table and database names are stored as written and are case-sensitive**. `EMPLOYEES2` and `employees2` can coexist, and `SELECT … FROM Employees2` fails with error 1146 (verified on both). (The original "stored in lowercase by default" applies only when the parameter is 1.)
 
 Create a table named EMPLOYEES in uppercase:
 
@@ -54,10 +56,11 @@ CREATE TABLE employees (
     AVG_SALARY NUMERIC NOT NULL);
 ```
 
-Turn off table name case sensitivity by setting `lower_case_table_names = 1`.
+Turn off table name case sensitivity by setting `lower_case_table_names = 1`. Since MySQL 8.0 this can only be set **when the cluster is created** (in the cluster parameter group used at creation); it cannot be changed later. SQL Server identifiers are case-insensitive under the usual `_CI_` collation, so decide before creating the target cluster: either `lower_case_table_names = 1`, or lower-case every identifier during conversion (toolkit convention) and in the application's SQL.
 
 ## Conversion notes
 - SQL Server case sensitivity = collation; Aurora MySQL case sensitivity = `lower_case_table_names`.
 - In most cases, use AWS DMS transformations to convert schema, table, and column names to lowercase.
 - Column, index, stored routine, event names, and column aliases are case-insensitive on both platforms.
-- See [Identifier Case Sensitivity](https://dev.mysql.com/doc/refman/5.7/en/identifier-case-sensitivity.html) in the MySQL documentation.
+- See [Identifier Case Sensitivity](https://dev.mysql.com/doc/refman/8.4/en/identifier-case-sensitivity.html) in the MySQL documentation.
+- **Data** comparisons follow the collation. The Aurora default `utf8mb4_0900_ai_ci` is case- and accent-insensitive, which matches SQL Server's common `SQL_Latin1_General_CP1_CI_AS` for case but **not** for accents (`'é' = 'e'` is true in MySQL, false under `_AS`). Use `utf8mb4_0900_as_ci` to keep accent sensitivity. Trailing spaces are significant under `_0900_` collations (NO PAD); SQL Server ignores them in `=` comparisons — see `../tsql/collations.md`.

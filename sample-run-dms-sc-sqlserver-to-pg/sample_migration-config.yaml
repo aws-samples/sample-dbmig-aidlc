@@ -3,7 +3,7 @@
 # run imports that project, triages it, reconciles against the live target, and prepares
 # it for the data load — then rejoins the normal Validation -> Operations phases.
 
-project: adventureworks-hr-person
+project: aw-dms-sc-20261030
 
 run:
   mode: silent            # silent logs follow-ups and continues; 'interactive' prompts
@@ -30,7 +30,7 @@ strategy:
 # drop/recreate around the load still applies); 'framework' = the built-in migrate-data
 # for dev/test loads.
 testing:
-  data_load: dms
+  data_load: framework   # this run used migrate-data; 'dms' when an AWS DMS task loads
   equivalence:
     reconcile_row_counts: true
     function_parity: true

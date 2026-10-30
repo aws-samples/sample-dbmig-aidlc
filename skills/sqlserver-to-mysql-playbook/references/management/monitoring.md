@@ -6,6 +6,8 @@
 **Conversion category:** Automatic (Three star feature compatibility)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Performance Insights EOL (2026-07-31) → Database Insights; performance_schema off by default (verified); DMV → MySQL view mappings (INNODB_LOCKS removed, verified); trace replacements.
+
 ## SQL Server
 
 SQL Server provides many interfaces for monitoring (ad-hoc and ongoing data collection, root-cause analysis, preventative/reactive actions).
@@ -43,7 +45,7 @@ Native MySQL monitoring features (InnoDB logging, the Performance Schema) are tu
 
 Amazon RDS provides rich monitoring via **Amazon CloudWatch**.
 
-**Amazon RDS Performance Insights** — advanced DB performance monitoring; supports additional counter metrics on RDS for MySQL and Aurora MySQL (up to 10 extra graphs from dozens of OS/DB metrics), correlated with the DB load chart. Enable via the RDS console.
+**CloudWatch Database Insights** — *(updated)* **Amazon RDS Performance Insights reached end of life on 2026-07-31** and was replaced by CloudWatch Database Insights (Standard mode included; Advanced mode adds per-query statistics, execution history and fleet views). It keeps the DB-load / wait-event model described below.
 
 When the **Performance Schema** is on, Performance Insights provides more detail (DB load by detailed wait events); when off, load is categorized by the MySQL process list state. Enabling options:
 * Let Performance Insights manage parameters automatically (Performance Schema turns on when you create an instance with Performance Insights enabled; schema-param changes aren't shown in the parameter group but appear in `SHOW GLOBAL VARIABLES`).
@@ -58,6 +60,9 @@ When the **Performance Schema** is on, Performance Insights provides more detail
 | `performance-schema-consumer-thread-instrumentation` | ON |
 
 ## Conversion notes
-- AWS service replacements: SQL Server monitoring (DMVs, Extended Events, Profiler, Activity Monitor, Query Store) → **Amazon CloudWatch**, **Amazon RDS Performance Insights**, and **Enhanced Monitoring**.
+- AWS service replacements: SQL Server monitoring (DMVs, Extended Events, Profiler, Activity Monitor, Query Store) → **Amazon CloudWatch**, **CloudWatch Database Insights** (successor to Performance Insights), and **Enhanced Monitoring**.
+- Verified on the validation clusters (default Serverless v2 parameter groups, 3.13 and 8.4.8): `performance_schema` = 0, so `performance_schema.events_statements_summary_by_digest` and `performance_schema.processlist` return no rows. It is a static parameter — enable it in the parameter group and reboot before load tests.
+- DMV mappings: `sys.dm_exec_requests`/`sessions` → `SHOW PROCESSLIST`, `sys.session`, `information_schema.innodb_trx`; `sys.dm_exec_query_stats` → `events_statements_summary_by_digest`, `sys.statement_analysis`; `sys.dm_tran_locks` → `performance_schema.data_locks`, `sys.innodb_lock_waits` (`information_schema.INNODB_LOCKS` was removed in 8.0, verified); `sys.dm_os_wait_stats` → `performance_schema.events_waits_summary_global_by_event_name`; `sys.dm_db_index_usage_stats` → `sys.schema_unused_indexes`, `sys.schema_index_statistics`.
+- Extended Events / Profiler traces → slow query log with `long_query_time = 0` (exported to CloudWatch Logs) or Database Insights Advanced; Advanced Auditing (`server_audit_logging`, off by default, verified) for audit traces.
 - Native MySQL monitoring (InnoDB logging, Performance Schema) is disabled by default on Aurora MySQL; Performance Schema can be enabled for richer Performance Insights wait-event detail.
 - Many third-party monitoring tools that depend on those native features won't work; use AWS-native tooling.

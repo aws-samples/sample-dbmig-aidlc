@@ -1,0 +1,5 @@
+ALTER TABLE adventureworks_person.businessentityaddress
+ADD CONSTRAINT fk_businessentityaddress_businessentity_businessentityid_731149650 FOREIGN KEY (businessentityid) 
+REFERENCES adventureworks_person.businessentity (businessentityid)
+ON UPDATE NO ACTION
+ON DELETE NO ACTION;

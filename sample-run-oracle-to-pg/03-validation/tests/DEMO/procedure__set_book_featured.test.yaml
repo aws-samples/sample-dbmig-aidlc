@@ -2,10 +2,11 @@ object: SET_BOOK_FEATURED
 schema: DEMO
 type: procedure
 notes: >
-  COMMITs in the source: NON-DESTRUCTIVE case only (non-existent book 999999).
+  COMMITs in the source: non-destructive case. Book 1 has only a SYSTEM listing, so the STORE filter
+  updates 0 rows on both engines.
 cases:
-  - id: f1
-    call_source: "BEGIN DEMO.SET_BOOK_FEATURED(999999, 1); END;"
-    call_target: "CALL demo.set_book_featured(999999, 1)"
+  - id: p1
+    call_source: "BEGIN DEMO.SET_BOOK_FEATURED(1, 0); END;"
+    call_target: "CALL demo.set_book_featured(1, 0)"
     verify:
-      - {name: featured, source_sql: "SELECT COUNT(*) FROM DEMO.LISTINGS WHERE is_featured = 1", target_sql: "SELECT count(*) FROM demo.listings WHERE is_featured = 1"}
+      - {name: featured_book1, source_sql: "SELECT SUM(is_featured) FROM DEMO.LISTINGS WHERE book_id = 1", target_sql: "SELECT sum(is_featured) FROM demo.listings WHERE book_id = 1"}

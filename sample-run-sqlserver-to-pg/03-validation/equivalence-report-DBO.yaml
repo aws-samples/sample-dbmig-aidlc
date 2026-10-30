@@ -1,8 +1,8 @@
 schema: DBO
 mode: silent
 summary:
-  cases: 68
-  passed: 68
+  cases: 69
+  passed: 69
   failed: 0
   skipped: 0
   low_coverage_objects: 1
@@ -15,24 +15,24 @@ results:
   status: pass
   coverage: OK
   detail:
-    source: '105.36'
-    target: '105.36'
+    source: '103.49'
+    target: '103.49'
 - object: DBO.ufnCalculateCustomerLifetimeValue
   type: function
   case: c2
   status: pass
   coverage: OK
   detail:
-    source: '90.34'
-    target: '90.34'
+    source: '88.7'
+    target: '88.70'
 - object: DBO.ufnCalculateCustomerLifetimeValue
   type: function
   case: c3
   status: pass
   coverage: OK
   detail:
-    source: '2095.66'
-    target: '2095.66'
+    source: '2053.32'
+    target: '2053.32'
 - object: DBO.ufnCalculateCustomerLifetimeValue
   type: function
   case: c4
@@ -215,8 +215,8 @@ results:
   status: pass
   coverage: OK
   detail:
-    source: '26056'
-    target: '26056'
+    source: '26924'
+    target: '26924'
 - object: DBO.VwRegionalSales
   type: function
   case: v1
@@ -375,6 +375,18 @@ results:
   detail:
     source: '3'
     target: '3.00'
+- object: DBO.uspGetBillOfMaterials
+  type: function
+  case: r4
+  status: pass
+  coverage: OK
+  detail:
+    source_rows: 3
+    target_rows: 3
+    source_first: (497, 939, 'ML Road Pedal', Decimal('1'), Decimal('27.568'), Decimal('62.09'),
+      1, 2)
+    target_first: (497, 939, 'ML Road Pedal', Decimal('1.00'), Decimal('27.5680'),
+      Decimal('62.0900'), 1, 2)
 - object: DBO.uspGetManagerAuthors
   type: function
   case: r1
@@ -437,8 +449,8 @@ results:
   status: pass
   coverage: OK
   detail:
-    source: '4'
-    target: '4'
+    source: '3'
+    target: '3'
 - object: DBO.uspGetWhereUsedProductID
   type: function
   case: r1

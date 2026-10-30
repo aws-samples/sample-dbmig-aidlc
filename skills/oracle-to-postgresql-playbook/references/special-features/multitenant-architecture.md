@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (Three-star feature compatibility)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): `CREATE DATABASE … STRATEGY`, fast clones for whole-cluster copies, cluster-wide roles versus PDB-local users, cross-database query limits, Serverless v2 scale-to-zero for per-tenant clusters.
+
 ## Oracle
 
 Oracle 12c introduced the **multitenant architecture**: a single **container database (CDB)** hosts one or more **pluggable databases (PDB)**. Before 12c, one instance = one database; now the instance-to-database relationship is 1:N.
@@ -44,10 +46,11 @@ Amazon Aurora PostgreSQL offers a simplified equivalent: create **multiple datab
 
 Mapping: an Oracle **CDB/Instance ≈ an Aurora cluster**; an Oracle **PDB ≈ a PostgreSQL database** inside the cluster (not all features comparable).
 
-Database cloning uses **templates** — set `IS_TEMPLATE` true, then create from it:
+Database cloning uses **templates** — set `IS_TEMPLATE` true, then create from it (no other sessions may be connected to the source):
 ```sql
-CREATE DATABASE emp_bck TEMPLATE emp;
+CREATE DATABASE emp_bck TEMPLATE emp STRATEGY file_copy;   -- PG 15+: file_copy is faster for large DBs; default wal_log
 ```
+For a full copy of a whole cluster (all "PDBs" at once), an **Aurora fast clone** (`restore-db-cluster-to-point-in-time --restore-type copy-on-write`) is faster and does not block the source.
 
 Map Oracle 18c/19c features in AWS:
 - **PDB Clone** → `CREATE DATABASE ... TEMPLATE ...`.
@@ -64,6 +67,9 @@ CREATE DATABASE pg_db3;
 
 ## Conversion notes
 - No exact PDB equivalent. Use **multiple databases per Aurora cluster** for lightweight isolation, or **separate clusters** for total workload isolation.
+- **Roles are cluster-wide** (like Oracle common users). PDB-local users with the same name but different passwords in different PDBs cannot coexist in one cluster. Use separate clusters, or prefixed role names plus `REVOKE CONNECT ON DATABASE … FROM PUBLIC` and per-database `GRANT CONNECT`.
+- A query cannot join across databases in the same cluster without `postgres_fdw`/`dblink`. If former PDBs query each other, consider schemas in **one** database instead of separate databases.
+- Aurora Serverless v2 (scaling down to 0 ACU when idle) makes a cluster per tenant affordable for small, intermittently used PDBs.
 - Each Aurora instance (primary/replica) has its own endpoint, enabling workload segmentation across replicas.
 - Use the `TEMPLATE` option for cloning; use logical replication, database links, or AWS DMS to emulate refreshable/switchover scenarios.
 - Centralized fleet management maps to managing RDS instances + databases via the AWS console/CLI.

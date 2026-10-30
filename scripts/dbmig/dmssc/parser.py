@@ -203,8 +203,14 @@ def parse_project(dms_sc_dir: str) -> ImportResult:
             obj_by_id[sid.upper()] = obj
 
     # ---- Pass 2: target nodes (match by synchronization_object -> source id) --
+    # A project that was converted more than once (e.g. again after adding a
+    # schema-rename transformation rule) keeps the old target tree next to the new
+    # one, so one source object can have several target nodes. Keep the NEWEST
+    # (file modification time; `aws s3 cp` preserves the object's LastModified),
+    # and record the others, instead of whichever file happened to be read last.
+    target_mtime: Dict[str, tuple] = {}
     for tdir in _node_dirs(root, "t-"):
-        for f in tdir.iterdir():
+        for f in sorted(tdir.iterdir()):
             if not f.is_file():
                 continue
             node = _content0(_read_json(f))
@@ -220,6 +226,21 @@ def parse_project(dms_sc_dir: str) -> ImportResult:
             if obj is None:
                 continue
             meta = str(node.get("meta-type", "")).upper()
+            # Rank candidates: a node of the SAME kind as the source wins over a helper
+            # node DMS SC generates from it (a TABLE also yields a trigger node such as
+            # `tr_employee_biu` whose synchronization_object is the table), then newest.
+            score = (meta == obj.source_type, f.stat().st_mtime)
+            prev = target_mtime.get(src_id.upper())
+            if prev is not None:
+                if score < prev:
+                    if score[0] == prev[0]:
+                        result.superseded_targets.append(str(node.get("id", f.name)))
+                    continue
+                if score[0] == prev[0]:
+                    result.superseded_targets.append(obj.target_id or "?")
+                obj.action_items = [a for a in obj.action_items if a.source != "inline"]
+                obj.has_genai = False
+            target_mtime[src_id.upper()] = score
             locator = node.get("locator") or {}
             sql = str(node.get("sql", "") or "")
             obj.target_id = str(node.get("id", ""))
@@ -260,6 +281,12 @@ def _collect_message_actions(node, obj_by_id: Dict[str, DmsScObject],
             name = str(node.get("name", ""))
             if isinstance(actions, list) and actions and name:
                 obj = obj_by_id.get(name.upper())
+                if obj is None and stat.get("parentFullName"):
+                    # Column-level items (e.g. 7708 on a computed column, 7657 on a
+                    # hierarchyid column) sit on a child node whose ``name`` is the
+                    # bare column name; they belong to the parent table. Without
+                    # this roll-up a table with a CRITICAL column triages ACCEPT.
+                    obj = obj_by_id.get(str(stat["parentFullName"]).upper())
                 for a in actions:
                     if not isinstance(a, dict):
                         continue
@@ -288,23 +315,38 @@ def _collect_message_actions(node, obj_by_id: Dict[str, DmsScObject],
 
 
 def load_apply_results(dms_sc_dir: str) -> Dict[str, dict]:
-    """full-path (upper) -> {status, error} from apply-result/*.csv (best effort)."""
+    """full-path (upper) -> {status, error} from apply-result/*.csv (best effort).
+
+    Every "apply to target" run writes its own CSV, so an object applied twice (e.g. a
+    first export that failed on a missing dependency, then a re-run) appears in several
+    files. The LATEST attempt wins: rows are compared by their ``Timestamp`` column
+    (``YYYY-MM-DD HH:MM:SS``), then by file modification time — never by the arbitrary
+    order in which files are read.
+    """
     import csv
     root = Path(dms_sc_dir).expanduser()
     out: Dict[str, dict] = {}
+    rank: Dict[str, tuple] = {}
     ar = root / "apply-result"
     if not ar.is_dir():
         return out
-    for f in ar.glob("*.csv"):
+    for f in sorted(ar.glob("*.csv")):
         try:
+            mtime = f.stat().st_mtime
             with f.open(newline="", encoding="utf-8", errors="replace") as fh:
                 for row in csv.DictReader(fh):
                     fp = (row.get("Full Path") or "").strip()
-                    if fp:
-                        out[fp.upper()] = {
-                            "status": (row.get("Status") or "").strip(),
-                            "error": (row.get("Error") or "").strip(),
-                        }
+                    if not fp:
+                        continue
+                    key = fp.upper()
+                    r = ((row.get("Timestamp") or "").strip(), mtime)
+                    if key in rank and r < rank[key]:
+                        continue
+                    rank[key] = r
+                    out[key] = {
+                        "status": (row.get("Status") or "").strip(),
+                        "error": (row.get("Error") or "").strip(),
+                    }
         except (OSError, csv.Error) as exc:
             # One unreadable apply-result file must not abort the import; report it.
             from .. import console

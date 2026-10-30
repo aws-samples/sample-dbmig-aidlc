@@ -1,0 +1,5 @@
+ALTER TABLE adventureworks_humanresources.employeepayhistory
+ADD CONSTRAINT fk_employeepayhistory_employee_businessentityid_1003150619 FOREIGN KEY (businessentityid) 
+REFERENCES adventureworks_humanresources.employee (businessentityid)
+ON UPDATE NO ACTION
+ON DELETE NO ACTION;

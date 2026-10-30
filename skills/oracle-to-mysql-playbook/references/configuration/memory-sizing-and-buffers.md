@@ -6,6 +6,8 @@
 **Conversion category:** N/A (feature compatibility: two stars)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Current instance classes and Serverless v2 sizing (buffer pool verified), information_schema.GLOBAL_VARIABLES removed (verified), corrected log-buffer and PGA mappings, 8.4 dynamic defaults.
+
 **Key difference:** Different cache names, similar usage.
 
 ## Oracle
@@ -42,7 +44,7 @@ MySQL uses different memory buffers per storage engine; this covers **InnoDB**. 
 | `stored_program_cache` | Cached stored routines per connection |
 | `sort_buffer_size` | Sort buffers used while creating an InnoDB index |
 
-Total memory for an Aurora cluster is fixed by the **DB Instance Class** chosen at creation (e.g. `db.r3.large: 15.25GB`, `db.r3.xlarge: 30.5GB`).
+Total memory for an Aurora instance is fixed by the **DB instance class** (for example `db.r7g.large` 16 GiB, `db.r7g.xlarge` 32 GiB; the original's r3 classes are retired), or for **Serverless v2** by the current ACU count (about 2 GiB per ACU). The buffer pool follows capacity: on the 0.5–4 ACU validation clusters `innodb_buffer_pool_size` was ~280 MB (verified).
 
 > Note: cluster-level parameters such as `innodb_buffer_pool_size` and `binlog_cache_size` are configured via parameter groups in the RDS console.
 
@@ -53,7 +55,7 @@ SHOW VARIABLES LIKE 'innodb_buffer_pool_size';
 SHOW VARIABLES LIKE 'binlog_cache_size';
 SHOW VARIABLES LIKE 'stored_program_cache';
 
-SELECT * FROM information_schema.GLOBAL_VARIABLES;
+SELECT * FROM performance_schema.global_variables;   -- information_schema.GLOBAL_VARIABLES was removed (error 1109, verified)
 
 SET SESSION sort_buffer_size = 1000000;
 ```
@@ -63,12 +65,12 @@ SET SESSION sort_buffer_size = 1000000;
 | Description | Oracle | MySQL |
 |---|---|---|
 | Cache table data | `db_cache_size` | `innodb_buffer_pool_size` |
-| Transaction log records | `log_buffer` | `binlog_cache_size` |
+| Transaction log records | `log_buffer` | `innodb_log_buffer_size` (redo; 16 MB on 3.x, 64 MB on 8.4, verified); `binlog_cache_size` only matters with binary logging on |
 | Parallel queries | `large_pool_size` | N/A |
 | Java code and JVM | `Java_pool_size` | N/A |
 | Max physical memory for instance | `sga_max_size` / `memory_max_size` | Set by RDS/Aurora instance class |
-| Total private memory for all sessions | `pga_aggregate_target`, `pga_aggregate_limit` | `max_digest_length` |
-| View all parameters | `SELECT * FROM v$parameter;` | `SELECT * FROM information_schema.GLOBAL_VARIABLES` |
+| Total private memory for all sessions | `pga_aggregate_target`, `pga_aggregate_limit` | No aggregate limit: per-session buffers `sort_buffer_size`, `join_buffer_size` (256 KB each, verified), `tmp_table_size`/`temptable_max_ram` × `max_connections`. (`max_digest_length`, listed in the original, is unrelated.) |
+| View all parameters | `SELECT * FROM v$parameter;` | `SHOW GLOBAL VARIABLES` / `performance_schema.global_variables` |
 | Configure session-level parameter | `ALTER SESSION SET ...` | `SET SESSION ...` |
 | Configure instance-level parameter | `ALTER SYSTEM SET ...` | Parameter groups in RDS console |
 
@@ -78,3 +80,6 @@ SET SESSION sort_buffer_size = 1000000;
 - The dominant data cache maps `db_cache_size` → `innodb_buffer_pool_size`; size it via the parameter group, not at the OS level.
 - No Aurora equivalents for `large_pool_size` (parallel query) or `Java_pool_size`.
 - Cluster-wide memory parameters (`innodb_buffer_pool_size`, `binlog_cache_size`) are set in parameter groups; per-session tuning uses `SET SESSION`.
+- Leave `innodb_buffer_pool_size` at the Aurora default formula (about 3/4 of instance memory); Aurora's shared storage means there is no OS file cache to leave room for.
+- On Aurora MySQL 8.4 several memory parameters (`temptable_max_ram`, buffer-pool instances) scale with instance size by default (AWS docs); remove fixed values copied from older parameter groups.
+- Watch `FreeableMemory` and out-of-memory restarts when raising per-session buffers: they are allocated per connection.

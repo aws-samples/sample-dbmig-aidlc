@@ -6,6 +6,8 @@
 **Conversion category:** Manual (Two star feature compatibility — no automation; requires rewrite)
 **SCT automation:** No automation
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): INNODB_SYS_TABLES renamed (verified); no stemming (verified), CONTAINS mappings, prefix/phrase search, token size and stopwords, ngram parser for CJK (verified), OpenSearch instead of CloudSearch.
+
 ## SQL Server
 
 SQL Server runs full-text queries against character data via an integrated full-text engine and the `fdhost.exe` filter daemon. Requires a full-text catalog (logical container, single-database scope) containing one or more full-text indexes.
@@ -43,7 +45,7 @@ WHERE CONTAINS(ReviewText, 'excellent');
 
 ## MySQL
 
-Aurora MySQL supports InnoDB full-text indexes queried with the `MATCH … AGAINST` predicate. Indexes allowed on `CHAR`, `VARCHAR`, `TEXT` columns; created via `CREATE TABLE`, `ALTER TABLE`, or `CREATE INDEX`. Uses an inverted-index design with byte offsets for proximity. Index system tables visible via `INFORMATION_SCHEMA.INNODB_SYS_TABLES`.
+Aurora MySQL supports InnoDB full-text indexes queried with the `MATCH … AGAINST` predicate. Indexes allowed on `CHAR`, `VARCHAR`, `TEXT` columns; created via `CREATE TABLE`, `ALTER TABLE`, or `CREATE INDEX`. Uses an inverted-index design with byte offsets for proximity. Index system tables visible via `INFORMATION_SCHEMA.INNODB_TABLES` (`INNODB_SYS_TABLES` was renamed in 8.0 — error 1109, verified).
 
 Key internals:
 - **Index cache** batches recent inserts to reduce auxiliary-table contention.
@@ -105,4 +107,12 @@ SHOW WARNINGS;
 - Aurora full-text is simpler and less comprehensive but sufficient for most basic needs.
 - Pre-create the `FTS_DOC_ID` column (AUTO_INCREMENT) to avoid expensive table rebuilds on large tables.
 - Maintain soft-deleted entries via `OPTIMIZE TABLE` + `innodb_optimize_fulltext_only=ON`.
-- For complex workloads, consider Amazon CloudSearch (34 languages, highlighting, autocomplete, geospatial); no direct tooling integration — requires a custom sync app.
+- For complex workloads, use **Amazon OpenSearch Service**; an OpenSearch Ingestion pipeline can stream CDC from Aurora MySQL ([docs](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/configure-client-aurora.html)). (Amazon CloudSearch, suggested by the original, is closed to new customers.)
+
+Verified on Aurora MySQL 3.13 and 8.4.8:
+- **No stemming / inflectional forms**: natural-language `MATCH (t) AGAINST ('excellent')` does **not** match "Excellently" (SQL Server `FREETEXT`/`FORMSOF(INFLECTIONAL…)` would). Use boolean-mode prefix search `'+excel*'` (matched all three rows) or store a stemmed column.
+- `CONTAINS(t, '"excellent product"')` (phrase) → `AGAINST ('"excellent product"' IN BOOLEAN MODE)`; `CONTAINS(t, 'a AND NOT b')` → `'+a -b'`; `CONTAINSTABLE … RANK` → the `MATCH … AGAINST` expression in the select list (relevance score).
+- Words shorter than `innodb_ft_min_token_size` (3) are not indexed, and the default stopword list is on (`innodb_ft_enable_stopword` = 1); both are static parameters.
+- **CJK text**: create the index `WITH PARSER ngram` (`ngram_token_size` = 2, verified with Chinese text) — SQL Server's word breakers for Chinese/Japanese/Korean have no other equivalent.
+- `NEAR` proximity → boolean `'"a b" @n'` proximity syntax.
+- Full-text indexes are not supported on partitioned tables.

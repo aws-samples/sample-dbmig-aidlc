@@ -16,3 +16,5 @@ Reference information about query execution plans and query hints in Microsoft S
 
 - **Run plans:** SQL Server uses `SET SHOWPLAN_*`/`SET STATISTICS XML` (text/XML/graphical); Aurora MySQL uses `EXPLAIN`/`DESCRIBE` and `EXPLAIN ANALYZE` (tabular/JSON/TREE). Completely different optimizers — analysis must be redone, not translated.
 - **Hints & plan guides:** Aurora MySQL supports optimizer hints (`/*+ ... */`) and index hints (`USE`/`IGNORE`/`FORCE INDEX`) but has no plan-guide equivalent. SQL Server locking hints, `OPTIMIZE FOR`, and `RECOMPILE` are N/A in Aurora MySQL. Recommended approach: remove all hints first, then reapply selectively only as a last resort.
+
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): `MAX_EXECUTION_TIME` is in ms, MySQL 8 join-order/hash-join hints, locking-hint mapping, `EXPLAIN ANALYZE` TREE only, Database Insights replaces Performance Insights.

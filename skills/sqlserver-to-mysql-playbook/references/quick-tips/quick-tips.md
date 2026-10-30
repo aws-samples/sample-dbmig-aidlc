@@ -3,6 +3,8 @@
 > Source: AWS Microsoft SQL Server to Amazon Aurora MySQL Migration Playbook — Migration quick tips
 > URL: https://docs.aws.amazon.com/dms/latest/sql-server-to-aurora-mysql-migration-playbook/chap-sql-server-aurora-mysql.tips.html
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Corrected eight wrong tips (histograms, CHECK enforced, AUTO_INCREMENT persisted, '+' returns 0 silently, DEFAULT keyword works, identifier case, user variables, no DATEADD — all verified) and added an Aurora MySQL 8.4 / 3 section.
+
 These tips can save time as you transition from SQL Server to Aurora MySQL. They address
 many of the challenges faced by administrators new to Aurora MySQL, and highlight functional
 differences between similar SQL Server and Aurora MySQL features.
@@ -11,8 +13,9 @@ differences between similar SQL Server and Aurora MySQL features.
 
 - The concept of a *database* in MySQL isn't the same as in SQL Server. A database in MySQL
   is synonymous with *schema*.
-- You can't create explicit statistics objects in Aurora MySQL. Statistics are collected and
-  maintained for indexes only.
+- *(corrected)* There are no statistics objects, but MySQL 8 has column **histograms**
+  (`ANALYZE TABLE t UPDATE HISTOGRAM ON col`, verified) in addition to index statistics; they are
+  refreshed only manually.
 - The equivalent of `CREATE DATABASE… AS SNAPSHOT OF…` in SQL Server resembles Aurora MySQL
   database cloning. However, unlike SQL Server snapshots (which are read-only), Aurora MySQL
   cloned databases are updatable.
@@ -23,9 +26,8 @@ differences between similar SQL Server and Aurora MySQL features.
   foreign keys.
 - Partition `SWITCH` in SQL Server can be performed between any two partitions of any two
   tables. In Aurora MySQL, you can only `EXCHANGE` a table partition with a full table.
-- Unlike SQL Server statistics, Aurora MySQL doesn't collect detailed key value distribution;
-  it relies on selectivity only. When troubleshooting runtime, be aware that parameter values
-  are insignificant to plan choices.
+- Index statistics hold selectivity only; value distribution comes from histograms where you create
+  them. MySQL optimizes each execution, so there is no parameter-sniffing plan cache to manage.
 
 ## SQL / T-SQL
 
@@ -75,15 +77,15 @@ differences between similar SQL Server and Aurora MySQL features.
   value of `Col1`. The end result is `Col1 = Col2`.
 - In Aurora MySQL, you can use multiple rows with `NULL` for a UNIQUE constraint. In SQL
   Server, you can use only one row. Aurora MySQL follows the ANSI standard behavior.
-- Although Aurora MySQL supports the syntax for `CHECK` constraints, they are parsed but
-  ignored.
+- *(corrected)* `CHECK` constraints are **enforced** on Aurora MySQL 3 / 8.4 (MySQL 8.0.16+, error
+  3819, verified); `NOT ENFORCED` replaces `WITH NOCHECK`.
 - The Aurora MySQL `AUTO_INCREMENT` column property is similar to `IDENTITY` in SQL Server.
   However, there is a major difference in how sequences are maintained. SQL Server caches a
   set of values in memory and records the last allocation on disk; when the service restarts,
   some values may be lost but the sequence continues from where it left off. In Aurora MySQL,
   each time you restart the service, the seed value for `AUTO_INCREMENT` is reset to one
-  increment interval larger than the largest existing value. Sequence position isn't
-  maintained across service restarts.
+  increment interval larger than the largest existing value. *(corrected)* That was MySQL 5.7;
+  since MySQL 8.0 the counter is **persisted** and survives restarts, as in SQL Server.
 - Parameter names in Aurora MySQL don't require a preceding "@". You can declare local
   variables such as `DECLARE MyParam1 INTEGER`.
 - Parameters that use the @ sign don't have to be declared first. You can assign a value
@@ -95,18 +97,21 @@ differences between similar SQL Server and Aurora MySQL features.
   `SIGNAL` and `RESIGNAL` statements.
 - Aurora MySQL doesn't support the `MERGE` statement. Use the `REPLACE` statement and the
   `INSERT… ON DUPLICATE KEY UPDATE` statement as alternatives.
-- In Aurora MySQL, you can't concatenate strings with the `+` operator. `'A' + 'B'` isn't a
-  valid expression. Use the `CONCAT` function instead, for example `CONCAT('A', 'B')`.
+- In Aurora MySQL, you can't concatenate strings with the `+` operator. *(corrected)* `'A' + 'B'`
+  **is** valid — it is numeric addition and silently returns `0` (`'abc' + 1` = 1), with only a
+  warning (verified). Every string `+` must become `CONCAT('A', 'B')`.
 - Aurora MySQL doesn't support aliasing in the select list using `'String Alias' = Expression`.
   Aurora MySQL treats it as a logical predicate, returns 0 or FALSE, and aliases the column
   with the full expression. Use the `AS` syntax instead. (Note this syntax has been deprecated
   as of SQL Server 2008 R2.)
-- Aurora MySQL doesn't support using the `DEFAULT` keyword for `INSERT` statements. Use
-  explicit `NULL` instead. (Note this syntax has been deprecated as of SQL Server 2008 R2.)
-- Object identifiers are case sensitive by default in Aurora MySQL. If you get an "Object not
-  found" error, verify the object name case.
-- In Aurora MySQL, you can't declare variables interactively in a script — only within stored
-  routines such as stored procedures, functions, and triggers.
+- *(corrected)* `VALUES (DEFAULT, DEFAULT)` and `INSERT INTO t () VALUES ()` work in Aurora MySQL;
+  only SQL Server's `INSERT INTO t DEFAULT VALUES` form is a syntax error (all verified).
+- **Table and database** names are case-sensitive by default in Aurora MySQL
+  (`lower_case_table_names` = 0, settable only at cluster creation; `lab.Ut` vs `lab.ut` → error
+  1146, verified); column and routine names are not. If you get an "Object not found" error,
+  verify the object name case.
+- `DECLARE` local variables exist only within stored routines; scripts use **user variables**
+  (`SET @x = …`) instead (see above).
 - Aurora MySQL is much stricter than SQL Server about statement terminators. Always use a
   semicolon at the end of statements.
 - The syntax for `CREATE PROCEDURE` requires parentheses after the procedure name, similar to
@@ -137,12 +142,34 @@ more useful ones:
 Aurora MySQL date and time functions differ from SQL Server functions and can cause confusion
 during migration:
 
-- `DATEADD` is supported but is only used to add dates. Use `TIMESTAMPADD`, `DATE_ADD`, or
-  `DATE_SUB`. There is similar behavior for `DATEDIFF`.
+- *(corrected)* There is **no `DATEADD`** function (error 1305, verified); use `DATE_ADD(d, INTERVAL n unit)`,
+  `TIMESTAMPADD(unit, n, d)` or `DATE_SUB`. `DATEDIFF` exists but returns days only, as `a − b`;
+  SQL Server `DATEDIFF` counts boundaries while `TIMESTAMPDIFF` counts complete units — see
+  `../tsql/datetime.md`.
 - Do not use `CAST` and `CONVERT` for date formatting styles. In Aurora MySQL, use
   `DATE_FORMAT` and `TIME_FORMAT`.
 - If your application uses the `ANSI CURRENT_TIMESTAMP` syntax, conversion isn't required. Use
   `NOW` in place of `GETDATE`.
+
+## Aurora MySQL 8.4 / 3 additions (verified 2026-10-29)
+
+- Target **Aurora MySQL 8.4** for new migrations (standard support to April 2032; Aurora MySQL 3 / MySQL 8.0
+  to 30 April 2028). Details and the 8.4-vs-3 differences: `../../../oracle-to-mysql-playbook/references/target-baseline-aurora-mysql.md`.
+- Aurora's default `sql_mode` is **empty** (default parameter groups, verified 2026-10-30): long values are truncated, invalid dates become `0000-00-00`, NULLs in multi-row inserts become 0, `1/0` returns NULL, `GROUP BY` is not strict,
+  zero dates are accepted. Set a stricter `sql_mode` before equivalence testing.
+- Native now (5.7 gaps in the original playbook): CTEs, window functions, `CHECK`, `LATERAL` (for `APPLY`),
+  `JSON_TABLE` (for `OPENJSON`/`STRING_SPLIT`), `GROUP_CONCAT` (for `STRING_AGG`), `REGEXP_*`, roles,
+  `SKIP LOCKED`/`NOWAIT`, `GROUPING()` with `WITH ROLLUP`, functional and invisible indexes.
+- Still missing: `MERGE`, sequences, `PIVOT`, `FULL OUTER JOIN`, `GROUPING SETS`, `OUTPUT`, `TOP … WITH TIES`
+  (use `RANK()`), `INSTEAD OF` and statement-level triggers, table-valued functions and parameters (use JSON),
+  parameter defaults, overloading, filtered and `INCLUDE` indexes, `DEFAULT VALUES`.
+- Silent traps (verified): `ON DELETE SET DEFAULT` acts as `RESTRICT`; column-level `REFERENCES` creates no
+  FK; `ENGINE=FEDERATED` becomes InnoDB; `#temp` tables can't be referenced twice in one statement (1137);
+  unique keys allow many NULLs; the default collation is accent-insensitive and NO PAD.
+- 8.4 only: TLS required by default, `caching_sha2_password` for new users, `MASTER`/`SLAVE` statements removed,
+  FKs must reference a unique key, no `AUTO_INCREMENT` on `FLOAT`/`DOUBLE`.
+- Performance Insights reached end of life (2026-07-31) — use CloudWatch Database Insights and turn on
+  `performance_schema` (off by default).
 
 ## Conversion notes
 

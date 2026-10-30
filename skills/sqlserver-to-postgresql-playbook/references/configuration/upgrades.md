@@ -6,6 +6,8 @@
 **Conversion category:** N/A
 **SCT automation:** N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): version examples, `reg*` rule, PG 18 as target, Blue/Green upgrades.
+
 ## SQL Server
 
 Database upgrades are performed for security fixes, bug fixes, compliance, or new features. Two approaches: upgrade in-place or migrate to a new installation.
@@ -46,11 +48,11 @@ Or query from the database:
 ```sql
 SELECT AURORA_VERSION();
 -- aurora_version
--- 4.0.0
+-- 18.6.1
 
 SHOW SERVER_VERSION;
 -- server_version
--- 12.4
+-- 18.6
 ```
 
 AWS does **not** apply major version upgrades automatically — they may include non-backward-compatible system table/code changes, so application testing is highly recommended. Minor upgrades can be applied automatically by configuring the RDS instance; when enabled, the upgrade occurs during the scheduled maintenance window.
@@ -70,7 +72,7 @@ Recommended major upgrade process:
     ```sql
     SELECT count(*) FROM pg_catalog.pg_prepared_xacts;
     ```
-  - Remove all uses of `reg*` data types before upgrade (except `regtype` and `regclass`, the `reg*` types cannot be upgraded — `pg_upgrade` cannot persist them):
+  - Remove all uses of `reg*` data types before upgrade (except `regclass`, `regrole` and `regtype`; the others cannot be upgraded because `pg_upgrade` cannot persist them). Add `regnamespace` and `regcollation` to the list below:
     ```sql
     SELECT count(*) FROM pg_catalog.pg_class c, pg_catalog.pg_namespace n, pg_catalog.pg_attribute a
     WHERE c.oid = a.attrelid
@@ -116,3 +118,5 @@ aws rds modify-db-cluster ^
 - Both platforms require backup beforehand and application testing afterward, plus re-running all steps in production.
 - Major version upgrades require `--allow-major-version-upgrade` and a version-compatible parameter group; reboot after upgrade to apply a newly associated parameter group.
 - Choosing **Apply immediately** can cause an outage; otherwise changes apply in the maintenance window.
+- **New migrations should target Aurora PostgreSQL 18** (latest major; 18.3/18.4/18.6 available at validation, 2026-10-29) to avoid a near-term major upgrade.
+- Prefer **RDS Blue/Green Deployments** for later major upgrades (switchover typically under a minute). Run `ANALYZE` after any major upgrade. Versions past end of standard support incur RDS Extended Support charges.

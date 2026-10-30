@@ -6,6 +6,8 @@
 **Conversion category:** N/A (tooling)
 **SCT automation:** N/A — Aurora MySQL performance feature.
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Replaced Aurora MySQL 2 limits with the current 3 / 8.4 ones (partitioned tables, LOB/JSON, DYNAMIC; not with I/O-Optimized or t2/t3); verified off by default; MAXDOP and columnstore notes.
+
 ## SQL Server
 N/A on the source side. Conceptually comparable to SQL Server's parallel query execution, but Aurora pushes processing down to the distributed storage layer rather than parallelizing across a few server CPUs.
 
@@ -25,7 +27,12 @@ Aurora Parallel Query is an Aurora MySQL feature for faster analytical queries o
 - Potentially reduced data duplication in ETL pipelines by making long-running analytic queries on existing data practical.
 
 ### Important notes / limitations
-- **Table formats:** Row format must be `COMPACT`; partitioned tables are **not** supported.
-- **Data types:** `TEXT`, `BLOB`, and `GEOMETRY` are **not** supported.
-- **DDL:** The table can't have pending fast online DDL operations.
-- **Cost:** Available at no extra charge, but because it accesses storage directly, IO cost may increase.
+Current limits for Aurora MySQL 3 and 8.4 ([AWS docs](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-mysql-parallel-query.html), checked 2026-10-29); the original listed Aurora MySQL 2 limits:
+- **Row format:** `COMPACT` or `DYNAMIC` (default) work; `COMPRESSED`/`REDUNDANT` don't.
+- **Partitioned tables:** supported (larger partitions are more likely to qualify).
+- **Data types:** `TEXT`, `BLOB`, `JSON`, `GEOMETRY` and long `VARCHAR` columns are supported (extra retrieval overhead).
+- **DDL:** can run alongside instant DDL.
+- **Not supported** with Aurora I/O-Optimized storage or `db.t2`/`db.t3` classes.
+- **Off by default:** `aurora_parallel_query` = 0 on 3.13 and 8.4.8 (verified).
+- **Cost:** no feature charge, but it bypasses the buffer pool, so read I/O charges rise; prefer readers.
+- SQL Server `MAXDOP` / parallelism hints have no direct equivalent: Parallel Query is cost-based. For columnstore-style analytics consider a zero-ETL integration to Amazon Redshift.

@@ -1,4 +1,16 @@
 results:
+- label: ufnCalculateCustomerLifetimeValue
+  status: applied
+  error: null
+  pass: 1
+- label: ufnGetAccountingEndDate
+  status: applied
+  error: null
+  pass: 1
+- label: ufnGetAccountingStartDate
+  status: applied
+  error: null
+  pass: 1
 - label: ufnGetDocumentStatusText
   status: applied
   error: null
@@ -12,6 +24,78 @@ results:
   error: null
   pass: 1
 - label: ufnLeadingZeros
+  status: applied
+  error: null
+  pass: 1
+- label: VwCustomerShopping
+  status: applied
+  error: null
+  pass: 1
+- label: VwOpenCoupons
+  status: applied
+  error: null
+  pass: 1
+- label: VwRegionalSales
+  status: applied
+  error: null
+  pass: 1
+- label: VwTopMembers
+  status: applied
+  error: null
+  pass: 1
+- label: uspDeleteAuthor
+  status: applied
+  error: null
+  pass: 1
+- label: uspDeleteOldCoupons
+  status: applied
+  error: null
+  pass: 1
+- label: uspGetAuthorManagers
+  status: applied
+  error: null
+  pass: 1
+- label: uspGetBillOfMaterials
+  status: applied
+  error: null
+  pass: 1
+- label: uspGetManagerAuthors
+  status: applied
+  error: null
+  pass: 1
+- label: uspGetProductData
+  status: applied
+  error: null
+  pass: 1
+- label: uspGetTopRegion
+  status: applied
+  error: null
+  pass: 1
+- label: uspGetWhereUsedProductID
+  status: applied
+  error: null
+  pass: 1
+- label: uspLogError
+  status: applied
+  error: null
+  pass: 1
+- label: uspPrintError
+  status: applied
+  error: null
+  pass: 1
+- label: uspProcessRefunds
+  status: applied
+  error: null
+  pass: 1
+- label: uspShoppingLevelAmount
+  status: applied
+  error: null
+  pass: 1
+- label: uspUpdateAuthorLogin
+  status: applied
+  error: null
+  pass: 1
+- label: uspUpdateAuthorPersonalInfo
   status: applied
   error: null
   pass: 1

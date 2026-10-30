@@ -6,6 +6,8 @@
 **Conversion category:** Manual (Three-star feature compatibility — distribute load/applications/users across multiple instances)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): fixed the Multi-AZ/cross-Region wording, removed the MySQL-only `binlog_format` step, added targeted failover, Global Database and fast clones.
+
 ## Oracle
 
 Oracle Active Data Guard (ADG) is a synced database architecture with primary and standby databases. The difference between Data Guard and ADG is that ADG standby databases allow **read access only**.
@@ -61,22 +63,22 @@ ALTER DATABASE RECOVER MANAGED STANDBY DATABASE NODELAY DISCONNECT FROM SESSION;
 Use Aurora replicas to scale read operations and increase availability (analogous to ADG) with far less configuration. Manage replicas from the Amazon RDS console or automate via the AWS CLI.
 
 Two replication options when creating Aurora PostgreSQL instances:
-- **Multi-AZ (Availability Zone)** — replicating instance in a different region.
-- **Instance Read Replicas** — replicating instance in the same region.
+- **Multi-AZ** — Aurora Replicas in other Availability Zones of the same Region. They share the cluster's storage volume and are the failover targets.
+- **Cross-Region** — an **Aurora Global Database** secondary cluster in another Region (storage-level replication, typically under 1 second of lag).
 
 Instance options:
-- **Create Aurora Replica** — same region.
-- **Create Cross Region Read Replica** — new reader cluster in a different region.
+- **Add reader** — Aurora Replica in the same Region (up to 15 per cluster).
+- **Add AWS Region** — Global Database secondary cluster in a different Region.
 
 Differences between the two:
-- Cross Region creates a new reader cluster in a different region — higher level of HA and keeps data closer to end users.
-- Cross Region has more lag between instances.
+- A Global Database secondary is a separate reader cluster in a different Region. It gives Region-level DR and keeps data closer to remote users.
+- Cross-Region has more lag between instances (typically under 1 second).
 - Additional charges apply for cross-region data transfer.
 
 Behavioral notes:
 - DDL statements on the primary may interrupt connections on associated Aurora Replicas (if a replica connection is actively using an object modified by DDL on the primary).
 - Rebooting the primary instance automatically reboots the Aurora Replicas in that cluster.
-- Before creating a cross-region replica, turn on the `binlog_format` parameter.
+- Durability does not depend on replicas. Aurora storage keeps 6 copies across 3 AZs, and a commit is acknowledged only after a 4-of-6 storage quorum, so a committed transaction survives an AZ loss even with zero replicas. Replicas add fast failover and read scaling.
 
 With Multi-AZ, the primary switches over automatically to the standby replica when:
 - The primary database instance fails.
@@ -98,11 +100,12 @@ Comparison of ADG features vs. Aurora PostgreSQL replicas:
 
 | Feature | Oracle Active Data Guard | Aurora PostgreSQL |
 |---|---|---|
-| Switch over | `ALTER DATABASE SWITCHOVER TO DBREP VERIFY;` | Can't choose which instance to fail over to; the instance with higher priority becomes the writer (primary). |
-| Automatic failover | `EDIT DATABASE ... SET PROPERTY FASTSTARTFAILOVERTARGET=...; ENABLE FAST_START FAILOVER;` | Use Multi-AZ on instance creation or by modifying an existing instance. |
-| Sync vs async | Configurable (MAXIMIZE AVAILABILITY / MAXIMIZE PERFORMANCE) | **Not supported** — only asynchronous replication. |
-| Open standby to R/W and continue syncing | `CONVERT DATABASE ... TO SNAPSHOT STANDBY;` then `TO PHYSICAL STANDBY;` | **Not supported** — instead restore from snapshot, run QA/testing on the restored instance, then drop it. |
-| Gapped (delayed) replication | `ALTER DATABASE RECOVER MANAGED STANDBY DATABASE DELAY 5 ...` | **Not supported.** |
+| Switch over | `ALTER DATABASE SWITCHOVER TO DBREP VERIFY;` | `aws rds failover-db-cluster --db-cluster-identifier c1 --target-db-instance-identifier c1-reader-2` picks the new writer. Automatic failover picks the replica by promotion tier (`--promotion-tier 0–15`). Cross-Region: `aws rds switchover-global-cluster` (planned, no data loss) or `failover-global-cluster` (unplanned). |
+| Automatic failover | `EDIT DATABASE ... SET PROPERTY FASTSTARTFAILOVERTARGET=...; ENABLE FAST_START FAILOVER;` | Automatic whenever the cluster has at least one Aurora Replica in another AZ. |
+| Sync vs async | Configurable (MAXIMIZE AVAILABILITY / MAXIMIZE PERFORMANCE) | No mode switch. Commits are synchronous to the 6-way storage quorum across 3 AZs (comparable to Maximum Availability inside a Region). Replica caches and Global Database secondaries are asynchronous. Cap cross-Region lag with the `rds.global_db_rpo` cluster parameter (seconds), which delays commits if the RPO would be exceeded. |
+| Open standby to R/W and continue syncing | `CONVERT DATABASE ... TO SNAPSHOT STANDBY;` then `TO PHYSICAL STANDBY;` | **Not supported.** Closest equivalent: an **Aurora fast clone** (`aws rds restore-db-cluster-to-point-in-time --restore-type copy-on-write --use-latest-restorable-time`). A clone is a read/write copy ready in minutes that shares unchanged pages. Use it for QA, then delete it. It does not keep syncing. |
+| Gapped (delayed) replication | `ALTER DATABASE RECOVER MANAGED STANDBY DATABASE DELAY 5 ...` | **Not supported.** Use point-in-time restore (or a clone at a past time) to recover from human error. |
 
 - Aurora replication latency is in milliseconds; promotion of a replica to primary is typically under 30 seconds with no data loss.
-- Key tradeoff: Aurora simplifies HA/DR management at the cost of Oracle ADG flexibility (no sync mode, no delayed standby, no manual failover target selection).
+- Key tradeoff: Aurora simplifies HA/DR management at the cost of Oracle ADG flexibility (no delayed standby, no read/write snapshot standby that resyncs).
+- Applications should connect through the **cluster (writer) endpoint** and **reader endpoint**, not instance endpoints, so failover needs no reconfiguration. To cut failover time further, use RDS Proxy or the AWS Advanced JDBC/Python/Node.js wrappers, which are topology-aware.

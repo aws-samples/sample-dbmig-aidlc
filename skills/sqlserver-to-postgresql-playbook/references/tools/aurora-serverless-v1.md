@@ -1,27 +1,39 @@
-# Amazon Aurora Serverless v1 overview
+# Amazon Aurora Serverless (v2) — formerly "Aurora Serverless v1"
 
-> Source: AWS SQL Server→Aurora PostgreSQL Migration Playbook
+> Source: AWS SQL Server→Aurora PostgreSQL Migration Playbook (original topic: Aurora Serverless v1)
 > URL: https://docs.aws.amazon.com/dms/latest/sql-server-to-aurora-postgresql-migration-playbook/chap-sql-server-aurora-pg.tools.auroraserverless.html
 
-**Conversion category:** N/A (tooling)
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): **Aurora Serverless v1 reached end of life on 2025-03-31.** Remaining v1 clusters were moved to Serverless v2 ([AWS docs](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless.relnotes.html)). This page now describes **Aurora Serverless v2**, the only serverless option for Aurora PostgreSQL 18. The filename is kept so existing links still resolve.
+
+**Conversion category:** N/A (target deployment/capacity option)
 **SCT automation:** N/A
 
 ## SQL Server
-- Not applicable as a source. Aurora Serverless v1 is a **target deployment option** for the migrated database; SQL Server has no equivalent on-demand autoscaling configuration.
+Not applicable as a source. SQL Server has no on-demand autoscaling configuration (Azure SQL serverless is the closest analogue); this is a target deployment option.
 
-## PostgreSQL
-- Aurora Serverless v1 is an on-demand autoscaling configuration available for **Aurora PostgreSQL-Compatible Edition** (and Aurora MySQL). A migrated Aurora PostgreSQL database can run as a Serverless v1 cluster.
-- Cluster volume is **always encrypted** (you choose the key; encryption can't be disabled). Same encrypted-snapshot operations as provisioned clusters.
+## PostgreSQL — Aurora Serverless v2
+Aurora Serverless v2 is an instance class (`db.serverless`) inside a normal Aurora cluster. Capacity is measured in **Aurora Capacity Units (ACUs)**, about 2 GiB of memory each with matching CPU and network. You set a minimum and maximum per cluster, and capacity changes in fine-grained steps within seconds, while connections stay open.
+
+Facts that matter for a migration target (the validation cluster for this review was itself Serverless v2 on Aurora PostgreSQL 18.6):
+- **Range:** minimum **0** or 0.5 ACU, maximum up to **256 ACU** per instance.
+- **Scale to zero (auto-pause):** with `MinCapacity=0` an idle instance pauses and costs only storage. The first request after a pause fails until the instance resumes (observed: Data API `resuming after being auto-paused. Please wait a few seconds and try again`). Use `MinCapacity ≥ 0.5` for anything latency-sensitive, and add client retry logic otherwise.
+- **Mix with provisioned instances:** a cluster can have a provisioned writer and Serverless v2 readers, or the reverse. Readers in promotion tiers 0–1 scale with the writer, so they can take over after a failover.
+- **Same engine and features** as provisioned Aurora PostgreSQL 18: Multi-AZ, Global Database, RDS Proxy, Data API, Performance/Database Insights, all extensions.
+- **Storage** is the same six-way replicated cluster volume, always encrypted when created encrypted (choose a KMS key at creation).
+- Memory-sensitive settings scale with capacity. `shared_buffers` follows the **maximum** ACU, so a very low max can hurt cache-heavy workloads.
+
+```bash
+aws rds create-db-cluster --db-cluster-identifier app --engine aurora-postgresql --engine-version 18.6 \
+  --serverless-v2-scaling-configuration MinCapacity=0.5,MaxCapacity=64 \
+  --manage-master-user-password --storage-encrypted --enable-http-endpoint ...
+aws rds create-db-instance --db-instance-identifier app-1 --db-cluster-identifier app \
+  --engine aurora-postgresql --db-instance-class db.serverless --no-publicly-accessible
+```
+
+**Good fits:** variable or unpredictable workloads, new applications with uncertain sizing, dev/test (scale to zero overnight), many small per-tenant databases, and readers that absorb reporting spikes.
 
 ## Conversion notes
-- **What it is:** An on-demand autoscaling configuration for Amazon Aurora that scales compute capacity up/down based on application needs (vs. provisioned clusters where you manage capacity manually). Auto starts up, scales, and shuts down when not in use.
-- **Advantages:** Simpler than provisioned; scalable (no disruption to client connections); cost-effective (pay per-second for resources consumed); highly available storage (same fault-tolerant distributed storage with six-way replication as Aurora).
-- **Use cases:** Infrequently used apps; new apps (unsure of instance size); variable workloads (HR, budgeting, operational reporting); unpredictable workloads (sudden activity surges); dev/test databases (auto shut down nights/weekends); multi-tenant applications (per-database capacity managed automatically).
-- **Scaling behavior:**
-  - Autoscaling thresholds: **1.5 minutes to scale up**, **5 minutes to scale down** (metrics must exceed/fall below limits for that duration to trigger).
-  - Cool-down period between scaling activities: **5 minutes to scale up**, **15 minutes to scale down**.
-  - Service must find a **"scaling point"** — may take longer with long-running transactions.
-  - Scaling is transparent to clients/applications: existing connections and session state are transferred to new nodes.
-  - Pausing/resuming adds higher latency only for the first connection (~25 seconds).
-- **How to provision:** Management Console → Amazon RDS → Create database → Engine options → for Engine versions choose "Show versions that support Serverless v2" → choose capacity settings for your use case.
-- **Pricing:** See Serverless Pricing under MySQL-Compatible or PostgreSQL-Compatible Edition on the Aurora pricing page.
+- Do not plan new targets on Serverless v1; it no longer exists. Old guidance about v1 scaling points, 5/15-minute cool-downs and ~25 s resume latency does not apply to v2.
+- Size `MaxCapacity` from the SQL Server peak (CPU, memory from `sys.dm_os_performance_counters` / perfmon history), and `MinCapacity` from the steady baseline. Watch the `ACUUtilization` and `ServerlessDatabaseCapacity` CloudWatch metrics during performance tests.
+- Long-running batch jobs migrated from SQL Server Agent can push the instance to max ACU for hours. Compare the cost against a provisioned (or I/O-Optimized) writer for steady heavy workloads.
+- Pair with RDS Proxy or the Data API for connection-heavy serverless applications.

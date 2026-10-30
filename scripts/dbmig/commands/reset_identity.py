@@ -58,7 +58,7 @@ def run(args) -> int:
         console.err("reset-identity requires a 'target' connection")
         return 2
 
-    tgt_schema = (getattr(args, "target_schema", None) or args.schema).lower()
+    tgt_schema = config.resolve_target_schema(args)
     only = None
     if getattr(args, "tables", None):
         only = {t.strip().lower() for t in args.tables.split(",") if t.strip()}

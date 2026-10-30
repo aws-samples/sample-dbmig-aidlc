@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (three-star feature compatibility; three-star automation) — different paradigm/syntax requires application or driver rewrite.
 **SCT automation:** No automation. SCT action code index: XML.
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Corrected the LOAD XML note (LOAD XML FROM S3 exists); verified ExtractValue XPath support, ignored namespaces, NULL on malformed XML, UpdateXML; JSON_TABLE as XMLTABLE replacement.
+
 ## Oracle
 
 Oracle XML DB provides native XML support: the `XMLType` data type (accessible from SQL; supports XML Schema, XPath, XQuery, XSLT, DOM) and `XMLIndex` (indexes structured to unstructured XML). XML can be schema-based (validated against an XSD) or non-schema-based.
@@ -86,7 +88,13 @@ SELECT UpdateXML('<Root><Person>John</Person>
 -- <Person>Jack</Person>
 ```
 
-Note: Aurora MySQL does **not** support the MySQL `LOAD XML` statement; load XML into regular tables from S3 instead.
+Note: load XML files with **`LOAD XML FROM S3`** (rows as `<row>` attributes, child elements or `<field name=…>`); see `external-tables-and-s3.md`.
+
+Verified on Aurora MySQL 3.13 and 8.4.8:
+- `ExtractValue` supports XPath 1.0 subsets: attributes (`/r/a/@x` → `7`), functions such as `count(/r/a)` → `2`, multiple matches joined by spaces (`1 2`).
+- **Namespaces are ignored**: `ExtractValue('<r xmlns="u"><a>1</a></r>', '/r/a')` matches without a prefix.
+- **Malformed XML returns NULL** with a warning, not an error. Validate in the application, or check `ExtractValue(x, 'count(/*)') = 1` where structure matters.
+- `UpdateXML` replaces one matching node (`<r><a>9</a></r>`).
 
 ## Conversion notes
 
@@ -100,6 +108,7 @@ Note: Aurora MySQL does **not** support the MySQL `LOAD XML` statement; load XML
 | Query XQuery | `XMLQuery(...)` | N/A |
 | Validate XSD | Supported | Not supported |
 
-- Re-architect XML-heavy designs: prefer Aurora MySQL's native JSON type and 25+ JSON functions where possible.
+- Re-architect XML-heavy designs: prefer Aurora MySQL's native JSON type and its functions (`JSON_TABLE` replaces `XMLTABLE`) where possible.
+- Oracle `XMLTYPE` columns → `LONGTEXT` (toolkit datatype map); `XMLELEMENT`/`XMLAGG` generation → `CONCAT`/`GROUP_CONCAT` (escape `&`, `<`, `>` yourself) or JSON output.
 - XPath queries map to `ExtractValue`; updates map to `UpdateXML`; XQuery, XSD validation, and XML full-text indexing have no equivalent.
 - Application code/drivers using Oracle SQL/XML must be rewritten.

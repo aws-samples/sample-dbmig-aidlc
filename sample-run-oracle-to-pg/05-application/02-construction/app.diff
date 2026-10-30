@@ -1,6 +1,22 @@
-diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/config/DatabaseInfoConfig.java src/main/java/com/bobsusedbooks/config/DatabaseInfoConfig.java
---- migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/config/DatabaseInfoConfig.java	2026-03-14 16:31:58
-+++ src/main/java/com/bobsusedbooks/config/DatabaseInfoConfig.java	2026-09-28 23:56:12
+diff -ru --exclude=target --exclude=*.bak migrations/<project>/05-application/backup/20261030-145403/pom.xml ./pom.xml
+--- migrations/<project>/05-application/backup/20261030-145403/pom.xml	2026-10-30 14:50:10
++++ pom.xml	2026-10-30 14:55:02
+@@ -50,11 +50,7 @@
+             <version>42.7.7</version>
+             <scope>runtime</scope>
+         </dependency>
+-        <dependency>
+-            <groupId>com.oracle.database.jdbc</groupId>
+-            <artifactId>ojdbc17</artifactId>
+-            <version>23.8.0.25.04</version>
+-        </dependency>
++        <!-- ojdbc17 removed: migrated to PostgreSQL (org.postgresql:postgresql above) -->
+         <!-- Lombok -->
+         <dependency>
+             <groupId>org.projectlombok</groupId>
+diff -ru --exclude=target --exclude=*.bak migrations/<project>/05-application/backup/20261030-145403/src/main/java/com/bobsusedbooks/config/DatabaseInfoConfig.java ./src/main/java/com/bobsusedbooks/config/DatabaseInfoConfig.java
+--- migrations/<project>/05-application/backup/20261030-145403/src/main/java/com/bobsusedbooks/config/DatabaseInfoConfig.java	2026-10-30 14:50:10
++++ src/main/java/com/bobsusedbooks/config/DatabaseInfoConfig.java	2026-10-30 14:54:33
 @@ -45,11 +45,11 @@
  
          private String extractConnectionInfo(String jdbcUrl, String username) {
@@ -16,9 +32,9 @@ diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/jav
              }
          }
      }
-diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/config/DatabaseInfoController.java src/main/java/com/bobsusedbooks/config/DatabaseInfoController.java
---- migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/config/DatabaseInfoController.java	2026-03-14 16:31:58
-+++ src/main/java/com/bobsusedbooks/config/DatabaseInfoController.java	2026-09-28 23:56:12
+diff -ru --exclude=target --exclude=*.bak migrations/<project>/05-application/backup/20261030-145403/src/main/java/com/bobsusedbooks/config/DatabaseInfoController.java ./src/main/java/com/bobsusedbooks/config/DatabaseInfoController.java
+--- migrations/<project>/05-application/backup/20261030-145403/src/main/java/com/bobsusedbooks/config/DatabaseInfoController.java	2026-10-30 14:50:10
++++ src/main/java/com/bobsusedbooks/config/DatabaseInfoController.java	2026-10-30 14:54:33
 @@ -16,11 +16,11 @@
      @ModelAttribute("databaseInfo")
      public String getDatabaseInfo() {
@@ -34,25 +50,26 @@ diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/jav
          }
      }
  }
-diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/demo/OracleBookRepository.java src/main/java/com/bobsusedbooks/demo/OracleBookRepository.java
---- migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/demo/OracleBookRepository.java	2026-03-14 16:31:58
-+++ src/main/java/com/bobsusedbooks/demo/OracleBookRepository.java	2026-09-28 23:56:51
-@@ -20,6 +20,14 @@
+diff -ru --exclude=target --exclude=*.bak migrations/<project>/05-application/backup/20261030-145403/src/main/java/com/bobsusedbooks/demo/OracleBookRepository.java ./src/main/java/com/bobsusedbooks/demo/OracleBookRepository.java
+--- migrations/<project>/05-application/backup/20261030-145403/src/main/java/com/bobsusedbooks/demo/OracleBookRepository.java	2026-10-30 14:50:10
++++ src/main/java/com/bobsusedbooks/demo/OracleBookRepository.java	2026-10-30 14:55:02
+@@ -20,6 +20,15 @@
   * IMPORTANT: This class contains Oracle-specific SQL syntax that can be transformed
   * to PostgreSQL using Amazon Q's /transform command.
   */
 +/*
 + * dbmig-aidlc app modernization (Oracle -> PostgreSQL), like-for-like:
 + * PRE-EXISTING BROKEN — this demo class queries columns/tables that do not exist in the
-+ * SOURCE schema either (verified against Oracle ALL_TAB_COLUMNS / ALL_TABLES: BOOKS has no
-+ * NAME/QUANTITY/PRICE/IS_AVAILABLE/AVERAGE_RATING/CREATED_DATE, CUSTOMERS no NAME, ORDERS no
-+ * ORDER_DATE, no SALES table). Only the Oracle dialect was converted mechanically; the class
-+ * was not repaired (no schema was invented). Decide: delete, or rewrite against the real model.
++ * SOURCE schema either (verified against Oracle ALL_TAB_COLUMNS / ALL_TABLES on 2026-10-30:
++ * BOOKS has no NAME/QUANTITY/PRICE/IS_AVAILABLE/AVERAGE_RATING/CREATED_DATE/IS_FEATURED,
++ * CUSTOMERS no NAME, ORDERS no ORDER_DATE, no SALES table). Only the Oracle dialect was
++ * converted mechanically; the class was not repaired (no schema was invented).
++ * Decide: delete it, or rewrite it against the real model.
 + */
  @Repository
  public class OracleBookRepository {
      
-@@ -35,8 +43,11 @@
+@@ -35,8 +44,11 @@
          // Oracle-specific SQL with ROWNUM for pagination
          String sql = "SELECT * FROM BOOKS b " +
                       "WHERE b.genre_id = ? " +
@@ -66,7 +83,7 @@ diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/jav
          
          try (Connection conn = dataSource.getConnection();
               PreparedStatement stmt = conn.prepareStatement(sql)) {
-@@ -88,7 +99,7 @@
+@@ -88,7 +100,7 @@
          
          // Oracle-specific SQL with NVL function
          String sql = "SELECT * FROM BOOKS b " +
@@ -75,7 +92,7 @@ diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/jav
                       "ORDER BY b.name";
          
          try (Connection conn = dataSource.getConnection();
-@@ -113,9 +124,9 @@
+@@ -113,9 +125,9 @@
          
          // Oracle-specific SQL with DECODE function
          String sql = "SELECT b.*, " +
@@ -88,16 +105,16 @@ diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/jav
                       "FROM BOOKS b " +
                       "WHERE b.quantity < ? " +
                       "ORDER BY b.quantity ASC";
-@@ -192,7 +203,7 @@
+@@ -192,7 +204,7 @@
              sql.append("AND b.price <= ? ");
          }
          
 -        sql.append("AND b.created_date > TO_DATE('2023-01-01', 'YYYY-MM-DD') ");
-+        sql.append("AND b.created_date > to_timestamp('2023-01-01', 'YYYY-MM-DD')::timestamp ");
++        sql.append("AND b.created_date > TIMESTAMP '2023-01-01 00:00:00' ");
          sql.append("ORDER BY b.name");
          
          try (Connection conn = dataSource.getConnection();
-@@ -260,7 +271,7 @@
+@@ -260,7 +272,7 @@
                       "         ROW_NUMBER() OVER (ORDER BY SUM(s.quantity) DESC) as rank " +
                       "  FROM BOOKS b " +
                       "  JOIN SALES s ON b.id = s.book_id " +
@@ -106,25 +123,26 @@ diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/jav
                       "  GROUP BY b.id, b.name, b.author, b.isbn, b.price, b.quantity, " +
                       "           b.genre_id, b.publisher_id, b.condition_id, b.book_type_id, " +
                       "           b.is_featured, b.is_bestseller, b.is_new_arrival, " +
-diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/demo/OracleBookService.java src/main/java/com/bobsusedbooks/demo/OracleBookService.java
---- migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/demo/OracleBookService.java	2026-03-14 16:31:58
-+++ src/main/java/com/bobsusedbooks/demo/OracleBookService.java	2026-09-28 23:56:51
-@@ -19,6 +19,14 @@
+diff -ru --exclude=target --exclude=*.bak migrations/<project>/05-application/backup/20261030-145403/src/main/java/com/bobsusedbooks/demo/OracleBookService.java ./src/main/java/com/bobsusedbooks/demo/OracleBookService.java
+--- migrations/<project>/05-application/backup/20261030-145403/src/main/java/com/bobsusedbooks/demo/OracleBookService.java	2026-10-30 14:50:10
++++ src/main/java/com/bobsusedbooks/demo/OracleBookService.java	2026-10-30 14:55:02
+@@ -19,6 +19,15 @@
   * IMPORTANT: This class contains Oracle-specific SQL syntax that can be transformed
   * to PostgreSQL using Amazon Q's /transform command.
   */
 +/*
 + * dbmig-aidlc app modernization (Oracle -> PostgreSQL), like-for-like:
 + * PRE-EXISTING BROKEN — this demo class queries columns/tables that do not exist in the
-+ * SOURCE schema either (verified against Oracle ALL_TAB_COLUMNS / ALL_TABLES: BOOKS has no
-+ * NAME/QUANTITY/PRICE/IS_AVAILABLE/AVERAGE_RATING/CREATED_DATE, CUSTOMERS no NAME, ORDERS no
-+ * ORDER_DATE, no SALES table). Only the Oracle dialect was converted mechanically; the class
-+ * was not repaired (no schema was invented). Decide: delete, or rewrite against the real model.
++ * SOURCE schema either (verified against Oracle ALL_TAB_COLUMNS / ALL_TABLES on 2026-10-30:
++ * BOOKS has no NAME/QUANTITY/PRICE/IS_AVAILABLE/AVERAGE_RATING/CREATED_DATE/IS_FEATURED,
++ * CUSTOMERS no NAME, ORDERS no ORDER_DATE, no SALES table). Only the Oracle dialect was
++ * converted mechanically; the class was not repaired (no schema was invented).
++ * Decide: delete it, or rewrite it against the real model.
 + */
  @Service
  public class OracleBookService {
  
-@@ -39,7 +47,7 @@
+@@ -39,7 +48,7 @@
              "  JOIN order_items oi ON o.id = oi.order_id " +
              "  JOIN books b ON oi.book_id = b.id " +
              "  WHERE o.customer_id = ? " +
@@ -133,20 +151,20 @@ diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/jav
              "  GROUP BY b.genre_id " +
              "  ORDER BY purchase_count DESC " +
              "), " +
-@@ -97,8 +105,8 @@
+@@ -97,8 +106,8 @@
              "  AVG(o.total_amount) as avg_order_value, " +
              "  MAX(o.order_date) as last_order_date, " +
              "  ROUND(AVG(LEAD(o.order_date) OVER (PARTITION BY o.customer_id ORDER BY o.order_date) - o.order_date)) as avg_days_between_orders, " +
 -            "  LISTAGG(DISTINCT g.name, ', ') WITHIN GROUP (ORDER BY COUNT(*) DESC) as top_genres, " +
 -            "  ROUND(MONTHS_BETWEEN(SYSDATE, MIN(o.order_date))) as customer_age_months " +
-+            "  STRING_AGG(DISTINCT g.name, ', ') as top_genres, " +  // Oracle ORDER BY COUNT(*) inside LISTAGG has no DISTINCT-compatible PG form; order lost — flag
-+            "  ROUND((EXTRACT(YEAR FROM age(LOCALTIMESTAMP(0), MIN(o.order_date))) * 12 + EXTRACT(MONTH FROM age(LOCALTIMESTAMP(0), MIN(o.order_date))))::numeric) as customer_age_months " +
++            "  STRING_AGG(DISTINCT g.name, ', ') as top_genres, " +  // LISTAGG ... ORDER BY COUNT(*) has no DISTINCT-compatible form; ordering lost — flag
++            "  ROUND((EXTRACT(YEAR FROM age(LOCALTIMESTAMP(0), MIN(o.order_date))) * 12 + EXTRACT(MONTH FROM age(LOCALTIMESTAMP(0), MIN(o.order_date))))::numeric) as customer_age_months " +  // approximates MONTHS_BETWEEN (whole months)
              "FROM customers c " +
              "JOIN orders o ON c.id = o.customer_id " +
              "JOIN order_items oi ON o.id = oi.order_id " +
-diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/entities/Address.java src/main/java/com/bobsusedbooks/entities/Address.java
---- migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/entities/Address.java	2026-03-14 16:31:58
-+++ src/main/java/com/bobsusedbooks/entities/Address.java	2026-09-28 23:57:19
+diff -ru --exclude=target --exclude=*.bak migrations/<project>/05-application/backup/20261030-145403/src/main/java/com/bobsusedbooks/entities/Address.java ./src/main/java/com/bobsusedbooks/entities/Address.java
+--- migrations/<project>/05-application/backup/20261030-145403/src/main/java/com/bobsusedbooks/entities/Address.java	2026-10-30 14:50:10
++++ src/main/java/com/bobsusedbooks/entities/Address.java	2026-10-30 14:54:33
 @@ -1,5 +1,8 @@
  package com.bobsusedbooks.entities;
  
@@ -166,9 +184,9 @@ diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/jav
      private Boolean isDefault;
      
      private String addressType;
-diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/entities/Book.java src/main/java/com/bobsusedbooks/entities/Book.java
---- migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/entities/Book.java	2026-03-14 16:31:58
-+++ src/main/java/com/bobsusedbooks/entities/Book.java	2026-09-28 23:57:19
+diff -ru --exclude=target --exclude=*.bak migrations/<project>/05-application/backup/20261030-145403/src/main/java/com/bobsusedbooks/entities/Book.java ./src/main/java/com/bobsusedbooks/entities/Book.java
+--- migrations/<project>/05-application/backup/20261030-145403/src/main/java/com/bobsusedbooks/entities/Book.java	2026-10-30 14:50:10
++++ src/main/java/com/bobsusedbooks/entities/Book.java	2026-10-30 14:54:33
 @@ -1,5 +1,8 @@
  package com.bobsusedbooks.entities;
  
@@ -178,18 +196,17 @@ diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/jav
  import jakarta.persistence.*;
  import lombok.Getter;
  import lombok.NoArgsConstructor;
-@@ -29,6 +32,8 @@
+@@ -29,6 +32,7 @@
      private String description;
      
      @Column(name = "publish_date")
 +    @JdbcTypeCode(SqlTypes.TIMESTAMP)
-+    
      private LocalDate publishDate;
      
      private Integer year;
-diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/entities/BookCover.java src/main/java/com/bobsusedbooks/entities/BookCover.java
---- migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/entities/BookCover.java	2026-03-14 16:31:58
-+++ src/main/java/com/bobsusedbooks/entities/BookCover.java	2026-09-28 23:57:19
+diff -ru --exclude=target --exclude=*.bak migrations/<project>/05-application/backup/20261030-145403/src/main/java/com/bobsusedbooks/entities/BookCover.java ./src/main/java/com/bobsusedbooks/entities/BookCover.java
+--- migrations/<project>/05-application/backup/20261030-145403/src/main/java/com/bobsusedbooks/entities/BookCover.java	2026-10-30 14:50:10
++++ src/main/java/com/bobsusedbooks/entities/BookCover.java	2026-10-30 14:54:33
 @@ -1,5 +1,8 @@
  package com.bobsusedbooks.entities;
  
@@ -209,9 +226,9 @@ diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/jav
      private byte[] coverImage;
      
      @Column(name = "content_type", length = 100)
-diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/entities/Customer.java src/main/java/com/bobsusedbooks/entities/Customer.java
---- migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/entities/Customer.java	2026-03-14 16:31:58
-+++ src/main/java/com/bobsusedbooks/entities/Customer.java	2026-09-28 23:57:19
+diff -ru --exclude=target --exclude=*.bak migrations/<project>/05-application/backup/20261030-145403/src/main/java/com/bobsusedbooks/entities/Customer.java ./src/main/java/com/bobsusedbooks/entities/Customer.java
+--- migrations/<project>/05-application/backup/20261030-145403/src/main/java/com/bobsusedbooks/entities/Customer.java	2026-10-30 14:50:10
++++ src/main/java/com/bobsusedbooks/entities/Customer.java	2026-10-30 14:54:33
 @@ -1,5 +1,8 @@
  package com.bobsusedbooks.entities;
  
@@ -252,9 +269,9 @@ diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/jav
      private Boolean accountLocked = false;
      
      private LocalDateTime lastLogin;
-diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/entities/Listing.java src/main/java/com/bobsusedbooks/entities/Listing.java
---- migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/entities/Listing.java	2026-03-14 16:31:58
-+++ src/main/java/com/bobsusedbooks/entities/Listing.java	2026-09-28 23:57:19
+diff -ru --exclude=target --exclude=*.bak migrations/<project>/05-application/backup/20261030-145403/src/main/java/com/bobsusedbooks/entities/Listing.java ./src/main/java/com/bobsusedbooks/entities/Listing.java
+--- migrations/<project>/05-application/backup/20261030-145403/src/main/java/com/bobsusedbooks/entities/Listing.java	2026-10-30 14:50:10
++++ src/main/java/com/bobsusedbooks/entities/Listing.java	2026-10-30 14:54:33
 @@ -1,5 +1,8 @@
  package com.bobsusedbooks.entities;
  
@@ -284,9 +301,9 @@ diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/jav
      private Boolean isNewArrival = false;
      
      @Column(name = "created_on", nullable = false)
-diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/entities/Order.java src/main/java/com/bobsusedbooks/entities/Order.java
---- migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/entities/Order.java	2026-03-14 16:31:58
-+++ src/main/java/com/bobsusedbooks/entities/Order.java	2026-09-28 23:57:19
+diff -ru --exclude=target --exclude=*.bak migrations/<project>/05-application/backup/20261030-145403/src/main/java/com/bobsusedbooks/entities/Order.java ./src/main/java/com/bobsusedbooks/entities/Order.java
+--- migrations/<project>/05-application/backup/20261030-145403/src/main/java/com/bobsusedbooks/entities/Order.java	2026-10-30 14:50:10
++++ src/main/java/com/bobsusedbooks/entities/Order.java	2026-10-30 14:54:33
 @@ -1,5 +1,8 @@
  package com.bobsusedbooks.entities;
  
@@ -296,28 +313,25 @@ diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/jav
  import jakarta.persistence.*;
  import lombok.Getter;
  import lombok.NoArgsConstructor;
-@@ -52,12 +55,18 @@
+@@ -52,12 +55,15 @@
      private String paymentStatus;
      
      @Column(name = "shipped_date")
 +    @JdbcTypeCode(SqlTypes.TIMESTAMP)
-+    
      private LocalDate shippedDate;
      
      @Column(name = "delivered_date")
 +    @JdbcTypeCode(SqlTypes.TIMESTAMP)
-+    
      private LocalDate deliveredDate;
      
      @Column(name = "cancelled_date")
 +    @JdbcTypeCode(SqlTypes.TIMESTAMP)
-+    
      private LocalDate cancelledDate;
      
      @Column(name = "cancellation_reason")
-diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/entities/PasswordResetToken.java src/main/java/com/bobsusedbooks/entities/PasswordResetToken.java
---- migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/entities/PasswordResetToken.java	2026-03-14 16:31:58
-+++ src/main/java/com/bobsusedbooks/entities/PasswordResetToken.java	2026-09-28 23:57:19
+diff -ru --exclude=target --exclude=*.bak migrations/<project>/05-application/backup/20261030-145403/src/main/java/com/bobsusedbooks/entities/PasswordResetToken.java ./src/main/java/com/bobsusedbooks/entities/PasswordResetToken.java
+--- migrations/<project>/05-application/backup/20261030-145403/src/main/java/com/bobsusedbooks/entities/PasswordResetToken.java	2026-10-30 14:50:10
++++ src/main/java/com/bobsusedbooks/entities/PasswordResetToken.java	2026-10-30 14:54:33
 @@ -1,5 +1,8 @@
  package com.bobsusedbooks.entities;
  
@@ -336,9 +350,9 @@ diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/jav
      private Boolean used = false;
      
      public PasswordResetToken(String token, Customer customer, LocalDateTime expiryDate) {
-diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/entities/ShoppingCartItem.java src/main/java/com/bobsusedbooks/entities/ShoppingCartItem.java
---- migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/entities/ShoppingCartItem.java	2026-03-14 16:31:58
-+++ src/main/java/com/bobsusedbooks/entities/ShoppingCartItem.java	2026-09-28 23:57:19
+diff -ru --exclude=target --exclude=*.bak migrations/<project>/05-application/backup/20261030-145403/src/main/java/com/bobsusedbooks/entities/ShoppingCartItem.java ./src/main/java/com/bobsusedbooks/entities/ShoppingCartItem.java
+--- migrations/<project>/05-application/backup/20261030-145403/src/main/java/com/bobsusedbooks/entities/ShoppingCartItem.java	2026-10-30 14:50:10
++++ src/main/java/com/bobsusedbooks/entities/ShoppingCartItem.java	2026-10-30 14:54:33
 @@ -1,5 +1,8 @@
  package com.bobsusedbooks.entities;
  
@@ -358,9 +372,9 @@ diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/jav
      private Boolean isWishlistItem;
      
      @ManyToOne(fetch = FetchType.LAZY)
-diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/repositories/BookRepository.java src/main/java/com/bobsusedbooks/repositories/BookRepository.java
---- migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/repositories/BookRepository.java	2026-03-14 16:31:58
-+++ src/main/java/com/bobsusedbooks/repositories/BookRepository.java	2026-09-29 00:05:28
+diff -ru --exclude=target --exclude=*.bak migrations/<project>/05-application/backup/20261030-145403/src/main/java/com/bobsusedbooks/repositories/BookRepository.java ./src/main/java/com/bobsusedbooks/repositories/BookRepository.java
+--- migrations/<project>/05-application/backup/20261030-145403/src/main/java/com/bobsusedbooks/repositories/BookRepository.java	2026-10-30 14:50:10
++++ src/main/java/com/bobsusedbooks/repositories/BookRepository.java	2026-10-30 14:54:33
 @@ -94,10 +94,14 @@
              Pageable pageable);
  
@@ -380,9 +394,9 @@ diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/jav
              nativeQuery = true)
      List<Book> fullTextSearchBooks(String searchTerms);        
  }
-diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/repositories/CustomerRepository.java src/main/java/com/bobsusedbooks/repositories/CustomerRepository.java
---- migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/repositories/CustomerRepository.java	2026-03-14 16:31:58
-+++ src/main/java/com/bobsusedbooks/repositories/CustomerRepository.java	2026-09-28 23:57:02
+diff -ru --exclude=target --exclude=*.bak migrations/<project>/05-application/backup/20261030-145403/src/main/java/com/bobsusedbooks/repositories/CustomerRepository.java ./src/main/java/com/bobsusedbooks/repositories/CustomerRepository.java
+--- migrations/<project>/05-application/backup/20261030-145403/src/main/java/com/bobsusedbooks/repositories/CustomerRepository.java	2026-10-30 14:50:10
++++ src/main/java/com/bobsusedbooks/repositories/CustomerRepository.java	2026-10-30 14:54:33
 @@ -31,6 +31,9 @@
       * @param customerId The ID of the customer
       * @return List of CustomerHistoryDTO objects containing the customer's purchase history
@@ -394,9 +408,9 @@ diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/jav
      List<CustomerHistoryDTO> getCustomerPurchaseHistory(@Param("customerId") Long customerId);
  }
 \ No newline at end of file
-diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/services/BookService.java src/main/java/com/bobsusedbooks/services/BookService.java
---- migrations/<project>/05-application/backup/20260928-235158/src/main/java/com/bobsusedbooks/services/BookService.java	2026-03-14 16:31:58
-+++ src/main/java/com/bobsusedbooks/services/BookService.java	2026-09-29 00:05:28
+diff -ru --exclude=target --exclude=*.bak migrations/<project>/05-application/backup/20261030-145403/src/main/java/com/bobsusedbooks/services/BookService.java ./src/main/java/com/bobsusedbooks/services/BookService.java
+--- migrations/<project>/05-application/backup/20261030-145403/src/main/java/com/bobsusedbooks/services/BookService.java	2026-10-30 14:50:10
++++ src/main/java/com/bobsusedbooks/services/BookService.java	2026-10-30 14:54:33
 @@ -176,10 +176,13 @@
              return "%";
          }
@@ -415,9 +429,50 @@ diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/jav
      }
  
      public Page<BookDto> searchBooksPaginated(String keyword, Pageable pageable) {
-diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/resources/application.properties src/main/resources/application.properties
---- migrations/<project>/05-application/backup/20260928-235158/src/main/resources/application.properties	2026-09-28 10:05:17
-+++ src/main/resources/application.properties	2026-09-28 23:56:12
+diff -ru --exclude=target --exclude=*.bak migrations/<project>/05-application/backup/20261030-145403/src/main/java/com/bobsusedbooks/utils/LoadCoverImages.java ./src/main/java/com/bobsusedbooks/utils/LoadCoverImages.java
+--- migrations/<project>/05-application/backup/20261030-145403/src/main/java/com/bobsusedbooks/utils/LoadCoverImages.java	2026-10-30 14:50:10
++++ src/main/java/com/bobsusedbooks/utils/LoadCoverImages.java	2026-10-30 14:55:13
+@@ -21,9 +21,11 @@
+             System.exit(1);
+         }
+ 
+-        String url = props.getProperty("spring.datasource.url");
+-        String username = props.getProperty("spring.datasource.username");
+-        String password = props.getProperty("spring.datasource.password");
++        // dbmig-aidlc: the datasource settings are now ${ENV} placeholders (secrets moved out of
++        // application.properties). This utility reads the file without Spring, so resolve them here.
++        String url = resolvePlaceholders(props.getProperty("spring.datasource.url"));
++        String username = resolvePlaceholders(props.getProperty("spring.datasource.username"));
++        String password = resolvePlaceholders(props.getProperty("spring.datasource.password"));
+ 
+         try (Connection conn = DriverManager.getConnection(url, username, password)) {
+             Map<Integer, String> imageMap = new HashMap<>();
+@@ -49,6 +51,22 @@
+             System.err.println("Database error: " + e.getMessage());
+             System.exit(1);
+         }
++    }
++
++    /** Resolve ${NAME} and ${NAME:default} from the environment, like Spring's property resolution. */
++    static String resolvePlaceholders(String value) {
++        if (value == null) {
++            return null;
++        }
++        java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\$\\{([A-Za-z0-9_.]+)(?::([^}]*))?}").matcher(value);
++        StringBuilder out = new StringBuilder();
++        while (m.find()) {
++            String env = System.getenv(m.group(1));
++            String replacement = env != null ? env : (m.group(2) != null ? m.group(2) : "");
++            m.appendReplacement(out, java.util.regex.Matcher.quoteReplacement(replacement));
++        }
++        m.appendTail(out);
++        return out.toString();
+     }
+ 
+     private static void loadImage(Connection conn, int bookId, String filename) {
+diff -ru --exclude=target --exclude=*.bak migrations/<project>/05-application/backup/20261030-145403/src/main/resources/application.properties ./src/main/resources/application.properties
+--- migrations/<project>/05-application/backup/20261030-145403/src/main/resources/application.properties	2026-10-30 14:50:10
++++ src/main/resources/application.properties	2026-10-30 14:55:02
 @@ -1,15 +1,14 @@
 -# Oracle Database Configuration
 -spring.datasource.url=jdbc:oracle:thin:@//<ORACLE_HOST>:1521/ORCL
@@ -440,18 +495,3 @@ diff -ru migrations/<project>/05-application/backup/20260928-235158/src/main/res
  
  # SQL Initialization
  #spring.sql.init.mode=always@
---- migrations/<project>/05-application/backup/20260928-235158/pom.xml	2026-05-30 18:37:03
-+++ pom.xml	2026-09-28 23:56:51
-@@ -50,11 +50,7 @@
-             <version>42.7.7</version>
-             <scope>runtime</scope>
-         </dependency>
--        <dependency>
--            <groupId>com.oracle.database.jdbc</groupId>
--            <artifactId>ojdbc17</artifactId>
--            <version>23.8.0.25.04</version>
--        </dependency>
-+        <!-- ojdbc17 removed: migrated to PostgreSQL (org.postgresql:postgresql above) -->
-         <!-- Lombok -->
-         <dependency>
-             <groupId>org.projectlombok</groupId>

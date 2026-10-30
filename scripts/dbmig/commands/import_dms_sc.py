@@ -28,7 +28,7 @@ from typing import Dict, List
 import yaml
 
 from .. import config, console, report
-from ..manifest import write_manifest
+from ..manifest import load_manifest, write_manifest
 from ..dmssc import parse_project, classify
 from ..dmssc.classify import ACCEPT, VERIFY, MANUAL
 from ..dmssc.parser import load_apply_results
@@ -51,6 +51,22 @@ def _snap_base(obj: DmsScObject) -> str:
     # scanners quiet and the 8-hex-char stem is just as collision-safe here.
     h = hashlib.sha256(obj.source_id.encode("utf-8")).hexdigest()[:8]
     return f"{stem}__{h}"
+
+
+def _manual_label(o: DmsScObject, code_units: List[dict]) -> str:
+    """``Schema.Name`` plus its construction state, so the report shows which MANUAL
+    objects were already reconverted (a re-import keeps that work)."""
+    label = f"{o.source_schema}.{o.source_name}"
+    unit = next((u for u in code_units if u.get("source_id") == o.source_id), None)
+    if unit and unit.get("reconverted"):
+        state = "applied" if unit.get("status") == "applied" else unit.get("status", "")
+        return f"{label}|reconverted ({state})"
+    return label
+
+
+def _norm_nl(text: str) -> str:
+    # DMS SC output carries CRLF; read_text() folds it to LF, so compare normalized.
+    return text.replace("\r\n", "\n")
 
 
 def _status_for(disp: str) -> str:
@@ -76,6 +92,11 @@ def run(args) -> int:
         console.warn("no convertible objects found in the DMS SC project "
                      "(check --dms-sc-dir points at the project root)")
         return 0
+
+    if result.superseded_targets:
+        console.warn(f"{len(result.superseded_targets)} older target node(s) ignored: the project "
+                     "was converted more than once (e.g. after a schema-rename rule); the newest "
+                     "conversion of each object is used")
 
     # Attach apply-result status by matching the target node id (== Full Path).
     apply_results = load_apply_results(dms_dir)
@@ -163,7 +184,8 @@ def _update_migration_report(project: str, ws_root: Path, result: ImportResult,
         + (":" if manual_all else "."),
     ]
     for m in manual_all[:20]:
-        lines.append(f"  - `{m}`")
+        name, _, state = m.partition("|")
+        lines.append(f"  - `{name}`" + (f" — {state}" if state else ""))
     lines += [
         f"- **{grand[VERIFY]} object(s) are probabilistic (GenAI/ML) or advisory "  # nosemgrep: string-concat-in-list -- intentional: one long message split across lines
         "conversions** kept from DMS SC — they must be proven equivalent and marked "
@@ -218,6 +240,20 @@ def _emit_schema(args, ws_root: Path, schema: str, objs: List[DmsScObject],
     counts = Counter()
     code_units: List[dict] = []
 
+    # A re-import must not clobber construction work: a code unit whose output file
+    # was edited by hand (a MANUAL reconversion) or that was already applied keeps
+    # its file and status. Only untouched DMS SC output is refreshed.
+    prior_units: Dict[str, dict] = {}
+    prior_path = config.resolve_manifest(constr, "code-manifest", schema)
+    if prior_path.exists():
+        try:
+            for pu in (load_manifest(prior_path).get("units") or []):
+                if pu.get("output_file"):
+                    prior_units[pu["output_file"]] = pu
+        except (OSError, yaml.YAMLError):
+            prior_units = {}
+    preserved: List[str] = []
+
     for o in objs:
         counts[o.disposition] += 1
         grand[o.disposition] += 1
@@ -232,12 +268,18 @@ def _emit_schema(args, ws_root: Path, schema: str, objs: List[DmsScObject],
             p.write_text(o.target_ddl)
             o.target_ddl_ref = str(p.relative_to(ws_root))
 
-        # Code objects also get a construction manifest unit + output file.
-        if o.category == "code":
+        # Code objects also get a construction manifest unit + output file. So do
+        # MANUAL storage objects (e.g. a table whose computed column DMS SC could not
+        # convert): their reconversion is construction work too and must be tracked.
+        if o.category == "code" or o.disposition == MANUAL:
             code_dir.mkdir(parents=True, exist_ok=True)
             out_rel = f"code/{target_schema.lower()}/{base}.sql"
-            if o.target_ddl:
-                (constr / out_rel).write_text(o.target_ddl)
+            out_path = constr / out_rel
+            prior = prior_units.get(out_rel)
+            edited = (prior is not None and out_path.exists()
+                      and _norm_nl(out_path.read_text()) != _norm_nl(o.target_ddl or ""))
+            if o.target_ddl and not edited:
+                out_path.write_text(o.target_ddl)
             unit = {
                 "name": o.target_name or o.source_name,
                 "object_type": o.source_type,
@@ -258,7 +300,17 @@ def _emit_schema(args, ws_root: Path, schema: str, objs: List[DmsScObject],
                 unit["needs_verification"] = True
             if o.disposition == MANUAL:
                 unit["needs_manual_conversion"] = True
+            if prior is not None and (edited or prior.get("status") == "applied"):
+                for k in ("status", "post_status", "reconverted", "error"):
+                    if k in prior:
+                        unit[k] = prior[k]
+                if edited:
+                    unit["reconverted"] = True
+                    preserved.append(unit["name"])
             code_units.append(unit)
+    if preserved:
+        console.warn(f"[{schema}] kept {len(preserved)} hand-reconverted code unit(s) "
+                     f"(file edited since the last import): {', '.join(preserved)}")
 
     # ---- code manifest --------------------------------------------------------
     if code_units:
@@ -322,7 +374,7 @@ def _emit_schema(args, ws_root: Path, schema: str, objs: List[DmsScObject],
         "manual": counts[MANUAL],
         "code_units": len(code_units),
         "apply_errors": sum(1 for o in objs if (o.apply_status or "").upper() == "ERROR"),
-        "manual_objects": [f"{o.source_schema}.{o.source_name}" for o in objs
+        "manual_objects": [_manual_label(o, code_units) for o in objs
                            if o.disposition == MANUAL],
         "verification": vsum,
         "verify_added": added,

@@ -32,7 +32,8 @@ BEGIN
 END;
 
 --- CONVERTED TARGET CODE (PostgreSQL) — use these exact routine names and signatures in target_sql / call_target ---
--- DETERMINISTIC -> IMMUTABLE; PARALLEL_ENABLE -> PARALLEL SAFE
+-- DEMO.CALCULATE_DISCOUNT_PCT. DETERMINISTIC -> IMMUTABLE, PARALLEL_ENABLE -> PARALLEL SAFE.
+-- ROUND(numeric, 2) rounds half away from zero on both engines.
 CREATE OR REPLACE FUNCTION demo.calculate_discount_pct(p_original_price numeric, p_discounted_price numeric)
 RETURNS numeric LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE AS $$
 BEGIN
@@ -58,12 +59,14 @@ EXCEPTION
 END;
 
 --- CONVERTED TARGET CODE (PostgreSQL) — use these exact routine names and signatures in target_sql / call_target ---
+-- DEMO.GET_CONDITION_NAME. %TYPE kept (PostgreSQL supports it). SELECT INTO STRICT reproduces Oracle's
+-- NO_DATA_FOUND, which the source handles by returning 'Unknown'.
 CREATE OR REPLACE FUNCTION demo.get_condition_name(p_condition_id numeric)
 RETURNS varchar LANGUAGE plpgsql STABLE AS $$
 DECLARE
     v_name demo.conditions.name%TYPE;
 BEGIN
-    SELECT name INTO STRICT v_name FROM demo.conditions WHERE id = p_condition_id;   -- STRICT: keep Oracle NO_DATA_FOUND
+    SELECT name INTO STRICT v_name FROM demo.conditions WHERE id = p_condition_id;
     RETURN v_name;
 EXCEPTION
     WHEN NO_DATA_FOUND THEN
@@ -87,15 +90,17 @@ EXCEPTION
 END;
 
 --- CONVERTED TARGET CODE (PostgreSQL) — use these exact routine names and signatures in target_sql / call_target ---
+-- DEMO.GET_CUSTOMER_FULL_NAME. Oracle || treats NULL as '' ('' = NULL), PostgreSQL || returns NULL:
+-- coalesce each operand so a customer with a NULL name part gives the same string.
 CREATE OR REPLACE FUNCTION demo.get_customer_full_name(p_customer_id numeric)
 RETURNS varchar LANGUAGE plpgsql STABLE AS $$
 DECLARE
     v_name varchar(500);
 BEGIN
-    -- Oracle '||' treats NULL as ''; PostgreSQL propagates NULL -> coalesce operands
     SELECT coalesce(first_name, '') || ' ' || coalesce(last_name, '')
     INTO STRICT v_name
-    FROM demo.customers WHERE id = p_customer_id;
+    FROM demo.customers
+    WHERE id = p_customer_id;
     RETURN v_name;
 EXCEPTION
     WHEN NO_DATA_FOUND THEN
@@ -117,14 +122,17 @@ BEGIN
 END;
 
 --- CONVERTED TARGET CODE (PostgreSQL) — use these exact routine names and signatures in target_sql / call_target ---
+-- DEMO.GET_CUSTOMER_LIFETIME_VALUE. NVL -> coalesce.
 CREATE OR REPLACE FUNCTION demo.get_customer_lifetime_value(p_customer_id numeric)
 RETURNS numeric LANGUAGE plpgsql STABLE AS $$
 DECLARE
     v_total numeric := 0;
 BEGIN
-    SELECT coalesce(sum(total_amount), 0) INTO v_total
+    SELECT coalesce(sum(total_amount), 0)
+    INTO v_total
     FROM demo.orders
-    WHERE customer_id = p_customer_id AND status NOT IN ('CANCELLED');
+    WHERE customer_id = p_customer_id
+      AND status NOT IN ('CANCELLED');
     RETURN v_total;
 END $$;
 
@@ -144,12 +152,14 @@ EXCEPTION
 END;
 
 --- CONVERTED TARGET CODE (PostgreSQL) — use these exact routine names and signatures in target_sql / call_target ---
+-- DEMO.GET_GENRE_NAME. %TYPE kept (PostgreSQL supports it). SELECT INTO STRICT reproduces Oracle's
+-- NO_DATA_FOUND, which the source handles by returning 'Unknown'.
 CREATE OR REPLACE FUNCTION demo.get_genre_name(p_genre_id numeric)
 RETURNS varchar LANGUAGE plpgsql STABLE AS $$
 DECLARE
     v_name demo.genres.name%TYPE;
 BEGIN
-    SELECT name INTO STRICT v_name FROM demo.genres WHERE id = p_genre_id;   -- STRICT: keep Oracle NO_DATA_FOUND
+    SELECT name INTO STRICT v_name FROM demo.genres WHERE id = p_genre_id;
     RETURN v_name;
 EXCEPTION
     WHEN NO_DATA_FOUND THEN
@@ -227,11 +237,12 @@ CREATE OR REPLACE EDITIONABLE PACKAGE BODY "DEMO"."BOOK_PKG" AS
 END book_pkg;
 
 --- CONVERTED TARGET CODE (PostgreSQL) — use these exact routine names and signatures in target_sql / call_target ---
--- Package BOOK_PKG (spec + body) flattened to <package>_<subprogram>.
+-- Package BOOK_PKG (spec + body) flattened to <package>_<subprogram> (checks/package-naming.md).
+-- Calls between subprograms are rewritten to the flattened names.
 CREATE OR REPLACE FUNCTION demo.book_pkg_get_available_quantity(p_book_id numeric)
 RETURNS numeric LANGUAGE plpgsql STABLE AS $$
 DECLARE
-    v_qty numeric := 0;   -- listings.quantity%TYPE (NUMBER(10)); SUM() is exact numeric
+    v_qty demo.listings.quantity%TYPE := 0;
 BEGIN
     SELECT coalesce(sum(quantity), 0) INTO v_qty
     FROM demo.listings
@@ -239,10 +250,11 @@ BEGIN
     RETURN v_qty;
 END $$;
 
+-- v_avg is listings.price%TYPE (numeric(38,2)) on both engines, so AVG is rounded to 2 places
+-- by the assignment in both.
 CREATE OR REPLACE FUNCTION demo.book_pkg_get_avg_price(p_book_id numeric)
 RETURNS numeric LANGUAGE plpgsql STABLE AS $$
 DECLARE
-    -- listings.price%TYPE = NUMBER(38,2): Oracle ROUNDS the AVG to 2 dp on assignment; keep it.
     v_avg demo.listings.price%TYPE := 0;
 BEGIN
     SELECT coalesce(avg(price), 0) INTO v_avg
@@ -257,10 +269,13 @@ BEGIN
     RETURN CASE WHEN demo.book_pkg_get_available_quantity(p_book_id) > 0 THEN 1 ELSE 0 END;
 END $$;
 
--- OUT params: CALL demo.book_pkg_get_book_details(id, NULL, NULL, NULL, NULL);
+-- SELECT INTO STRICT: a missing book raises NO_DATA_FOUND, as in Oracle.
 CREATE OR REPLACE PROCEDURE demo.book_pkg_get_book_details(
-    p_book_id numeric, OUT p_title varchar, OUT p_author varchar,
-    OUT p_total_qty numeric, OUT p_avg_price numeric)
+    p_book_id numeric,
+    OUT p_title varchar,
+    OUT p_author varchar,
+    OUT p_total_qty numeric,
+    OUT p_avg_price numeric)
 LANGUAGE plpgsql AS $$
 BEGIN
     SELECT title, author INTO STRICT p_title, p_author FROM demo.books WHERE id = p_book_id;
@@ -274,18 +289,18 @@ END $$;
   2 |  | Looks new but may have been read once or twice | Like New | 
   3 |  | Shows some signs of wear, may have markings | Good | 
 ### CUSTOMERS  (columns: ID, USERNAME, EMAIL, FIRST_NAME, LAST_NAME, PHONE_NUMBER, PASSWORD_HASH, SUB, DATE_OF_BIRTH, CREATED_ON, EMAIL_VERIFIED, ROLE, ACCOUNT_EXPIRED, CREDENTIALS_EXPIRED, ACCOUNT_LOCKED, LAST_LOGIN)
-  1 | admin | admin@bobsusedbooks.com | Admin | User | 555-999-8888 | <redacted> |  | 1980-01-01 00:00:00 | 2026-09-28 02:05:25.721450 | 1 | ADMIN | 0 | 0 | 0 | 
-  2 | johndoe | john.doe@example.com | John | Doe | 555-123-4567 | <redacted> | auth0|123456 | 1985-05-15 00:00:00 | 2026-09-28 02:05:25.734726 | 1 | USER | 0 | 0 | 0 | 
-  3 | janedoe | jane.doe@example.com | Jane | Doe | 555-234-5678 | <redacted> | auth0|234567 | 1990-10-20 00:00:00 | 2026-09-28 02:05:25.746187 | 1 | USER | 0 | 0 | 0 | 
+  1 | admin | admin@bobsusedbooks.com | Admin | User | 555-999-8888 | <redacted> |  | 1980-01-01 00:00:00 | 2026-10-30 01:53:56.436591 | 1 | ADMIN | 0 | 0 | 0 | 
+  2 | johndoe | john.doe@example.com | John | Doe | 555-123-4567 | <redacted> | auth0|123456 | 1985-05-15 00:00:00 | 2026-10-30 01:53:56.447203 | 1 | USER | 0 | 0 | 0 | 
+  3 | janedoe | jane.doe@example.com | Jane | Doe | 555-234-5678 | <redacted> | auth0|234567 | 1990-10-20 00:00:00 | 2026-10-30 01:53:56.455661 | 1 | USER | 0 | 0 | 0 | 
 ### GENRES  (columns: ID, CREATED_ON, DESCRIPTION, NAME, UPDATED_ON)
   1 |  | Non-fiction account of someone's life | Biographies | 
   2 |  | Books for children | Children's Books | 
   3 |  | Non-fiction about past events | History | 
 ### BOOKS  (columns: ID, TITLE, AUTHOR, ISBN, DESCRIPTION, PUBLISH_DATE, YEAR, CREATED_ON, UPDATED_ON, CREATED_BY, GENRE_ID, PUBLISHER_ID, BOOK_TYPE_ID, SEARCH_TEXT)
-  43 | The Night Circus | Erin Morgenstern | 9780385534635 | The circus arrives without warning, appearing at night and open only from sunset… |  |  | 2026-09-28 02:05:26.136606 |  | system | 6 | 5 | 1 | the night circus erin morgenstern 9780385534635
-  44 | Mexican Gothic | Silvia Moreno-Garcia | 9780525620785 | When socialite Noemí receives a frantic letter from her newly-wed cousin begging… |  |  | 2026-09-28 02:05:26.143074 |  | system | 6 | 6 | 2 | mexican gothic silvia moreno-garcia 9780525620785
-  45 | A Darker Shade of Magic | V.E. Schwab | 9780765387561 | Kell is one of the last Antari—magicians with the rare ability to travel between… |  |  | 2026-09-28 02:05:26.149371 |  | system | 6 | 7 | 1 | a darker shade of magic v.e. schwab 9780765387561
+  30 | The Devil in the White City | Erik Larson | 9780307408846 | This gripping non-fiction narrative intertwines two remarkable stories set again… |  |  | 2026-10-30 01:53:56.839131 |  | system | 3 | 2 | 1 | the devil in the white city erik larson 9780307408846
+  31 | The Nightingale | Kristin Hannah | 9780312577223 | Set in France during World War II, this powerful novel follows two sisters—one r… |  |  | 2026-10-30 01:53:56.846624 |  | system | 4 | 3 | 1 | the nightingale kristin hannah 9780312577223
+  32 | A Gentleman in Moscow | Amor Towles | 9780670026197 | In 1922, Count Alexander Rostov is sentenced by a Bolshevik tribunal to house ar… |  |  | 2026-10-30 01:53:56.852888 |  | system | 4 | 4 | 2 | a gentleman in moscow amor towles 9780670026197
 ### LISTINGS  (columns: ID, BOOK_ID, SELLER_ID, PRICE, QUANTITY, CONDITION_ID, STATUS, LISTING_TYPE, ADMIN_NOTES, PROCESSED_AT, PROCESSED_BY, IS_FEATURED, IS_BESTSELLER, IS_NEW_ARRIVAL, CREATED_ON, UPDATED_ON)
-  1 | 1 | 1 | 10.95 | 25 | 2 | 1 | SYSTEM |  |  |  | 1 | 0 | 1 | 2026-09-28 02:05:26.204692 | 
-  2 | 2 | 1 | 13.95 | 3 | 3 | 1 | SYSTEM |  |  |  | 0 | 1 | 0 | 2026-09-28 02:05:26.208513 | 
-  3 | 3 | 1 | 6.5 | 10 | 1 | 1 | SYSTEM |  |  |  | 1 | 1 | 0 | 2026-09-28 02:05:26.212295 | 
+  1 | 1 | 1 | 10.95 | 25 | 2 | 1 | SYSTEM |  |  |  | 1 | 0 | 1 | 2026-10-30 01:53:57.004066 | 
+  2 | 2 | 1 | 13.95 | 3 | 3 | 1 | SYSTEM |  |  |  | 0 | 1 | 0 | 2026-10-30 01:53:57.008985 | 
+  3 | 3 | 1 | 6.5 | 10 | 1 | 1 | SYSTEM |  |  |  | 1 | 1 | 0 | 2026-10-30 01:53:57.013576 | 

@@ -6,6 +6,8 @@
 **Conversion category:** N/A (feature compatibility: one star)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): USE for current_schema, optimizer_trace for 10053 (verified), lc_time_names (verified), SET GLOBAL denied to the master user (verified), connection-init and RDS Proxy pinning guidance.
+
 **Key difference:** `SET` options are significantly different.
 
 ## Oracle
@@ -55,10 +57,11 @@ A time zone name such as `Europe/Helsinki` may be used instead of `+10:00`.
 
 | Purpose | Oracle | MySQL |
 |---|---|---|
-| Time/date format | `ALTER SESSION SET nls_date_format = 'dd/mm/yyyy hh24:mi:ss';` | N/A |
-| Current default schema/database | `ALTER SESSION SET current_schema='schema_name'` | N/A |
-| Generate traces for specific errors | `ALTER SESSION SET events '10053 trace name context forever';` | N/A |
-| Run trace for a SQL statement | `ALTER SESSION SET sql_trace=TRUE;` / `ALTER SYSTEM SET EVENTS 'sql_trace [sql:&&sql_id] bind=true, wait=true';` | `SET GLOBAL general_log = 'ON';` |
+| Time/date format | `ALTER SESSION SET nls_date_format = 'dd/mm/yyyy hh24:mi:ss';` | N/A — use explicit `DATE_FORMAT()` |
+| Date language | `ALTER SESSION SET nls_date_language = 'GERMAN'` | `SET SESSION lc_time_names = 'de_DE'` (verified: `Mittwoch 01. Mai 2024`) |
+| Current default schema/database | `ALTER SESSION SET current_schema='schema_name'` | `USE schema_name;` (sets the default database; affects unqualified names only) |
+| Optimizer trace (event 10053) | `ALTER SESSION SET events '10053 trace name context forever';` | `SET SESSION optimizer_trace = 'enabled=on';` then `SELECT trace FROM information_schema.optimizer_trace` (verified) |
+| Run trace for a SQL statement | `ALTER SESSION SET sql_trace=TRUE;` / `ALTER SYSTEM SET EVENTS 'sql_trace [sql:&&sql_id] bind=true, wait=true';` | `EXPLAIN ANALYZE <stmt>` for one statement; `general_log`/`slow_query_log` + `long_query_time = 0` in the parameter group for all statements. `SET GLOBAL general_log = 'ON'` is denied to the Aurora master user (error 1227, verified) |
 | Optimizer cost for index access | `ALTER SESSION SET optimizer_index_cost_adj = 50` | `SET SESSION optimizer_switch= ?` (see Switchable Optimizations) |
 | Optimizer row access strategy | `ALTER SESSION SET optimizer_mode=all_rows;` | `SET SESSION optimizer_switch= ?` (see Switchable Optimizations) |
 | Memory for sort operations | `ALTER SESSION SET sort_area_size=6321;` | `SET SESSION sort_buffer_size=32768;` |
@@ -66,8 +69,10 @@ A time zone name such as `Europe/Helsinki` may be used instead of `+10:00`.
 
 ## Conversion notes
 
-- Several Oracle session settings have no MySQL equivalent: NLS date/language formats, `current_schema`, event-based tracing (`events '10053 ...'`). Handle NLS date formatting in application code or with explicit `DATE_FORMAT()` rather than a session parameter.
+- Several Oracle session settings have no MySQL equivalent: NLS date formats and numeric characters. Handle NLS date formatting in application code or with explicit `DATE_FORMAT()`. `current_schema` → `USE`, 10053 → `optimizer_trace`, `nls_date_language` → `lc_time_names` (see table).
+- `SET GLOBAL …` is not available to the Aurora master user for most variables (error 1227 for `general_log` and `transaction_isolation`, verified); instance-wide changes go through parameter groups.
+- Session settings that converted code depends on (`sql_mode`, `time_zone`, `transaction_isolation`, `group_concat_max_len`) should be set by the application's connection initialization (`init_command` / driver option), not per procedure. Each `SET` makes RDS Proxy pin the connection.
 - Optimizer hints differ in model: Oracle uses scalar knobs (`optimizer_index_cost_adj`, `optimizer_mode`); MySQL toggles named strategies via `optimizer_switch`.
 - Memory tuning maps roughly: `sort_area_size` → `sort_buffer_size`, `hash_area_size` → `join_buffer_size`.
-- SQL tracing: Oracle's per-session `sql_trace` maps loosely to enabling MySQL's `general_log` (global), not a per-session equivalent.
+- SQL tracing: Oracle's per-session `sql_trace` maps loosely to the global `general_log` (parameter group). Per-statement detail comes from `EXPLAIN ANALYZE` and, with `performance_schema` ON, `events_statements_history`.
 - Time zone is set per session with `SET SESSION TIME_ZONE`, accepting offsets (`+10:00`) or named zones (`Europe/Helsinki`).

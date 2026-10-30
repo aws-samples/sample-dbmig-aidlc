@@ -366,14 +366,155 @@ choice; do not silently drop the behaviour.
 
 ---
 
+# Target-version baseline — conversion defaults and traps (verified on the target version; supersedes older playbook text)
+
+Source: `skills/oracle-to-postgresql-playbook/references/target-baseline-aurora-postgresql-18.md`
+
+## Conversion defaults on PostgreSQL 18 (supersede older playbook advice)
+
+| Oracle construct | Old playbook (PG 10–13) | PG 18 default | Topic file |
+|---|---|---|---|
+| Procedure | `RETURNS VOID` function | `CREATE PROCEDURE` + `CALL`; `COMMIT` allowed; `OUT` params (PG 14) | `sql-plsql/procedures-and-functions.md` |
+| `MERGE` | `INSERT … ON CONFLICT` | native `MERGE` (PG 15), `RETURNING merge_action()` + `NOT MATCHED BY SOURCE` (PG 17) | `sql-plsql/merge-statement.md` |
+| Virtual column | trigger / view / stored generated column | `GENERATED ALWAYS AS (…)` **VIRTUAL** (PG 18 default); `STORED` if indexed/unique/FK/UDF | `tables-indexes/virtual-columns.md` |
+| `REGEXP_LIKE/COUNT/INSTR/SUBSTR` | emulation | native (PG 15) | `sql-plsql/single-row-and-aggregate-functions.md` |
+| `JSON_VALUE/QUERY/EXISTS/TABLE`, `IS JSON` | operators rewrite | native SQL/JSON (PG 16/17) | `special-features/json-support.md` |
+| `SYS_GUID()` | `uuid_generate_v1()` (uuid-ossp) | `gen_random_uuid()` / `uuidv7()` (PG 18) | `sql-plsql/single-row-and-aggregate-functions.md` |
+| `NUMBER` | SCT default `double precision` | `numeric` (toolkit `datatype-map.yaml`) | `tables-indexes/common-data-types.md` |
+| `NUMBER(p,-s)` | unsupported | `numeric(p,-s)` (PG 15) | `tables-indexes/common-data-types.md` |
+| Identity | `SERIAL` | `GENERATED … AS IDENTITY` (also on partitioned tables, PG 17) | `sql-plsql/identity-columns-and-serial.md` |
+| `CONNECT BY` | recursive CTE | recursive CTE + `SEARCH`/`CYCLE` (PG 14) | `sql-plsql/common-table-expressions.md` |
+| `DISABLE NOVALIDATE` constraint | drop / `NOT VALID` | `NOT ENFORCED` (PG 18, CHECK/FK) | `tables-indexes/table-constraints.md` |
+| Named `NOT NULL` | `CHECK (x IS NOT NULL)` | named NOT NULL constraint, `NOT VALID` (PG 18) | `tables-indexes/table-constraints.md` |
+| `AFTER LOGON` trigger | not supported | `login` event trigger (PG 17) or `ALTER ROLE … SET` | `tables-indexes/triggers.md` |
+| Associative array (`INDEX BY`) | restructure | Aurora `collection` extension, or restructure | `sql-plsql/collections-and-bulk-operations.md` |
+| Interval partitioning | app code | `pg_partman` 5.4 + `pg_cron` | `physical-storage/table-partitioning-and-inheritance.md` |
+| Optimizer hints | drop | drop; `pg_hint_plan` 1.8 or QPM if proven necessary | `performance-tuning/hints-and-query-planning.md` |
+| `DBMS_SCHEDULER` | CloudWatch Events + Lambda | `pg_cron` (in-DB) / EventBridge Scheduler + Lambda/Step Functions | `special-features/dbms-scheduler-and-lambda.md` |
+| Database link to Oracle | not supported on RDS | `oracle_fdw` 1.2 | `special-features/database-links-dblink-fdw.md` |
+| Tablespaces | create them | drop the clauses (logical only on Aurora) | `tables-indexes/tablespaces-and-data-files.md` |
+
+## Still no PostgreSQL equivalent on 18 (verified where testable)
+
+Autonomous transactions, `SAVEPOINT` inside PL/pgSQL, global temporary tables (`GLOBAL` is
+ignored), global (cross-partition) indexes, `SPLIT`/`MERGE PARTITION`, interval/automatic-list
+partitioning, invisible indexes, IOTs, incremental/`ON COMMIT` materialized-view refresh,
+XQuery (`XMLQUERY` is a syntax error), `UTL_FILE` (orafce `utl_file` is permission-denied on
+Aurora), `ROWID`/`BFILE`, synonyms, `MODEL`, compound triggers, STARTUP/SHUTDOWN/SERVERERROR
+triggers, Oracle Flashback Query, and an in-place flashback/Backtrack (Backtrack is Aurora MySQL only).
+
+## Behavior differences to test for (verified on 18.6)
+
+- `'' IS NULL` is false; `'a' || NULL` is NULL (use `concat`).
+- `SELECT … INTO` without `STRICT` does not raise `NO_DATA_FOUND`.
+- `GREATEST`/`LEAST` ignore NULLs.
+- `substr(s, -n)` does not count from the end.
+- `to_date` drops the time; `::timestamp(0)` rounds fractional seconds.
+- `now()`/`LOCALTIMESTAMP` are fixed at transaction start.
+- `date + interval '1 month'` differs from `ADD_MONTHS` at month end.
+- `COMMIT` inside a block with an `EXCEPTION` clause fails, and a `WHEN OTHERS` handler hides the failure.
+- Composite `UNIQUE` with NULLs accepts duplicates that Oracle rejects.
+- A NULL range-partition key goes only to the `DEFAULT` partition.
+- Identifiers over 63 bytes are silently truncated.
+- Sequence `MAXVALUE` is limited to bigint, and `CACHE` is per session.
+
+---
+
+# Playbook quick tips — common gotchas for this pair
+
+Source: `skills/oracle-to-postgresql-playbook/references/quick-tips/quick-tips.md`
+
+# Migration Quick Tips — Oracle → Aurora PostgreSQL
+
+> Source: AWS Oracle→Aurora PostgreSQL Migration Playbook — Migration quick tips
+> URL: https://docs.aws.amazon.com/dms/latest/oracle-to-aurora-postgresql-migration-playbook/chap-oracle-aurora-pg.tips.html
+
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): rewrote outdated tips (MERGE, procedures, partitioning, statistics, virtual columns, GTT behavior, dynamic SQL) for PG 15–18; all marked items verified.
+
+A fast-reference list of functional differences administrators and developers new to
+PostgreSQL/Aurora commonly hit. Use as a pre-conversion checklist.
+
+## Management
+- *Database Snapshot* (Aurora) ≈ Oracle RMAN backup.
+- Partitioning is **declarative** (`PARTITION BY RANGE|LIST|HASH`) since PG 10; the old `INHERITS` + trigger approach is obsolete. No interval partitioning, and no `SPLIT`/`MERGE PARTITION` in PG 18 (verified). Use `pg_partman` 5.4 for automatic partition creation.
+- PostgreSQL statistics include per-column most-common values and histograms, plus optional
+  multi-column extended statistics (`CREATE STATISTICS`). Prepared statements switch to a
+  generic plan after 5 executions (`plan_cache_mode`), similar to Oracle bind peeking issues.
+- Missing features (e.g. sending email) are often replaced by AWS services (Lambda, SES).
+- Parameters and backups are managed by Amazon RDS (parameter groups, default comparison).
+- High availability via read replicas in a few clicks.
+- Database links: `dblink` extension (Oracle-like) or `postgres_fdw` (Foreign Data Wrapper); `oracle_fdw` 1.2 is available on Aurora 18 to read from Oracle directly.
+
+## SQL & PL/pgSQL
+- Triggers use `NEW` and `OLD` for inserted/deleted row values.
+- Cursor status: use `FOUND` / `GET DIAGNOSTICS` instead of `%FOUND`/`%NOTFOUND`/`%ROWCOUNT`.
+- Call a procedure with `CALL proc(...)` (PG 11+, `OUT` parameters PG 14+); call a function with
+  `SELECT fn(...)` or `PERFORM fn(...)` inside PL/pgSQL.
+- Dynamic SQL: Oracle `EXECUTE IMMEDIATE '<string>' USING …` → PL/pgSQL
+  `EXECUTE '<string>' USING …` (use `format()` with `%I`/`%L` for identifiers/literals).
+- Terminate `IF` blocks with `END IF`; `WHILE..LOOP` with `END LOOP`.
+- **Autocommit is ON** by default in drivers and `psql` (as in most Oracle clients except
+  SQL*Plus scripts). Make transaction boundaries explicit in the application.
+- No special UNICODE data types; any string type can use any charset/collation.
+- Collations can be set at server/database/column level, **not** table level.
+- `DELETE <table>` without `FROM` is invalid — always include `FROM`.
+- Oracle `IDENTITY` → `GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY` (prefer over `SERIAL`).
+- Error handling: `EXCEPTION WHEN … THEN` blocks with `SQLSTATE` codes; `GET STACKED
+  DIAGNOSTICS` replaces `DBMS_UTILITY.FORMAT_ERROR_BACKTRACE`. An exception block opens a
+  subtransaction, so avoid them in tight loops.
+- Native **`MERGE` is supported** (PG 15+). PG 17+ adds `RETURNING` with `merge_action()` and
+  `WHEN NOT MATCHED BY SOURCE` (verified on 18.6). Convert Oracle `MERGE` directly; use
+  `INSERT … ON CONFLICT` only for simple single-row upserts that need its concurrency
+  guarantees.
+- String concatenation with `||` works as in Oracle.
+- PostgreSQL is **strict about semicolons** — terminate every statement.
+- Convert Oracle procedures to `CREATE PROCEDURE` (PG 11+), which can `COMMIT`/`ROLLBACK`
+  and (PG 14+) return `OUT` parameters through `CALL` (verified on 18.6). Use
+  `CREATE FUNCTION` for Oracle functions.
+- `GREATEST` and `LEAST` ignore NULLs in PostgreSQL but return NULL in Oracle if any
+  argument is NULL. Wrap with a NULL check where it matters.
+- `SAVEPOINT` / `ROLLBACK TO SAVEPOINT` are not supported inside functions.
+- `BFILE`, `ROWID`, `UROWID` are unsupported — redesign with other types (`ctid` is not a
+  stable row id; use the primary key).
+- Temporary tables are session-scoped and visible only to the creating session.
+  `CREATE GLOBAL TEMPORARY TABLE` is **accepted but `GLOBAL` is ignored** (verified on 18.6),
+  so a converted GTT silently becomes a per-session table that must exist in each session.
+- Oracle virtual columns → `GENERATED ALWAYS AS (expr)` columns. PG 18 defaults to
+  **`VIRTUAL`** (computed on read), but virtual generated columns **cannot be indexed**
+  (verified); use `STORED` when the column must be indexed or constrained.
+- Unused columns: `ALTER TABLE … DROP COLUMN` is a metadata-only operation (instant).
+- No automatic/incremental materialized-view `REFRESH` — use `REFRESH MATERIALIZED VIEW
+  CONCURRENTLY` on a schedule (`pg_cron`) or trigger-maintained summary tables.
+- Oracle-compatibility helpers on Aurora 18: `orafce` 4.16 (`DUAL`, `NVL`, `DECODE`,
+  `ADD_MONTHS`, `DBMS_OUTPUT`, `UTL_FILE`-style functions), and core PG 15+
+  `regexp_like`/`regexp_count`/`regexp_instr`/`regexp_substr` (verified). orafce puts most
+  objects in the **`oracle` schema** (`oracle.dual`, `oracle.nvl`, `oracle.decode`,
+  `oracle.add_months`) plus package-like schemas (`dbms_output`, `dbms_sql`, `dbms_pipe`,
+  `dbms_alert`, `dbms_assert`, `dbms_utility`, `dbms_random`, `utl_file`). Either qualify
+  calls or add `oracle` to `search_path` (`ALTER ROLE app SET search_path = app, oracle, public`).
+  Prefer native PostgreSQL (`COALESCE`, `CASE`, `+ interval`) in converted code and keep
+  orafce for hard cases, so the schema does not depend on an extension.
+- `''` (empty string) is **not NULL** in PostgreSQL. Oracle treats it as NULL; review
+  `= ''`, `IS NULL`, `NVL` and concatenation logic.
+- Multiple databases per instance — useful for consolidation projects.
+- Beware control characters when pasting scripts — PostgreSQL is far more sensitive than
+  Oracle and produces hard-to-find syntax errors.
+
+## Conversion notes
+These tips overlap with the detailed `sql-plsql/`, `tables-indexes/`, and `special-features/`
+references — treat this page as the index of "gotchas" and follow the per-topic file for the
+actual conversion pattern and examples.
+
+---
+
 # Playbook topic index — general guidance (open the referenced files under `skills/oracle-to-postgresql-playbook/references/` as needed; customer-specific rules above win on conflict)
 
 # Physical Storage — Reference Index
 
 Distilled references from the AWS Oracle→Aurora PostgreSQL Migration Playbook (physical storage topics).
 
-- [table-partitioning-and-inheritance.md](table-partitioning-and-inheritance.md) — **READ THIS BEFORE CONVERTING ANY PARTITIONED TABLE.** Oracle hash/list/range/composite partitioning vs PostgreSQL declarative partitioning (PG 10/11+) and the pre-10 inheritance + trigger pattern; includes full SQL examples and a per-type support matrix. **Runtime-failure risks:** a missing `DEFAULT` partition makes out-of-range inserts fail *in production* (`23514`); range partitions need two-sided bounds starting at `MINVALUE`. **Semantic change:** PK/UNIQUE must include the partition key, which weakens uniqueness to per-partition. Partition names are schema-global and collide. (Assisted)
-- [sharding.md](sharding.md) — Oracle horizontal sharding across independent shard databases; not supported natively in PostgreSQL, requires re-architecture, DMS handles data movement. (Blocked)
+- [table-partitioning-and-inheritance.md](table-partitioning-and-inheritance.md) — **READ THIS BEFORE CONVERTING ANY PARTITIONED TABLE.** Oracle hash/list/range/composite partitioning vs PostgreSQL declarative partitioning (validated on Aurora PostgreSQL 18), `pg_partman` for interval partitioning, `DETACH`/`ATTACH` for exchange, and the legacy pre-10 inheritance pattern (do not generate); includes full SQL examples and a per-type support matrix. **Runtime-failure risks:** a missing `DEFAULT` partition makes out-of-range **and NULL-key** inserts fail *in production* (`23514`); range partitions need two-sided bounds starting at `MINVALUE`. **Semantic change:** PK/UNIQUE must include the partition key, which weakens uniqueness to per-partition. Partition names are schema-global and collide. (Assisted)
+- [sharding.md](sharding.md) — Oracle horizontal sharding across independent shard databases; not supported natively in PostgreSQL, requires re-architecture (Aurora Limitless Database exists only on 16.x), DMS handles data movement. (Blocked)
 
 
 # Special Features — Oracle → Aurora PostgreSQL Reference Index
@@ -383,44 +524,46 @@ Distilled from the AWS *Oracle to Aurora PostgreSQL Migration Playbook* (Special
 | File | Summary |
 |---|---|
 | [character-sets-and-encoding.md](character-sets-and-encoding.md) | Oracle character sets (VARCHAR2/NVARCHAR2, AL32UTF8/AL16UTF16) vs PostgreSQL encodings + locale; no NCHAR/UTF-16; changing encoding requires export/recreate/import. (Assisted) |
-| [database-links-dblink-fdw.md](database-links-dblink-fdw.md) | Oracle DATABASE LINK vs PostgreSQL `dblink` and `postgres_fdw`; no permanent named links; plaintext credential and oracle_fdw-on-RDS caveats. (Manual) |
-| [dbms-scheduler-and-lambda.md](dbms-scheduler-and-lambda.md) | Oracle DBMS_SCHEDULER (time/event/chained jobs) vs Aurora using CloudWatch + AWS Lambda. (Manual) |
+| [database-links-dblink-fdw.md](database-links-dblink-fdw.md) | Oracle DATABASE LINK vs PostgreSQL `dblink` and `postgres_fdw`; FDW server = permanent named link; `oracle_fdw`/`tds_fdw`/`mysql_fdw` available on Aurora 18; credential caveats. (Manual) |
+| [dbms-scheduler-and-lambda.md](dbms-scheduler-and-lambda.md) | Oracle DBMS_SCHEDULER (time/event/chained jobs) vs `pg_cron` (in-database, verified on 18) and EventBridge Scheduler + Lambda/Step Functions (external/chains). (Manual) |
 | [external-tables-and-s3.md](external-tables-and-s3.md) | Oracle external tables (ORACLE_LOADER/DATAPUMP/HDFS/HIVE) vs Aurora `aws_s3` export/import functions; no external tables in PostgreSQL. (Manual) |
-| [inline-views.md](inline-views.md) | Inline views/subqueries — fully compatible; PostgreSQL requires a mandatory alias on FROM-clause subqueries. (Automatic) |
-| [json-support.md](json-support.md) | Oracle JSON (CLOB + IS JSON, dot notation) vs PostgreSQL JSON/JSONB operators and GIN indexing; application rewrite needed. (Assisted) |
-| [materialized-views.md](materialized-views.md) | Oracle MViews (fast/complete refresh, MV logs, ON COMMIT) vs PostgreSQL complete-only refresh, trigger-driven auto-refresh, no DML. (Assisted) |
+| [inline-views.md](inline-views.md) | Inline views/subqueries — fully compatible; FROM-subquery alias optional since PG 16 (still recommended). (Automatic) |
+| [json-support.md](json-support.md) | Oracle JSON (CLOB + IS JSON, dot notation) vs PostgreSQL JSONB; PG 17/18 SQL/JSON (`JSON_VALUE`/`JSON_QUERY`/`JSON_TABLE`/`IS JSON`) convert near-directly; dot notation must be rewritten. (Assisted) |
+| [materialized-views.md](materialized-views.md) | Oracle MViews (fast/complete refresh, MV logs, ON COMMIT) vs PostgreSQL complete-only refresh (`CONCURRENTLY` with a unique index), `pg_cron`-scheduled refresh, no DML. (Assisted) |
 | [multitenant-architecture.md](multitenant-architecture.md) | Oracle CDB/PDB multitenant vs Aurora cluster + multiple databases / separate clusters; TEMPLATE cloning, logical replication. (Assisted) |
-| [resource-manager-and-dedicated-clusters.md](resource-manager-and-dedicated-clusters.md) | Oracle Resource Manager (consumer groups/plans/directives) vs dedicated/right-sized Aurora clusters + pg_stat_activity/pg_locks scripting. (Manual/architectural) |
-| [securefile-lobs-and-large-objects.md](securefile-lobs-and-large-objects.md) | Oracle SecureFile LOBs (compression/dedup/encryption) vs PostgreSQL BYTEA/TEXT + TOAST + KMS; SecureFiles unsupported. (Assisted) |
+| [resource-manager-and-dedicated-clusters.md](resource-manager-and-dedicated-clusters.md) | Oracle Resource Manager (consumer groups/plans/directives) vs dedicated/right-sized Aurora clusters, custom endpoints, and per-role timeouts (`statement_timeout`, `transaction_timeout`, `idle_session_timeout`). (Manual/architectural) |
+| [securefile-lobs-and-large-objects.md](securefile-lobs-and-large-objects.md) | Oracle SecureFile LOBs (compression/dedup/encryption) vs PostgreSQL BYTEA/TEXT (1 GB each) + TOAST (`lz4` per column) + KMS; SecureFiles unsupported. (Assisted) |
 | [views.md](views.md) | Oracle views (simple/complex, CHECK OPTION, INSTEAD OF) vs PostgreSQL auto-updatable simple views and CASCADED/LOCAL CHECK OPTION. **Views are converted in the stored-code pass and load after functions (views call functions).** Top failure is Oracle's implicit numeric↔varchar coercion, which PostgreSQL rejects — add explicit casts and treat it as a data-quality finding. `CREATE FORCE VIEW` hides broken references in the source, so conversion surfaces pre-existing rot. (Assisted) |
 | [xml-db-and-xml-type.md](xml-db-and-xml-type.md) | Oracle XML DB (XMLType, XMLIndex, XQuery, SQL/XML functions) vs PostgreSQL xml type, xpath()/xmltable(); no XQuery or XSD validation. (Assisted) |
-| [log-miner-and-logging.md](log-miner-and-logging.md) | Oracle Log Miner (redo logs, SQL_REDO/SQL_UNDO) vs PostgreSQL pg_stat_statements, statement logging, Aurora Performance Insights; no SQL_UNDO. (Manual) |
+| [log-miner-and-logging.md](log-miner-and-logging.md) | Oracle Log Miner (redo logs, SQL_REDO/SQL_UNDO) vs PostgreSQL pg_stat_statements, statement logging/pgaudit, logical decoding, CloudWatch Database Insights; no SQL_UNDO. (Manual) |
 
 
 # Tables and Indexes — Reference Index
 
+> **Target baseline: Aurora PostgreSQL 18** (validated on 18.6). Schema defaults: `NUMBER` → `numeric` (per `datatype-map.yaml`); identity over `SERIAL`; virtual columns → `GENERATED … VIRTUAL` (use `STORED` if indexed/unique/FK/UDF); drop `TABLESPACE` clauses; `DISABLE NOVALIDATE` → `NOT ENFORCED`; bitmap → B-tree; identifiers ≤ 63 bytes. Full list: `../target-baseline-aurora-postgresql-18.md`.
+
 Oracle → Aurora PostgreSQL conversion references distilled from the AWS Oracle→Aurora PostgreSQL Migration Playbook.
 
 ## Tables
-- [case-sensitivity.md](case-sensitivity.md) — Oracle names are case-insensitive; PostgreSQL folds unquoted names to lower-case and is case-sensitive (use lower-case via DMS transforms).
-- [common-data-types.md](common-data-types.md) — Oracle↔PostgreSQL data type mapping tables, BYTE/CHAR semantics, and AWS SCT example; BFILE/ROWID/UROWID need manual handling.
+- [case-sensitivity.md](case-sensitivity.md) — Oracle names are case-insensitive; PostgreSQL folds unquoted names to lower-case and is case-sensitive (use lower-case via DMS transforms); 63-byte silent truncation.
+- [common-data-types.md](common-data-types.md) — Oracle↔PostgreSQL data type mapping (toolkit `datatype-map.yaml` wins: `NUMBER` → `numeric`), BYTE/CHAR semantics, AWS SCT example; BFILE/ROWID/UROWID need manual handling; pgvector/PostGIS for VECTOR/SDO.
 - [read-only-tables-and-replicas.md](read-only-tables-and-replicas.md) — Oracle READ ONLY tables/partitions vs PostgreSQL workarounds (read-only role, database, or trigger).
-- [table-constraints.md](table-constraints.md) — PK/FK/UNIQUE/CHECK/NOT NULL mapping; PostgreSQL adds ON UPDATE and EXCLUDE, drops REF and view constraints.
-- [temporary-tables.md](temporary-tables.md) — Oracle GLOBAL temp tables vs PostgreSQL session-local temp tables; reversed ON COMMIT default.
-- [triggers.md](triggers.md) — Oracle inline-body triggers vs PostgreSQL function+trigger model; no system/DB-event triggers in PostgreSQL.
-- [tablespaces-and-data-files.md](tablespaces-and-data-files.md) — Tablespace/data-file concepts; Aurora auto-manages files under /rdsdbdata/tablespaces/.
+- [table-constraints.md](table-constraints.md) — PK/FK/UNIQUE/CHECK/NOT NULL mapping; PG 18 `NOT ENFORCED` (≈ DISABLE NOVALIDATE), named NOT NULL, temporal keys; composite-UNIQUE NULL difference; no REF or view constraints.
+- [temporary-tables.md](temporary-tables.md) — Oracle GLOBAL temp tables vs PostgreSQL session-local temp tables (`GLOBAL` ignored); reversed ON COMMIT default; GTT conversion patterns.
+- [triggers.md](triggers.md) — Oracle inline-body triggers vs PostgreSQL function+trigger model; `login` event trigger (PG 17) for LOGON; alphabetical firing order; no STARTUP/SHUTDOWN/SERVERERROR triggers.
+- [tablespaces-and-data-files.md](tablespaces-and-data-files.md) — Tablespace/data-file concepts; on Aurora tablespaces are logical only, so drop TABLESPACE clauses by default.
 - [user-defined-types.md](user-defined-types.md) — Oracle OBJECT types vs PostgreSQL composite/enum/range/array types; no AS OBJECT or CREATE OR REPLACE TYPE; constructor calls become `ROW(...)` and attribute access needs parentheses `(col).attr`. **Create types before anything referencing them.** Automatic for the DDL — but **collection use inside PL/SQL is Manual**, see `../sql-plsql/collections-and-bulk-operations.md`.
-- [unused-columns-and-alter-table.md](unused-columns-and-alter-table.md) — Oracle SET UNUSED/DROP UNUSED vs PostgreSQL DROP COLUMN + VACUUM FULL.
-- [virtual-columns.md](virtual-columns.md) — Oracle virtual columns vs PostgreSQL 12+ generated columns, or views/functions/triggers + expression indexes.
+- [unused-columns-and-alter-table.md](unused-columns-and-alter-table.md) — Oracle SET UNUSED/DROP UNUSED vs PostgreSQL DROP COLUMN + VACUUM FULL / `pg_repack`; instant `ADD COLUMN … DEFAULT`.
+- [virtual-columns.md](virtual-columns.md) — Oracle virtual columns vs PostgreSQL 18 `VIRTUAL` (default) / `STORED` generated columns; virtual columns cannot be indexed, unique, FK targets or use UDFs.
 
 ## Indexes
 - [indexes-summary.md](indexes-summary.md) — Overall index type/feature mapping and CREATE/ALTER/REINDEX DDL equivalents.
 - [btree-indexes.md](btree-indexes.md) — B-tree indexes; direct 1:1 conversion (default in both).
-- [bitmap-indexes.md](bitmap-indexes.md) — Oracle bitmap indexes have no PostgreSQL equivalent; consider BRIN.
-- [composite-multicolumn-indexes.md](composite-multicolumn-indexes.md) — Composite/multicolumn indexes; identical syntax, up to 32 columns.
-- [function-based-expression-indexes.md](function-based-expression-indexes.md) — Oracle function-based → PostgreSQL expression indexes (single-column only); plus partial indexes.
-- [invisible-indexes.md](invisible-indexes.md) — Oracle invisible indexes; no equivalent in Aurora PostgreSQL.
-- [index-organized-and-cluster-tables.md](index-organized-and-cluster-tables.md) — Oracle IOT vs PostgreSQL CLUSTER (one-time, non-persistent sort).
-- [partitioned-indexes.md](partitioned-indexes.md) — Oracle local/global partitioned indexes vs PostgreSQL per-partition indexes (no global index).
-- [automatic-indexing.md](automatic-indexing.md) — Oracle 19c auto indexing; no Aurora equivalent (Dexter/HypoPG unsupported), diagnostic queries provided.
+- [bitmap-indexes.md](bitmap-indexes.md) — Oracle bitmap indexes have no PostgreSQL equivalent; default to B-tree (deduplication, PG 18 skip scan), partial, `bloom` or BRIN.
+- [composite-multicolumn-indexes.md](composite-multicolumn-indexes.md) — Composite/multicolumn indexes; identical syntax, up to 32 columns; PG 18 skip scan.
+- [function-based-expression-indexes.md](function-based-expression-indexes.md) — Oracle function-based → PostgreSQL expression indexes (multi-expression supported; functions must be IMMUTABLE); plus partial indexes.
+- [invisible-indexes.md](invisible-indexes.md) — Oracle invisible indexes; no equivalent, but HypoPG (available on Aurora 18) and `pg_hint_plan` cover the what-if use cases.
+- [index-organized-and-cluster-tables.md](index-organized-and-cluster-tables.md) — Oracle IOT vs PostgreSQL CLUSTER (one-time) / `pg_repack` / covering `INCLUDE` index.
+- [partitioned-indexes.md](partitioned-indexes.md) — Oracle local/global partitioned indexes vs PostgreSQL parent-level (per-partition) indexes; no global index; `ON ONLY` + `ATTACH` for online builds.
+- [automatic-indexing.md](automatic-indexing.md) — Oracle 19c auto indexing; no Aurora equivalent, but HypoPG is available on Aurora 18 (Dexter works client-side); diagnostic queries provided.
 

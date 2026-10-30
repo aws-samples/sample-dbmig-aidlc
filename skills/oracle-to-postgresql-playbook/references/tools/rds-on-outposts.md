@@ -6,6 +6,8 @@
 **Conversion category:** N/A (deployment/infrastructure option)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): still Aurora-unsupported; check version support for PG 18 on Outposts.
+
 > Note: This topic relates to **Amazon RDS** only and is **not supported with Amazon Aurora**.
 
 ## Oracle
@@ -25,3 +27,4 @@ Amazon RDS on Outposts is a fully managed service that brings the same AWS infra
 - Use case: run RDS on premises for low-latency workloads that must sit close to on-premises data/applications, while still getting managed backups to an AWS Region.
 - Same management plane (console/API/CLI) for cloud and on-premises instances.
 - See: AWS Outposts Family, Amazon RDS on Outposts, and "Create Amazon RDS DB Instances on AWS Outposts."
+- Check the RDS on Outposts supported-version list before planning a PostgreSQL 18 target there; Outposts version support can trail the Region.

@@ -6,6 +6,8 @@
 **Conversion category:** N/A (config/operations topic)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): version examples, `reg*` rule (`regclass`/`regrole`/`regtype` allowed), Blue/Green upgrades, post-upgrade `ANALYZE`.
+
 ## Oracle
 
 Database upgrades are periodically required for security fixes, bug fixes, or new features. Oracle divides upgrades into **minor** and **major** types. The first step for either type is to install the new Oracle software on the server, followed by extensive application testing before upgrading a production database. Oracle 18c introduced **Zero-Downtime Database Upgrade** to automate the process and potentially eliminate application downtime.
@@ -46,11 +48,11 @@ Or from the database:
 ```sql
 SELECT AURORA_VERSION();
 -- aurora_version
--- 4.0.0
+-- 18.6.1
 
 SHOW SERVER_VERSION;
 -- server_version
--- 12.4
+-- 18.6
 ```
 
 **Minor upgrades** can be automatic — enable on the RDS instance and they apply during the scheduled maintenance window. To find current automatic minor upgrade versions (Linux):
@@ -75,7 +77,7 @@ No results = no automatic minor upgrade scheduled.
      ```sql
      SELECT count(*) FROM pg_catalog.pg_prepared_xacts;
      ```
-   * Remove all uses of `reg*` data types (except `regtype` and `regclass`, which can be persisted). `pg_upgrade` can't persist these. Verify per database:
+   * Remove all uses of `reg*` data types except `regclass`, `regrole` and `regtype`, which can be persisted. `pg_upgrade` can't persist the others. Verify per database:
      ```sql
      SELECT count(*)
        FROM pg_catalog.pg_class c,
@@ -88,7 +90,9 @@ No results = no automatic minor upgrade scheduled.
            'pg_catalog.regoper'::pg_catalog.regtype,
            'pg_catalog.regoperator'::pg_catalog.regtype,
            'pg_catalog.regconfig'::pg_catalog.regtype,
-           'pg_catalog.regdictionary'::pg_catalog.regtype)
+           'pg_catalog.regdictionary'::pg_catalog.regtype,
+           'pg_catalog.regnamespace'::pg_catalog.regtype,
+           'pg_catalog.regcollation'::pg_catalog.regtype)
          AND c.relnamespace = n.oid
          AND n.nspname NOT IN ('pg_catalog', 'information_schema');
      ```
@@ -136,3 +140,11 @@ aws rds modify-db-cluster ^
 - Major version upgrades are **never automatic** on Aurora; minor upgrades **can** be enabled to run during the maintenance window.
 - Reboot after associating a new parameter group during an upgrade or parameters won't apply (`pending-reboot` status).
 - Always test against a non-production environment first.
+
+### Aurora PostgreSQL 18 notes (validated on 18.6, 2026-10-29)
+
+- **Start a new migration on the latest major version** (Aurora PostgreSQL 18, available here as 18.3, 18.4 and 18.6). It has the most new features and the longest standard-support window before a forced major upgrade. Converting to an older major version only adds a future upgrade project.
+- For later major upgrades, prefer an **Amazon RDS Blue/Green Deployment** (logical replication to a green cluster on the new version, then a switchover of typically under a minute) over an in-place `modify-db-cluster`. Run in-place upgrades only when a longer outage is acceptable.
+- Run `ANALYZE` on every database after a major upgrade (or use `vacuumdb --all --analyze-in-stages`) before you trust performance numbers.
+- Check extensions before upgrading: `SELECT * FROM pg_available_extension_versions` on the target version, and update or drop extensions that are not available there.
+- Major versions that pass end of standard support move to paid **RDS Extended Support** unless upgraded. Plan the next upgrade at go-live.

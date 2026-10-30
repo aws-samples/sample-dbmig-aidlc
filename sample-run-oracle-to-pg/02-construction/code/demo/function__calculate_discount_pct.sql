@@ -1,4 +1,5 @@
--- DETERMINISTIC -> IMMUTABLE; PARALLEL_ENABLE -> PARALLEL SAFE
+-- DEMO.CALCULATE_DISCOUNT_PCT. DETERMINISTIC -> IMMUTABLE, PARALLEL_ENABLE -> PARALLEL SAFE.
+-- ROUND(numeric, 2) rounds half away from zero on both engines.
 CREATE OR REPLACE FUNCTION demo.calculate_discount_pct(p_original_price numeric, p_discounted_price numeric)
 RETURNS numeric LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE AS $$
 BEGIN

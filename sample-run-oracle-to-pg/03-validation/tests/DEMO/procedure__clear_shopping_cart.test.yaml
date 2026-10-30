@@ -1,11 +1,10 @@
 object: CLEAR_SHOPPING_CART
 schema: DEMO
 type: procedure
-notes: >
-  COMMITs in the source: NON-DESTRUCTIVE case only (non-existent customer 999999). LOW_COVERAGE: SHOPPING_CART_ITEMS empty in the source.
+notes: COMMITs in the source and LOW_COVERAGE (SHOPPING_CART_ITEMS empty). Non-destructive case for a real customer with an empty cart.
 cases:
-  - id: s1
-    call_source: "BEGIN DEMO.CLEAR_SHOPPING_CART(999999); END;"
-    call_target: "CALL demo.clear_shopping_cart(999999)"
+  - id: p1
+    call_source: "BEGIN DEMO.CLEAR_SHOPPING_CART(2); END;"
+    call_target: "CALL demo.clear_shopping_cart(2)"
     verify:
-      - {name: cart_count, source_sql: "SELECT COUNT(*) FROM DEMO.SHOPPING_CART_ITEMS", target_sql: "SELECT count(*) FROM demo.shopping_cart_items"}
+      - {name: cart_rows, source_sql: "SELECT COUNT(*) FROM DEMO.SHOPPING_CART_ITEMS", target_sql: "SELECT count(*) FROM demo.shopping_cart_items"}

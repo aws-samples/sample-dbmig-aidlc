@@ -1,0 +1,2 @@
+ALTER TABLE adventureworks_person.businessentitycontact
+ADD CONSTRAINT pk_businessentitycontact_businessentityid_personid_con$7d253ecf_1470628282 PRIMARY KEY (businessentityid, personid, contacttypeid);

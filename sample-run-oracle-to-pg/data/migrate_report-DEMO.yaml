@@ -8,19 +8,19 @@ tables:
     copied: 3
     status: ok
     error: null
-  BOOK_TYPES:
-    copied: 3
-    status: ok
-    error: null
   GENRES:
     copied: 8
     status: ok
     error: null
-  ORDERS:
-    copied: 0
+  BOOK_TYPES:
+    copied: 3
     status: ok
     error: null
   PERSISTENT_LOGINS:
+    copied: 0
+    status: ok
+    error: null
+  ORDERS:
     copied: 0
     status: ok
     error: null
@@ -67,22 +67,22 @@ units:
   copied: 3
   status: ok
   error: null
-- table: BOOK_TYPES
-  shard: null
-  copied: 3
-  status: ok
-  error: null
 - table: GENRES
   shard: null
   copied: 8
   status: ok
   error: null
-- table: ORDERS
+- table: BOOK_TYPES
+  shard: null
+  copied: 3
+  status: ok
+  error: null
+- table: PERSISTENT_LOGINS
   shard: null
   copied: 0
   status: ok
   error: null
-- table: PERSISTENT_LOGINS
+- table: ORDERS
   shard: null
   copied: 0
   status: ok

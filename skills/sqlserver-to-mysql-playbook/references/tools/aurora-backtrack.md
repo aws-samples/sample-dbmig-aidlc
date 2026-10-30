@@ -6,6 +6,8 @@
 **Conversion category:** N/A (tooling)
 **SCT automation:** N/A — Aurora MySQL operational feature.
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Backtrack on Aurora MySQL 2/3/8.4 (AWS docs); corrected the binlog restriction, removed the stale Region list and multi-master, 3→8.4 upgrade caveat, CLI commands and SQL Server snapshot analogy.
+
 ## SQL Server
 N/A on the source side. Conceptually analogous to point-in-time recovery, but faster — relevant for operational resilience after migrating off SQL Server.
 
@@ -24,14 +26,14 @@ Aurora Backtrack is an Aurora MySQL feature that rewinds the DB cluster to a spe
 - Deleted tables are kept in backtrack change records (so you can revert) unless there isn't enough space in the window.
 
 ### Backtracking limitations
-- Available only in certain AWS Regions and specific Aurora MySQL versions.
+- Supported on Aurora MySQL version 2, version 3 and version 8.4 in most commercial Regions (all versions in us-east-1/2 and us-west-1/2); check the AWS Region table.
 - Only for clusters **created with Backtrack enabled** (or restored snapshot/clone with it enabled); can't enable on clusters created with it turned off.
 - Backtrack window limit: **72 hours**.
 - Affects the **entire** DB cluster — can't backtrack a single table or single update.
-- Not supported with binlog replication; cross-Region replication must be turned off first.
+- You **can** enable binary logging on a backtrack-enabled cluster, but a backtrack then fails unless forced, and a forced backtrack breaks binlog replicas and blue/green deployments. Cross-Region read replicas can't be created from a backtrack-enabled cluster (use Global Database for DR).
 - Can't backtrack a database clone to before the clone was created (but the original DB can backtrack to before the clone).
 - Causes brief DB instance disruption — stop/pause applications first; Aurora pauses the DB, closes connections, drops uncommitted reads/writes during the operation.
-- **Not supported in regions:** Africa (Cape Town), China (Ningxia), Asia Pacific (Hong Kong), Europe (Milan), Europe (Stockholm), Middle East (Bahrain), South America (São Paulo).
 - Can't restore a cross-region snapshot of a backtrack-enabled cluster in a Region that doesn't support backtracking.
-- Can't use backtrack with Aurora multi-master clusters.
-- After an in-place upgrade from Aurora MySQL v1 to v2, can't backtrack to before the upgrade.
+- After an in-place upgrade (2 → 3, or 3 → 8.4) you can't backtrack to before the upgrade.
+- (Aurora multi-master has been retired.)
+- Commands: enable with `create-db-cluster … --backtrack-window 86400`; rewind with `aws rds backtrack-db-cluster --backtrack-to <time>`. This is the closest analog to restoring a SQL Server database snapshot (`RESTORE DATABASE … FROM DATABASE_SNAPSHOT`), but for the whole cluster.

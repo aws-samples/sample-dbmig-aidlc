@@ -6,6 +6,8 @@
 **Conversion category:** Automatic (four-star feature compatibility, four-star automation)
 **SCT automation:** Four-star automation level; SCT action code index: Data Types
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): correct `DATEDIFF` boundary formulas (verified), `EOMONTH`/`DATEFROMPARTS`/`DATENAME`/`ISDATE` (verified), PG 14/16 `date_bin`/`date_add`, transaction-start vs statement time, Aurora UTC default, IANA time zones.
+
 ## SQL Server
 
 Date/time functions are scalar functions operating on temporal/numeric input. System date/time values derive from the server OS.
@@ -50,7 +52,9 @@ Key functions:
 | `STATEMENT_TIMESTAMP` | Current date and time |
 | `TIMEOFDAY` | Current date/time as text string |
 | `TRANSACTION_TIMESTAMP` | Current date and time |
-| `TO_TIMESTAMP` | Convert Unix epoch to timestamp |
+| `TO_TIMESTAMP` | Convert Unix epoch to timestamp, or parse text with a format (`to_timestamp(text, fmt)`) |
+| `DATE_BIN` (PG 14) | Bin a timestamp into fixed-size intervals (15-minute buckets, verified) |
+| `DATE_ADD` / `DATE_SUBTRACT` (PG 16) | Add/subtract an interval in a given time zone (DST-correct, verified) |
 
 ## Summary
 
@@ -60,14 +64,35 @@ Key functions:
 | `GETUTCDATE` | `current_timestamp at time zone 'utc'` |
 | `DAY`, `MONTH`, `YEAR` | `EXTRACT(DAY/MONTH/YEAR FROM TIMESTAMP timestamp_value)` |
 | `DATEPART` | `EXTRACT`, `DATE_PART` |
-| `DATEDIFF` | `DATE_PART` |
-| `DATEADD` | `+ INTERVAL 'X days/months/years'` |
-| `CAST` and `CONVERT` | `CAST` |
+| `DATEDIFF` | see the boundary-counting formulas below (`DATE_PART` on an interval is **not** equivalent) |
+| `DATEADD(unit, n, d)` | `d + make_interval(days => n)` / `d + n * interval '1 month'` |
+| `EOMONTH(d)` | `(date_trunc('month', d) + interval '1 month - 1 day')::date` (verified) |
+| `DATEFROMPARTS(y, m, d)` | `make_date(y, m, d)`; `DATETIMEFROMPARTS` → `make_timestamp(...)` |
+| `DATENAME(month, d)` | `to_char(d, 'TMMonth')` (verified) |
+| `ISDATE(s)` | `pg_input_is_valid(s, 'date')` (PG 16+, verified) |
+| `SYSDATETIME()` / `SYSUTCDATETIME()` | `clock_timestamp()` / `clock_timestamp() AT TIME ZONE 'utc'` |
+| `SYSDATETIMEOFFSET()` | `now()` (`timestamptz`) |
+| `SWITCHOFFSET` / `AT TIME ZONE 'Pacific Standard Time'` | `AT TIME ZONE 'America/Los_Angeles'` (IANA names, not Windows names) |
+| `CAST` and `CONVERT` | `CAST` / `to_char` / `to_timestamp` (see `cast-and-convert.md`) |
+
+### `DATEDIFF` (counts boundaries crossed), verified on 18.6
+
+| SQL Server | PostgreSQL |
+|---|---|
+| `DATEDIFF(day, d1, d2)` | `d2::date - d1::date` |
+| `DATEDIFF(month, d1, d2)` | `(extract(year from d2) - extract(year from d1)) * 12 + extract(month from d2) - extract(month from d1)` |
+| `DATEDIFF(year, d1, d2)` | `extract(year from d2) - extract(year from d1)` (`'2023-12-31'`→`'2024-01-01'` = 1, like SQL Server) |
+| `DATEDIFF(hour, t1, t2)` | `floor(extract(epoch from date_trunc('hour', t2) - date_trunc('hour', t1)) / 3600)` |
+| `DATEDIFF(second, t1, t2)` | `floor(extract(epoch from date_trunc('second', t2) - date_trunc('second', t1)))` |
+
+Wrap the frequently used ones in `IMMUTABLE` SQL functions (`CREATE FUNCTION datediff_month(date, date) RETURNS int LANGUAGE sql IMMUTABLE RETURN …`) to keep converted code readable.
 
 ## Conversion notes
 - Function names differ; behavior is largely equivalent for common cases and well-automated by SCT.
-- `DATEDIFF` has no direct equivalent — compute with `DATE_PART` on the difference, or subtract and extract.
+- `DATEDIFF` has no direct equivalent. Use the boundary-counting formulas above; `date_part('month', age(d2, d1))` returns only the month *component* of the interval, which gives wrong results across years.
 - `DATEADD` becomes arithmetic with `INTERVAL` literals.
-- `GETUTCDATE` → `current_timestamp at time zone 'utc'`.
+- `GETUTCDATE` → `now() AT TIME ZONE 'utc'` (returns `timestamp` without time zone, verified).
+- `GETDATE()` / `CURRENT_TIMESTAMP` are evaluated per statement in SQL Server, but `now()`/`CURRENT_TIMESTAMP` are fixed at **transaction start** in PostgreSQL. Use `clock_timestamp()` where code measures elapsed time inside a transaction or loop.
+- The Aurora default time zone is `UTC`. SQL Server servers usually run in local time, so `GETDATE()` semantics change unless `timezone` is set per database or role (`ALTER DATABASE app SET timezone = 'America/New_York'`).
 - `CONVERT(..., style)` date formatting → use `TO_CHAR` with a format mask (see CAST/CONVERT reference).
 - PostgreSQL distinguishes `clock_timestamp()` (real-time) vs `now()`/`transaction_timestamp()` (transaction start) vs `statement_timestamp()` — verify which semantics the original code expects.

@@ -6,6 +6,8 @@
 **Conversion category:** Assisted
 **SCT automation:** N/A (three-star feature compatibility; syntax and option differences, similar functionality)
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): extended statistics, PG 18 statistics restore functions and `pg_dump --statistics`, `autovacuum_vacuum_max_threshold`, verified `ANALYZE`/`VACUUM` options.
+
 Table statistics describe data distribution and storage characteristics (row counts, data sizes, index usage) and let the query optimizer make informed plan decisions.
 
 ## Oracle
@@ -70,7 +72,7 @@ ALTER TABLE custom_autovaccum
 This enables autovacuum for the table, makes the process sleep 10 ms each run, and adds 1% of table size to `autovacuum_vacuum_threshold` and 0.5% to `autovacuum_analyze_threshold` when deciding whether to trigger a VACUUM.
 
 **Manual statistics collection** via `ANALYZE` at database, table, or column level. Notes:
-* `ANALYZE` on indexes is not currently supported.
+* `ANALYZE` on indexes is not supported. Expression indexes get statistics automatically when their table is analyzed. Plain-column indexes need none.
 * `ANALYZE` requires only a read-lock on the target table, so it can run in parallel with other table activity.
 * For large tables, `ANALYZE` samples the contents; the sample size is configured via `default_statistics_target` (default 100 entries). Raising it improves planner estimate accuracy at the cost of more space in `pg_statistic`.
 
@@ -101,6 +103,18 @@ SELECT relname, last_analyze FROM pg_stat_all_tables;
 
 Larger statistics targets increase `ANALYZE` time but improve planner-statistics quality, potentially yielding better execution plans.
 
+**Extended (multi-column) statistics**, the equivalent of Oracle column-group statistics (`DBMS_STATS.CREATE_EXTENDED_STATS`), verified on 18.6:
+
+```sql
+CREATE STATISTICS emp_dept_job (ndistinct, dependencies, mcv) ON department_id, job_id FROM employees;
+ANALYZE employees;
+SELECT statistics_name, kinds FROM pg_stats_ext WHERE tablename = 'employees';
+```
+
+Useful `ANALYZE`/`VACUUM` options (verified on 18.6): `ANALYZE (VERBOSE, SKIP_LOCKED, BUFFER_USAGE_LIMIT '…')`, `VACUUM (ANALYZE, PARALLEL n)`.
+
+**Copying or locking statistics** (≈ `DBMS_STATS.EXPORT_*_STATS` / `IMPORT_*_STATS` / `LOCK_TABLE_STATS`): PostgreSQL 18 adds `pg_restore_relation_stats()`, `pg_restore_attribute_stats()` and `pg_clear_relation_stats()`, and `pg_dump --statistics` exports statistics. These exist on Aurora 18.6. There is no statistics lock. Disable auto-analyze for one table with `ALTER TABLE t SET (autovacuum_analyze_threshold = 2000000000)` if you must freeze its statistics.
+
 See *ANALYZE* and *The Autovacuum Daemon* in the PostgreSQL documentation.
 
 ## Conversion notes
@@ -119,4 +133,7 @@ Feature mapping (Oracle → PostgreSQL):
 - Automatic collection: Oracle scheduler maintenance windows / real-time stats (19c) → PostgreSQL **autovacuum daemon** (tune via global params or per-table `ALTER TABLE ... SET (autovacuum_*)`).
 - PostgreSQL `ANALYZE` does **not** support analyzing indexes directly (Oracle `GATHER_INDEX_STATS` has no direct equivalent).
 - `ANALYZE` takes only a read lock, allowing concurrent table activity.
-- After bulk loads or major data changes during migration, run `ANALYZE` explicitly to avoid stale statistics and poor initial plans rather than waiting for autovacuum.
+- After bulk loads or major data changes during migration, run `ANALYZE` explicitly to avoid stale statistics and poor initial plans rather than waiting for autovacuum (`vacuumdb --all --analyze-in-stages -j 8` for a whole database).
+- Oracle column-group / extended statistics → `CREATE STATISTICS … (ndistinct, dependencies, mcv)`.
+- PostgreSQL statistics include most-common values and histograms per column (`pg_stats`), so skewed data is handled without Oracle-style manual histogram management.
+- Large tables: since PostgreSQL 18, `autovacuum_vacuum_max_threshold` (default 100,000,000 dead tuples) caps the scale-factor trigger. For very large tables, a per-table `autovacuum_vacuum_scale_factor`/`autovacuum_analyze_scale_factor` still matters.

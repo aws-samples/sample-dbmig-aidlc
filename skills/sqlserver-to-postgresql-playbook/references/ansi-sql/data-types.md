@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (Four-star compatibility, four-star automation)
 **SCT automation:** SCT action code index: Data Types. SCT converts all incompatible data types. Key differences: syntax and handling differences.
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): aligned with the toolkit `datatype-map.yaml` (`BIT`→`boolean`, `MONEY`→`numeric(19,4)`, `uuid`, `ltree`, PostGIS; verified), `uuidv7()` for `NEWSEQUENTIALID`, Babelfish availability on Aurora 18.
+
 ## SQL Server
 
 Built-in data type categories:
@@ -41,6 +43,8 @@ DECLARE @MyXMLType AS XML,
 
 ## PostgreSQL
 
+> **Toolkit mapping wins.** The authoritative mapping for this toolkit is `engines/sqlserver-to-postgresql/datatype-map.yaml`, which differs from the playbook tables below in several places: `BIT` → `boolean`, `MONEY`/`SMALLMONEY` → `numeric(19,4)`/`numeric(10,4)`, `UNIQUEIDENTIFIER` → `uuid`, `ROWVERSION` → `bytea`, `HIERARCHYID` → `ltree`, `GEOMETRY`/`GEOGRAPHY` → PostGIS. The playbook rows are kept for reference when reading SCT/DMS SC output.
+
 **Character data types**
 
 | SQL Server | Characteristic | Identical? | PostgreSQL |
@@ -54,15 +58,15 @@ DECLARE @MyXMLType AS XML,
 
 | SQL Server | Characteristic | Identical? | PostgreSQL |
 |---|---|---|---|
-| BIT | 1 byte per 8 BIT cols | Yes | BIT |
+| BIT | 1 byte per 8 BIT cols | No | `boolean` (toolkit default; `smallint` if the app treats it as 0/1). PostgreSQL `BIT` is a bit-string type, not a flag |
 | TINYINT | 8-bit unsigned, 0-255 | No | SMALLINT |
 | SMALLINT | 16-bit integer | Yes | SMALLINT |
 | INT, INTEGER | 32-bit integer | Yes | INT, INTEGER |
 | BIGINT | 64-bit integer | Yes | BIGINT |
 | NUMERIC | Fixed-point | Yes | NUMERIC |
 | DECIMAL | Fixed-point | Yes | DECIMAL |
-| MONEY | 64-bit currency | Yes | MONEY |
-| SMALLMONEY | 32-bit currency | No | MONEY |
+| MONEY | 64-bit currency | No | `numeric(19,4)` (toolkit default). PostgreSQL `money` depends on `lc_monetary`, has fixed 2-decimal scale and is discouraged |
+| SMALLMONEY | 32-bit currency | No | `numeric(10,4)` |
 | FLOAT | Floating-point | Yes | FLOAT |
 | REAL | Single-precision float | Yes | REAL |
 
@@ -108,9 +112,10 @@ DECLARE @MyXMLType AS XML,
 | SQL Server | Characteristic | Identical? | PostgreSQL |
 |---|---|---|---|
 | XML | XML data | Yes | XML |
-| UNIQUEIDENTIFIER | 16-byte GUID (UUID) | No | CHAR(16) |
-| HIERARCHYID | ~5 bytes | No | VARCHAR (n) |
-| ROWVERSION | 8 bytes | No | TIMESTAMP(p) |
+| UNIQUEIDENTIFIER | 16-byte GUID (UUID) | No | `uuid`. `NEWID()` → `gen_random_uuid()`, `NEWSEQUENTIALID()` → `uuidv7()` (PG 18, time-ordered, verified). **Sort order differs**: SQL Server orders GUIDs by a special byte order, PostgreSQL by plain bytes |
+| HIERARCHYID | ~5 bytes | No | `ltree` (available on Aurora 18, verified: ancestor tests with `@>`) when the app uses hierarchy methods; otherwise text/bytea |
+| ROWVERSION | 8 bytes | No | `bytea` / `bigint` maintained by a trigger, or the `xmin` system column for optimistic concurrency. **Not** a timestamp |
+| GEOMETRY / GEOGRAPHY | spatial | No | PostGIS `geometry` / `geography` (PostGIS 3.6 available on Aurora 18, verified) |
 
 Character column semantics: PostgreSQL `VARCHAR(n)` stores n characters (not bytes), regardless of byte size of non-English characters.
 
@@ -152,11 +157,14 @@ rowversioncol VARCHAR(8000) NOT NULL);
 ```
 
 ## Conversion notes
-- `TINYINT` → `SMALLINT` (PostgreSQL has no 8-bit unsigned type).
-- `SMALLMONEY` → `MONEY`.
+- `TINYINT` → `SMALLINT` (PostgreSQL has no 8-bit unsigned type); add `CHECK (col BETWEEN 0 AND 255)` if the range matters.
+- `MONEY`/`SMALLMONEY` → `numeric(19,4)`/`numeric(10,4)`, per the toolkit map. Avoid PostgreSQL `money`.
+- `BIT` → `boolean`. Application code that writes `0`/`1` needs casts or must stay `smallint`; record the choice in `customer-specific/`.
+- `DATETIME` rounds to 1/300 s ticks; PostgreSQL `timestamp(3)` is exact to the millisecond. Expect tiny differences in equivalence tests.
 - All `BINARY`/`VARBINARY`/`IMAGE`/`VARBINARY(MAX)` → `BYTEA`.
 - Temporal types map to `TIMESTAMP(p)` with/without time zone; `DATETIME`→`TIMESTAMP(3)`, `SMALLDATETIME`→`TIMESTAMP(0)`.
-- `UNIQUEIDENTIFIER` → `UUID` (table maps it to `CHAR(16)`, but SCT example emits `UUID`).
-- `HIERARCHYID`, `SQL_VARIANT`, `ROWVERSION` have no real equivalents — SCT emits `VARCHAR(8000)`; redesign for proper functionality.
+- `UNIQUEIDENTIFIER` → `uuid` (not `CHAR(16)`).
+- `HIERARCHYID` → `ltree`, `ROWVERSION` → `bytea`/trigger/`xmin`, `SQL_VARIANT` → `text` (or `jsonb` to keep type info). SCT emits `VARCHAR(8000)` for all three, which loses behavior; redesign.
+- **Babelfish alternative:** Aurora PostgreSQL 18 includes Babelfish (`babelfishpg_tsql` 6.2.0). It keeps SQL Server types (`money`, `datetime`, `uniqueidentifier`, `sql_variant`, …) and T-SQL over the TDS protocol. That is a different migration path from this toolkit's conversion; see `../tools/aws-sct.md`.
 - `SQL_VARIANT` has no equivalent at all.
 - Use proper collations/encoding when converting `TEXT`/`NTEXT`.

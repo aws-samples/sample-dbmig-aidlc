@@ -6,6 +6,8 @@
 **Conversion category:** Manual (Three star feature compatibility — no automation)
 **SCT automation:** No automation
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Corrected 'no column statistics' (histograms verified on both), SET GLOBAL limits, manual histogram refresh (AUTO UPDATE ignored on 8.4.7+, syntax error on 3.x — verified), no edits to innodb stats tables (verified).
+
 ## SQL Server
 
 Statistics support the cost-based query optimizer. Stored as BLOBs in system tables; contain histograms (first column only) and distribution info, collected by full scan or sampling. View via `DBCC SHOW_STATISTICS` or `sys.dm_db_stats_properties` / `sys.dm_db_stats_histogram`. Supports filtered statistics (`WHERE` predicate). Auto-managed by default via `AUTO_CREATE_STATISTICS` and `AUTO_UPDATE_STATISTICS` (and `AUTO_UPDATE_STATISTICS_ASYNC`).
@@ -36,9 +38,9 @@ ALTER DATABASE MyDB SET AUTO_CREATE_STATS OFF;
 
 ## MySQL
 
-Aurora MySQL supports persistent (default, written to disk, survives restart — recommended for plan stability) and non-persistent (in-memory) optimizer statistics. Statistics are created **for indexes only** — no independent column statistics.
+Aurora MySQL supports persistent (default, written to disk, survives restart — recommended for plan stability) and non-persistent (in-memory) optimizer statistics. Index statistics are created automatically for every index; *(corrected)* MySQL 8 also has **column histograms** (`ANALYZE TABLE t UPDATE HISTOGRAM ON col WITH n BUCKETS`, verified on 3.13 and 8.4.8), the equivalent of `CREATE STATISTICS` on a non-indexed column.
 
-The global `innodb_stats_persistent` parameter is not settable in Aurora MySQL (requires `SUPER`); control per-table with `STATS_PERSISTENT = 1`. Auto-refresh via global `innodb_stats_auto_recalc` (ON), or per-table `STATS_AUTO_RECALC=1`. Force refresh with `ANALYZE TABLE` (table-level only; use `NO_WRITE_TO_BINLOG`/`LOCAL` to avoid replication; `ALTER TABLE … ANALYZE PARTITION` for partitions).
+The global `innodb_stats_persistent` (ON by default, verified) cannot be changed with `SET GLOBAL` by the master user; use the parameter group, or per-table `STATS_PERSISTENT = 1`. Auto-refresh via global `innodb_stats_auto_recalc` (ON), or per-table `STATS_AUTO_RECALC=1`. Force refresh with `ANALYZE TABLE` (table-level only; use `NO_WRITE_TO_BINLOG`/`LOCAL` to avoid replication; `ALTER TABLE … ANALYZE PARTITION` for partitions).
 
 View metadata: `INFORMATION_SCHEMA.STATISTICS`; detailed: `innodb_table_stats`, `innodb_index_stats`.
 
@@ -75,17 +77,18 @@ ALTER TABLE MyTable STATS_PERSISTENT=0;
 
 ## Conversion notes
 
-- Aurora MySQL collects only **density** information — no detailed key-distribution histograms. Run plans aren't affected by specific parameter values.
-- Statistics are managed at the **table level** only — no per-column or per-statistic control.
-- No independent column statistics (`CREATE STATISTICS` has no equivalent); statistics exist implicitly for every index.
+- Index statistics hold density; **histograms** add value distribution for columns (singleton or equi-height), visible in `information_schema.COLUMN_STATISTICS`. `CREATE STATISTICS` on a non-indexed column → `UPDATE HISTOGRAM`; on several columns → no multi-column histogram (consider a composite index).
+- Histograms are **not maintained automatically**: `AUTO_UPDATE_STATISTICS` → schedule `ANALYZE TABLE … UPDATE HISTOGRAM` in an event. On Aurora MySQL 8.4.7+ `AUTO UPDATE` is ignored with a warning; on 3.x it is a syntax error (both verified).
+- The master user cannot edit `mysql.innodb_table_stats`/`innodb_index_stats` (error 1044, verified).
+- Run `ANALYZE TABLE` on all tables after the bulk load, before performance testing.
 - `STATS_SAMPLE_PAGES` uses a page count, not a percentage; a very large value approximates `FULLSCAN`.
 
 | Feature | SQL Server | Aurora MySQL | Comments |
 |---|---|---|---|
-| Column statistics | `CREATE STATISTICS` | N/A | |
+| Column statistics | `CREATE STATISTICS` | `ANALYZE TABLE … UPDATE HISTOGRAM` | single column, manual refresh |
 | Index statistics | Implicit per index | Implicit per index | Auto-maintained |
 | Refresh/update | `UPDATE STATISTICS`, `sp_updatestats` | `ANALYZE TABLE` | Table-level only |
-| Auto create | `AUTO_CREATE_STATISTICS` | N/A | |
+| Auto create | `AUTO_CREATE_STATISTICS` | N/A | create histograms explicitly |
 | Auto update | `AUTO_UPDATE_STATISTICS` | `STATS_AUTO_RECALC` | |
 | Sampling | `SAMPLE` option | `STATS_SAMPLE_PAGES` | Pages, not percent |
 | Full scan refresh | `FULLSCAN` option | N/A | Large `STATS_SAMPLE_PAGES` approximates |

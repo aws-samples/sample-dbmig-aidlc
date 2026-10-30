@@ -45,6 +45,15 @@ conversion:
     - engines/sqlserver-to-postgresql/datatype-map.yaml
     - engines/sqlserver-to-postgresql/checks/non-portable-constructs.md
     - skills/sqlserver-to-postgresql-playbook/references/
+  # Verified defaults and traps for the target version. The listed sections of
+  # this file are injected into the shared context of each phase.
+  target_baseline:
+    verified_for: ["18"]   # target major versions the baseline was validated on
+    file: skills/sqlserver-to-postgresql-playbook/references/target-baseline-aurora-postgresql-18.md
+    sections:
+      schema: ["Conversion defaults", "Behavior differences"]
+      code: ["Conversion defaults", "Behavior differences"]
+      tests: ["Behavior differences"]
 
 commands:
   test_connection: "./dbmig test-connection --side both"

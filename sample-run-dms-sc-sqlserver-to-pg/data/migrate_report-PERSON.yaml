@@ -1,0 +1,21 @@
+total_rows: 20153
+tables:
+  StateProvince:
+    copied: 181
+    status: ok
+    error: null
+  Person:
+    copied: 19972
+    status: ok
+    error: null
+units:
+- table: StateProvince
+  shard: null
+  copied: 181
+  status: ok
+  error: null
+- table: Person
+  shard: null
+  copied: 19972
+  status: ok
+  error: null

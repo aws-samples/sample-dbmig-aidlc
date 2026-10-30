@@ -6,6 +6,8 @@
 **Conversion category:** Manual (Two star feature compatibility — use Amazon Aurora Encryption)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): S3 default encryption (no header needed), encrypting an existing cluster, TLS defaults (`rds.force_ssl=1`), verified `pgcrypto` functions, `pg_columnmask` for redaction.
+
 ## Oracle
 
 Oracle data-at-rest encryption is called **Transparent Data Encryption (TDE)**. TDE encrypts data saved in tables or tablespaces and protects data stored on media (data at rest) if the media or data files are stolen. It works at the operating system level, and the database manages it automatically — no application/client changes are needed. TDE does **not** protect data in transit (use network encryption for that).
@@ -137,7 +139,7 @@ As part of the database settings you are asked to enable encryption and choose a
 Then set the root encryption key using the ARN (or pick from the list) and finish the instance launch.
 
 ### SSE-S3 encryption overview
-Server-side encryption with Amazon S3-managed keys (**SSE-S3**) uses multi-factor encryption: S3 encrypts each object with a unique key and encrypts that key with a periodically rotated root key. SSE-S3 uses **AES-256**. Once a bucket is enabled with SSE, any API call must include the `x-amz-server-side-encryption` header, and the AWS CLI must add the `--sse` switch.
+Server-side encryption with Amazon S3-managed keys (**SSE-S3**) uses multi-factor encryption: S3 encrypts each object with a unique key and encrypts that key with a periodically rotated root key. SSE-S3 uses **AES-256**. Since January 2023 S3 applies SSE-S3 to **all new objects by default**, so no header is needed. Set SSE-KMS as the bucket default when you need customer-managed keys, and require it with a bucket policy if needed.
 
 **Enable SSE-S3 (via AWS Glue):**
 1. Sign in to the AWS Glue console.
@@ -146,13 +148,14 @@ Server-side encryption with Amazon S3-managed keys (**SSE-S3**) uses multi-facto
 4. Enable Server-Side Encryption.
 5. Submit and run the job.
 
-After this, files are accessible only via AWS CLI S3 with `--sse`, or by adding `x-amz-server-side-encryption` to API calls.
+(Historical steps from the playbook. With default bucket encryption, Glue and the AWS CLI need no extra flags.)
 
 ## Conversion notes
 - No direct equivalent to Oracle TDE; Aurora PostgreSQL uses **Amazon RDS/Aurora storage-level encryption** backed by **AWS KMS (AES-256)**, configured at instance creation rather than in SQL.
 - Aurora encryption is **all-or-nothing at the storage level** — there is no per-column or per-tablespace encryption equivalent like Oracle's `ENCRYPT` column clause.
-- Encryption must typically be chosen **when the cluster is created**; plan for it before provisioning.
+- Encryption must be chosen **when the cluster is created**. To encrypt an existing unencrypted cluster, copy a snapshot with encryption enabled and restore from it. Always create migration targets encrypted, with a customer-managed KMS key when the customer must control key rotation or cross-account access.
 - Aurora encryption transparently covers storage, automated backups, read replicas, and snapshots — eliminating the manual keystore/wallet management Oracle requires.
-- Like Oracle TDE, Aurora storage encryption protects **data at rest only**; use TLS/SSL for data in transit.
-- For application-level or fine-grained encryption needs that TDE column encryption covered, consider the PostgreSQL `pgcrypto` extension or handle encryption in the application layer.
+- Like Oracle TDE, Aurora storage encryption protects **data at rest only**; use TLS for data in transit. On Aurora PostgreSQL 18, `rds.force_ssl = 1` (TLS required) and `ssl_min_protocol_version = TLSv1.2` are the defaults. Clients should use `sslmode=verify-full` with the RDS CA bundle.
+- For application-level or fine-grained encryption needs that TDE column encryption covered, consider the PostgreSQL `pgcrypto` extension (1.4 on Aurora 18: `pgp_sym_encrypt`/`pgp_sym_decrypt`, `crypt()` with `gen_salt('bf')`, verified) or encryption in the application layer (AWS Encryption SDK). Unlike TDE column encryption, `pgcrypto` is not transparent: the column becomes `bytea`, queries must call decrypt functions, and the key must not be embedded in SQL or logged.
+- To hide values from some users without encrypting them (Oracle Data Redaction), use the Aurora `pg_columnmask` extension or views with column privileges. See `roles.md`.
 - SSE-S3 is relevant for data staged in S3 (e.g., DMS/Glue pipelines), not for the database storage itself.

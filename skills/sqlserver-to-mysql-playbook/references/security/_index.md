@@ -18,5 +18,7 @@ Reference files distilled from the **Migrating security features to Aurora MySQL
 - **Encryption at rest**: SQL Server per-database TDE → Aurora/RDS storage-level encryption via AWS KMS, configured at instance creation only.
 - **Column-level encryption**: SQL Server's key/certificate hierarchy → simpler MySQL `AES_ENCRYPT`/`AES_DECRYPT` with client-hashed keys; no asymmetric support.
 - **Permissions (DCL)**: `GRANT`/`REVOKE` map closely; MySQL has **no `DENY`** and revokes only at the granularity granted.
-- **Users & roles**: SQL Server Logins+Users+Roles → single MySQL Users (host-qualified); no native roles in base engine — use AWS IAM authentication / RDS for MySQL 8 roles.
+- **Users & roles**: SQL Server Logins+Users+Roles → single MySQL Users (host-qualified); native roles on Aurora MySQL 3 / 8.4 (`SET DEFAULT ROLE ALL` after granting); Windows authentication → IAM database authentication.
 - **Encrypted connections**: both use TLS; configure client to trust the Aurora/RDS CA bundle.
+
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): roles native (set default roles), 8.4 requires TLS and uses `caching_sha2_password`, `DES_ENCRYPT` removed, `aes-128-ecb` default ignores IVs, `default_table_encryption` does not exist on Aurora.

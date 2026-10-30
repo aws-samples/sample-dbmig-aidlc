@@ -12,6 +12,8 @@
 **Conversion category:** Manual (No feature compatibility, no automation — PostgreSQL doesn't support external tables)
 **SCT automation:** No automation. SCT action code index: Creating Tables. Key difference: PostgreSQL doesn't support external tables.
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): region argument fix, extension versions, `file_fdw` unavailable (verified), Athena/Spectrum for query-in-place, PG 17/18 COPY error options.
+
 ## Oracle
 
 Oracle external tables let you create a table that reads data from a source outside the database. Since 12.2 external tables can be partitioned. Oracle 18c adds **inline external tables** (read external data in a query without first defining a table):
@@ -56,7 +58,7 @@ FROM aws_s3.query_export_to_s3(
 'SELECT * FROM employees',
 aws_commons.create_s3_uri(
 '<your-bucket>',
-'sample_employee_data','s3-us-west-2'));
+'sample_employee_data','us-west-2'));
 
 -- export as CSV with options + manifest
 SELECT *
@@ -84,3 +86,7 @@ SELECT aws_s3.table_import_from_s3('test_gzip', '',
 - Replace Oracle external tables with the Aurora `aws_s3` extension (`query_export_to_s3` / `table_import_from_s3`), which physically moves data to/from S3 rather than referencing files live.
 - Inline external tables (Oracle 18c) have no Aurora equivalent; use AWS Glue or other services for ETL use cases.
 - Aurora cluster needs IAM permissions to the S3 bucket. The `options` strings map to PostgreSQL `COPY` parameters.
+- `aws_s3` 2.0 and `aws_commons` 1.2 are the versions on Aurora 18. Attach an IAM role to the cluster for the `s3Import`/`s3Export` features (`aws rds add-role-to-db-cluster --feature-name s3Import`).
+- `file_fdw` is **not** available on Aurora (verified), so server-file foreign tables are not an option. `log_fdw` is available but reads only PostgreSQL log files.
+- For query-in-place over S3 files (true external-table behavior), Aurora PostgreSQL 18.6 includes **Aurora PostgreSQL analytics** (`aurora_analytics` extension 1.0.0): read-only foreign tables over **Parquet / Iceberg** data in Amazon S3 or S3 Tables (`SERVER aurora_analytics_server`), queryable and joinable with local tables. Enable `aurora_analytics.enabled` in the cluster parameter group, then `CREATE EXTENSION aurora_analytics;` ([AWS docs](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-analytics-getting-started.html)). This is the closest equivalent to an `ORACLE_DATAPUMP`/`ORACLE_HDFS`/`ORACLE_HIVE` external table over columnar data. CSV/fixed-width `ORACLE_LOADER` files still need `table_import_from_s3`, or conversion to Parquet first. Not exercised in this review. Amazon Athena or Redshift Spectrum remain options outside the database.
+- PG 17/18 `COPY` options (`ON_ERROR ignore`, `REJECT_LIMIT`, `LOG_VERBOSITY`) can be passed through the `options` string to emulate `REJECT LIMIT` of an `ORACLE_LOADER` external table. Test this; it is not validated through `aws_s3` here.

@@ -6,6 +6,8 @@
 **Conversion category:** Manual (four-star feature compatibility, no automation)
 **SCT automation:** No automation. Indexes action code index.
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): declarative partitioning first, `CREATE INDEX ON ONLY` + `CONCURRENTLY` + `ATTACH PARTITION` (verified), global-index consequences.
+
 ## Oracle
 Each index on a partitioned table is either **local** or **global**:
 - **Local partitioned index** — one-to-one with table partitions (one index partition per table partition). Created with the `LOCAL` clause. Each index partition is independent, so maintenance is easier and automatic when table partitions are created/dropped.
@@ -29,7 +31,7 @@ CREATE INDEX IDX_SYS_LOGS_GLOB ON SYSTEM_LOGS (EVENT_DATE)
 ```
 
 ## PostgreSQL
-PostgreSQL partitioning differs and has **no direct equivalent** to Oracle local/global indexes. Two approaches: table **inheritance** (parent + child tables as partitions) and **declarative partitioning**. With declarative partitioning, a **global index is still not supported**; creating an index on a partitioned table creates an index on each partition with a parent index referring to all sub-indexes — but no true global index.
+PostgreSQL partitioning differs and has **no direct equivalent** to Oracle global indexes. Use **declarative partitioning** (inheritance-based partitioning is legacy; the inheritance example below is kept only for reading old code). With declarative partitioning, a **global index is still not supported**; creating an index on a partitioned table creates an index on each partition with a parent index referring to all sub-indexes — but no true global index.
 
 - Indexes on child tables behave like Oracle **local** indexes (portable per-partition indexes).
 - Creating an index on the parent table (analogous to an Oracle global index) has **no effect** under inheritance.
@@ -59,7 +61,13 @@ CREATE INDEX IDX_SYSTEM_LOGS_CRITICAL ON SYSTEM_LOGS_CRITICAL(ERROR_CODE);
 ```
 
 ## Conversion notes
-- Map Oracle **local** indexes to per-partition (child-table) indexes — closest behavioral match.
-- Oracle **global** partitioned indexes have **no equivalent**; redesign queries/maintenance accordingly.
+- Map Oracle **local** indexes to an index on the **partitioned parent** (declarative partitioning). It creates and maintains one index per partition, including partitions created later — the closest behavioral match.
+- Build without long write locks (verified on 18.6):
+  ```sql
+  CREATE INDEX pix_idx ON ONLY pix (id);                 -- parent index, initially invalid
+  CREATE INDEX CONCURRENTLY pix_1_idx ON pix_1 (id);     -- per partition, online
+  ALTER INDEX pix_idx ATTACH PARTITION pix_1_idx;        -- parent becomes valid when all are attached
+  ```
+- Oracle **global** partitioned indexes have **no equivalent**; redesign queries/maintenance accordingly. A global *unique* index that excludes the partition key cannot be reproduced (see `../physical-storage/table-partitioning-and-inheritance.md`). Non-unique global indexes become local indexes, and queries without the partition key scan every partition's index.
 - To reduce write lockout on large partitioned tables: build each partition's index `CONCURRENTLY`, then attach via a non-concurrent partitioned `CREATE INDEX` (metadata-only).
 - Prefer declarative partitioning on modern PostgreSQL/Aurora; under it, a `CREATE INDEX` on the partitioned table cascades to all partitions automatically.

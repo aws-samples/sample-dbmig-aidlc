@@ -6,6 +6,8 @@
 **Conversion category:** Manual (Two star feature compatibility)
 **SCT automation:** Two star automation level
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Toolkit schema→database convention, multi-database naming, case-sensitive names (verified), utf8mb4 default.
+
 ## SQL Server
 
 Databases and schemas are logical containers for security/access control. Security at three levels: objects, schemas (collections of objects), databases (collections of schemas). Each instance hosts multiple databases plus system DBs (Master, Model, TempDB, MSDB). Built-in security schemas: `guest`, `dbo`, `db_datareader`, `sys`, `INFORMATION_SCHEMA`, etc.
@@ -78,6 +80,9 @@ SHOW CREATE DATABASE Demo;
 - Schema and database are synonymous in Aurora MySQL; three-part names collapse to two-part.
 - Rewrite `MyDB..MyTable` → `MyDB.MyTable` (replace the double dot caused by omitted schema with a single dot).
 - Consider creating a `dbo` schema in Aurora MySQL to minimize code changes when SQL Server code uses `dbo.<object>`.
+- **Toolkit convention:** each SQL Server **schema** maps to a MySQL **database** named after the lower-cased schema (`Person` → `person`, `dbo` → `dbo`), and cross-schema references are database-qualified; see `engines/sqlserver-to-mysql/checks/non-portable-constructs.md` §6. With several source databases, prefix to avoid clashes (`sales_dbo`, `hr_dbo`) and record the mapping in `customer-specific/`.
+- Database names are **case-sensitive** on Aurora by default (`lower_case_table_names` = 0, verified; it can only be changed at cluster creation), so use lower-case names consistently.
+- `SHOW CREATE DATABASE` on Aurora MySQL 3 / 8.4 shows `DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci` (verified on 8.4.8; the original example showed `latin1`).
 - Applications needing both multiple databases AND multiple schemas require **multiple Aurora instances** with cross-instance connectivity handled at the application layer.
 
 | Current architecture | Migrate to | Rewrites |

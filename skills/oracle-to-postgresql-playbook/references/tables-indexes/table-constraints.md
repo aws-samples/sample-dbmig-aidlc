@@ -6,6 +6,8 @@
 **Conversion category:** Automatic (four-star feature compatibility, four-star automation)
 **SCT automation:** Creating Tables action code index. PostgreSQL doesn't support `REF`, `ENABLE`/`DISABLE` keywords, or constraints on views.
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): PG 18 `NOT ENFORCED` (≈ DISABLE NOVALIDATE), named NOT NULL + `NOT VALID` (PG 18), temporal keys, composite-UNIQUE NULL difference and `NULLS NOT DISTINCT` (all verified), FK column-list SET NULL.
+
 ## Oracle
 Oracle offers six constraint types: **PRIMARY KEY**, **FOREIGN KEY**, **UNIQUE**, **CHECK**, **NOT NULL**, **REF**.
 
@@ -78,7 +80,7 @@ ALTER TABLE EMPLOYEES
 ```
 
 ## PostgreSQL
-Supported types: **PRIMARY KEY**, **FOREIGN KEY**, **UNIQUE**, **NOT NULL**, **EXCLUDE** (PostgreSQL-only). Oracle `REF` is **not supported**. Inline or out-of-line via `CREATE`/`ALTER TABLE`; views not supported. FK needs `REFERENCES` privilege.
+Supported types: **PRIMARY KEY**, **FOREIGN KEY**, **UNIQUE**, **CHECK**, **NOT NULL**, **EXCLUDE** (PostgreSQL-only). PostgreSQL 18 adds **temporal** keys (`PRIMARY KEY (id, valid_period WITHOUT OVERLAPS)`, `FOREIGN KEY (…, PERIOD valid_period)`) and the **`NOT ENFORCED`** state for CHECK and FOREIGN KEY constraints (both verified on 18.6). Oracle `REF` is **not supported**. Inline or out-of-line via `CREATE`/`ALTER TABLE`; views not supported. FK needs `REFERENCES` privilege.
 
 **PRIMARY KEY** — ANSI SQL syntax, automatically creates a unique B-Tree index.
 
@@ -98,23 +100,29 @@ CONSTRAINT FK_FEP_ID
   ON DELETE CASCADE
 ```
 
-**UNIQUE** — auto-creates a B-Tree index; accepts multiple NULLs (like Oracle).
+**UNIQUE** — auto-creates a B-Tree index; accepts multiple NULLs (like Oracle for single columns).
+- **Composite UNIQUE with NULLs differs.** Oracle rejects a second `(1, NULL)` when the non-NULL parts match. PostgreSQL by default accepts it (verified). `UNIQUE NULLS NOT DISTINCT` (PG 15+) rejects it (verified), but it also rejects duplicate all-NULL rows, which Oracle allows. Pick per constraint: default behavior, `NULLS NOT DISTINCT`, or a partial unique index `WHERE b IS NOT NULL` plus `NULLS NOT DISTINCT` when you need the exact Oracle rule.
+- `ON DELETE SET NULL (col, …)` / `SET DEFAULT (col, …)` with a column list (PG 15+, verified) handles composite FKs where only some columns should be nulled.
 
 **CHECK** — must evaluate to Boolean:
 ```sql
 EMAIL VARCHAR(25) CHECK(EMAIL ~ '(^[A-Za-z]+@example.com$)'),
 ```
 
-**NOT NULL** — inline only; can name it when expressed as a CHECK:
+**NOT NULL** — PostgreSQL 18 stores NOT NULL as a real, named constraint (`pg_constraint.contype = 'n'`, verified), so Oracle's named NOT NULL constraints convert directly:
 ```sql
-EMAIL VARCHAR(25) CONSTRAINT CHK_EMAIL CHECK(EMAIL IS NOT NULL)
+EMAIL VARCHAR(25) CONSTRAINT NN_EMAIL NOT NULL
+-- PG 18: add without scanning existing rows, validate later (≈ ENABLE NOVALIDATE)
+ALTER TABLE employees ADD CONSTRAINT nn_email NOT NULL email NOT VALID;
+ALTER TABLE employees VALIDATE CONSTRAINT nn_email;
 ```
 
 **Constraint states** via `SET CONSTRAINTS`: `DEFERRABLE`, `IMMEDIATE`, `NOT DEFERRABLE`.
 ```sql
 SET CONSTRAINTS { ALL | name [, ...] } { DEFERRED | IMMEDIATE }
 ```
-- `NOT VALID` (FK/CHECK only) — skip validating existing rows at creation.
+- `NOT VALID` (FK/CHECK, and NOT NULL since PG 18) — skip validating existing rows at creation; new rows are checked.
+- `NOT ENFORCED` (CHECK/FK, PG 18) — the constraint is recorded but **not checked at all**, like Oracle `DISABLE NOVALIDATE` / `RELY DISABLE` constraints kept for documentation or the optimizer. `ALTER TABLE … ALTER CONSTRAINT fk ENFORCED` turns it on and validates existing rows (verified: it failed on an orphan row).
 - `VALIDATE CONSTRAINT` — scan the table and validate a previously `NOT VALID` constraint.
 ```sql
 ALTER TABLE EMPLOYEES ADD CONSTRAINT FK_DEPT
@@ -139,7 +147,10 @@ ALTER TABLE EMPLOYEES
 | INITIALLY IMMEDIATE / INITIALLY DEFERRED | Same |
 | ENABLE / ENABLE VALIDATE | Default; not a keyword |
 | ENABLE NOVALIDATE | NOT VALID |
-| DISABLE / DISABLE VALIDATE / DISABLE NOVALIDATE | DISABLE→use NOT VALID; VALIDATE/NOVALIDATE not supported |
+| DISABLE NOVALIDATE (incl. `RELY`) | `NOT ENFORCED` (PG 18, CHECK/FK) |
+| DISABLE VALIDATE | Not supported (drop and recreate, or `NOT ENFORCED`) |
+| Named NOT NULL | Named NOT NULL constraint (PG 18) |
+| Temporal / period constraints | `WITHOUT OVERLAPS` / `PERIOD` (PG 18, needs `btree_gist` for scalar columns) |
 | USING_INDEX_CLAUSE | table_constraint_using_index |
 | View constraints | Not supported |
 | Metadata: DBA_CONSTRAINTS | Metadata: PG_CONSTRAINT |
@@ -147,6 +158,7 @@ ALTER TABLE EMPLOYEES
 ## Conversion notes
 - PostgreSQL adds `ON UPDATE` (CASCADE/RESTRICT/NO ACTION) and an `EXCLUDE` constraint type not in Oracle.
 - Oracle `REF` constraints and view constraints have no PostgreSQL equivalent — redesign required.
-- `ENABLE`/`DISABLE` keywords don't exist in PostgreSQL; use `NOT VALID` + `VALIDATE CONSTRAINT` for deferred validation of new vs. existing data.
+- `ENABLE`/`DISABLE` keywords don't exist in PostgreSQL; use `NOT VALID` + `VALIDATE CONSTRAINT` for deferred validation of new vs. existing data, or `NOT ENFORCED` (PG 18) for disabled constraints.
+- Bulk loads: create FKs after the load (this toolkit's `apply-schema --post-data` does that), or add them `NOT VALID` and validate afterwards. `VALIDATE CONSTRAINT` takes only a `SHARE UPDATE EXCLUSIVE` lock. AWS DMS sets `session_replication_role = replica` (allowed for the Aurora master user, verified) to skip FK triggers during CDC.
 - FK columns must be explicitly typed in PostgreSQL.
 - Both engines can build PK/unique constraints from a pre-existing index, but in PostgreSQL the index becomes owned by the constraint and is dropped with it.

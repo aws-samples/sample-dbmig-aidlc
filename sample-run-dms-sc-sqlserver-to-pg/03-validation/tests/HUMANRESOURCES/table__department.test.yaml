@@ -1,0 +1,17 @@
+object: Department
+schema: HUMANRESOURCES
+type: procedure
+notes: VERIFY 7826 (DEFAULT getdate() on ModifiedDate -> clock_timestamp()). Insert without ModifiedDate.
+cases:
+- id: c1
+  description: insert without ModifiedDate -> defaulted to now
+  call_source: INSERT INTO HumanResources.Department (Name, GroupName) VALUES (N'dbmig-test', N'Research and Development')
+  call_target: INSERT INTO adventureworks_humanresources.department (name, groupname) VALUES ('dbmig-test', 'Research and Development')
+  verify:
+  - name: defaulted_rows
+    source_sql: >
+      SELECT COUNT(*) FROM HumanResources.Department WHERE Name = N'dbmig-test'
+         AND ABS(DATEDIFF(second, ModifiedDate, GETDATE())) <= 60
+    target_sql: >
+      SELECT count(*) FROM adventureworks_humanresources.department WHERE name = 'dbmig-test'
+         AND abs(extract(epoch FROM (localtimestamp - modifieddate))) <= 60

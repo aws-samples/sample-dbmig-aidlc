@@ -6,6 +6,8 @@
 **Conversion category:** N/A (connection-management service)
 **SCT automation:** N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): version check, session-pinning caveat for converted code, IAM and reader endpoints.
+
 ## Oracle
 Not an Oracle feature. Conceptually comparable to connection-pooling middleware used in front of Oracle (e.g., application-side pools), but RDS Proxy is a fully managed AWS service.
 
@@ -29,3 +31,6 @@ Can be enabled for most applications with **no code changes**; no additional inf
 - Pairs well with **Aurora Serverless** workloads and with **AWS Secrets Manager / IAM** authentication.
 - No application code changes typically required to adopt.
 - See: "Amazon RDS Proxy for Scalable Serverless Applications" and the Amazon RDS Proxy product page.
+- Confirm RDS Proxy supports the target's major version (PostgreSQL 18) on the RDS Proxy supported-engines page before go-live.
+- Converted Oracle code that keeps **session state** (package variables emulated with `set_config`, temp tables, `SET` outside transactions, advisory locks) **pins** client connections to a backend and removes most pooling benefit. Review it before putting the application behind the proxy.
+- RDS Proxy supports end-to-end IAM authentication and reader endpoints for read scaling.

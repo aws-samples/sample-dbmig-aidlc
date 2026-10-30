@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (★★★★ feature compatibility)
 **SCT automation:** N/A — different syntax may require code rewrite.
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Verified that compound blocks outside routines are still a syntax error on 3 / 8.4; temporary-procedure pattern, set-based rewrite, bind variables → user variables.
+
 ## Oracle
 
 PL/SQL is a procedural extension of SQL. Code is divided into blocks using `DECLARE`, `BEGIN`, `EXCEPTION`, `END`. An **anonymous block** is unnamed PL/SQL code (not stored as a procedure/function/package) with three sections:
@@ -54,3 +56,6 @@ See [Procedures and Functions](procedures-and-functions.md) and [Transaction Mod
 - Map `DBMS_OUTPUT.PUT_LINE` to `SELECT` (result output) — see DBMS_OUTPUT reference.
 - Replace `EXCEPTION WHEN OTHERS` with MySQL `DECLARE … HANDLER` constructs inside the procedure.
 - For simple multi-statement transactional logic, a `START TRANSACTION`/`COMMIT` block suffices.
+- Still true on Aurora MySQL 3 and 8.4: a compound `BEGIN … END` (or MariaDB's `BEGIN NOT ATOMIC`) outside a routine is a syntax error (verified). Pattern for one-off scripts: `CREATE PROCEDURE tmp_x() BEGIN … END; CALL tmp_x(); DROP PROCEDURE tmp_x;` — needs `CREATE ROUTINE`, and with binary logging on also `log_bin_trust_function_creators` or `SUPER`-equivalent privileges.
+- Anonymous blocks that only loop over rows are usually better as a single set-based statement (`INSERT … SELECT`, multi-table `UPDATE … JOIN`, or a CTE).
+- Bind variables (`:x`) in SQL*Plus scripts → user variables (`SET @x = …`) in the client script.

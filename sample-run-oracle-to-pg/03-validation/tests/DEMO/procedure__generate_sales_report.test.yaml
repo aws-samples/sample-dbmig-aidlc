@@ -1,11 +1,10 @@
 object: GENERATE_SALES_REPORT
 schema: DEMO
 type: procedure
-notes: >
-  OUT-param procedure with no net effect; proves it executes on both engines. LOW_COVERAGE: ORDERS empty in the source.
+notes: LOW_COVERAGE (ORDERS empty); OUT params only, no net effect. Proves the call shape executes on both engines.
 cases:
-  - id: g1
-    call_source: "DECLARE a NUMBER; b NUMBER; c NUMBER; BEGIN DEMO.GENERATE_SALES_REPORT(DATE '2020-01-01', DATE '2030-01-01', a, b, c); END;"
-    call_target: "CALL demo.generate_sales_report('2020-01-01', '2030-01-01', NULL, NULL, NULL)"
+  - id: p1
+    call_source: "DECLARE a NUMBER; b NUMBER; c NUMBER; BEGIN DEMO.GENERATE_SALES_REPORT(DATE '2020-01-01', DATE '2030-12-31', a, b, c); END;"
+    call_target: "CALL demo.generate_sales_report('2020-01-01', '2030-12-31', NULL, NULL, NULL)"
     verify:
       - {name: orders_count, source_sql: "SELECT COUNT(*) FROM DEMO.ORDERS", target_sql: "SELECT count(*) FROM demo.orders"}

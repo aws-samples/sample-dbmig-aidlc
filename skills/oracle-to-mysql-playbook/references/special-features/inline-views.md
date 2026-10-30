@@ -6,6 +6,8 @@
 **Conversion category:** Automatic (five-star feature compatibility; five-star automation)
 **SCT automation:** N/A — fully compatible; only mandatory aliases differ.
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Alias rule still applies on 3 / 8.4 (verified); LATERAL and CTE alternatives; (+) joins.
+
 ## Oracle
 
 Inline views are `SELECT` statements placed in the `FROM` clause of another `SELECT`. They simplify complex queries by condensing calculations/joins. The inner statement does **not** require an alias in Oracle.
@@ -34,3 +36,6 @@ WHERE A.DEPARTMENT_ID = B.DEPARTMENT_ID;
 
 - Add a mandatory alias (e.g., `B`) to every derived table / inline view in the `FROM` clause.
 - No other changes are typically needed; this conversion is essentially automatic.
+- Still required on Aurora MySQL 3 and 8.4 (verified: error 1248 without the alias).
+- Correlated inline views (Oracle `LATERAL` / `CROSS APPLY` / `OUTER APPLY`) → `JOIN LATERAL (…) AS x ON TRUE` (MySQL 8.0.14+, verified). Inline views can also be written as CTEs (`WITH`).
+- Old-style Oracle outer joins `(+)` inside inline views must become ANSI `LEFT JOIN`.

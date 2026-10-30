@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (Three-star feature compatibility, three-star AWS SCT/DMS automation level). List, Range, and Hash partitioning map directly via declarative partitioning (PostgreSQL 10+); composite/interval/reference/virtual-column/automatic-list/split/exchange require manual workarounds.
 **SCT automation:** Three-star automation level. AWS SCT action code index: N/A. Key difference: foreign keys referencing to/from partitioned tables are supported on individual tables in PostgreSQL; some Oracle partition types are unsupported.
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): PG 12–18 partitioning features (verified), corrected the DEFERRABLE-unique claim, NULL routing, the `pg_partman` interval replacement, the EXCHANGE emulation, fixed exclusive upper bounds in the range examples, and marked the inheritance approach as legacy.
+
 ## Oracle
 
 Partitioning divides large tables and indexes into smaller pieces (partitions), each with its own name and definition, managed separately or collectively. Partitions are transparent to applications (unmodified SQL works). Benefits: query performance (scan a subset; parallel DML/DDL), data management/ILM (migration, index maintenance, backup/recovery), and reduced maintenance downtime.
@@ -134,13 +136,21 @@ PostgreSQL 11 and 12 added:
 - `FOR EACH ROW` triggers on a partitioned table propagate to individual partitions.
 - Attaching/detaching a partition correctly propagates foreign-key enforcement triggers.
 
+Later releases (all verified on Aurora PostgreSQL 18.6 unless noted):
+- PG 12: foreign keys **referencing** a partitioned table; faster pruning with many partitions.
+- PG 13: `BEFORE` row triggers on partitioned tables; logical replication of partitioned tables; better partition-wise joins.
+- PG 14: `ALTER TABLE … DETACH PARTITION … CONCURRENTLY` (not allowed while the table has a `DEFAULT` partition, verified).
+- PG 17: identity columns and exclusion constraints on partitioned tables.
+- PG 18: `ANALYZE ONLY` / `VACUUM ONLY` the parent; `NOT VALID` foreign keys on partitioned tables.
+- **Still absent in PG 18:** `SPLIT PARTITION` / `MERGE PARTITIONS` (syntax error on 18.6), interval and automatic-list partitioning, and global indexes.
+
 ### Using the partition mechanism
 
 #### List partition
 
 ```sql
 CREATE TABLE emps (
-  emp_id SERIAL NOT NULL,
+  emp_id INT GENERATED ALWAYS AS IDENTITY,  -- identity on partitioned tables: PG 17+
   emp_name VARCHAR(30) NOT NULL)
 PARTITION BY LIST (left(lower(emp_name), 1));
 
@@ -178,17 +188,17 @@ CREATE TABLE sales (
 CREATE TABLE sales_2018q1
   PARTITION OF sales (
     price DEFAULT 0
-  ) FOR VALUES FROM ('2018-01-01') TO ('2018-03-31');
+  ) FOR VALUES FROM ('2018-01-01') TO ('2018-04-01');
 
 CREATE TABLE sales_2018q2
   PARTITION OF sales (
     price DEFAULT 0
-  ) FOR VALUES FROM ('2018-04-01') TO ('2018-06-30');
+  ) FOR VALUES FROM ('2018-04-01') TO ('2018-07-01');
 
 CREATE TABLE sales_2018q3
   PARTITION OF sales (
     price DEFAULT 0
-  ) FOR VALUES FROM ('2018-07-01') TO ('2018-09-30');
+  ) FOR VALUES FROM ('2018-07-01') TO ('2018-10-01');
 
 INSERT INTO sales VALUES (('2018-01-08'),3121121, 100);  -- row inserted
 INSERT INTO sales VALUES (('2018-04-20'),4378623);       -- row inserted
@@ -201,7 +211,7 @@ Using `PARTITION BY` together with `PARTITION OF` creates a sub-partition. A sub
 
 ```sql
 CREATE TABLE salers (
-  emp_id serial not null,
+  emp_id int generated always as identity,
   emp_name varchar(30) not null,
   sales_in_usd int not null,
   sale_date date not null
@@ -219,26 +229,28 @@ CREATE TABLE emp_def
 
 CREATE TABLE sales_abc_2018q1
   PARTITION OF emp_abc (sales_in_usd DEFAULT 0)
-  FOR VALUES FROM ('2018-01-01') TO ('2018-03-31');
+  FOR VALUES FROM ('2018-01-01') TO ('2018-04-01');
 CREATE TABLE sales_abc_2018q2
   PARTITION OF emp_abc (sales_in_usd DEFAULT 0)
-  FOR VALUES FROM ('2018-04-01') TO ('2018-06-30');
+  FOR VALUES FROM ('2018-04-01') TO ('2018-07-01');
 CREATE TABLE sales_abc_2018q3
   PARTITION OF emp_abc (sales_in_usd DEFAULT 0)
-  FOR VALUES FROM ('2018-07-01') TO ('2018-09-30');
+  FOR VALUES FROM ('2018-07-01') TO ('2018-10-01');
 
 CREATE TABLE sales_def_2018q1
   PARTITION OF emp_def (sales_in_usd DEFAULT 0)
-  FOR VALUES FROM ('2018-01-01') TO ('2018-03-31');
+  FOR VALUES FROM ('2018-01-01') TO ('2018-04-01');
 CREATE TABLE sales_def_2018q2
   PARTITION OF emp_def (sales_in_usd DEFAULT 0)
-  FOR VALUES FROM ('2018-04-01') TO ('2018-06-30');
+  FOR VALUES FROM ('2018-04-01') TO ('2018-07-01');
 CREATE TABLE sales_def_2018q3
   PARTITION OF emp_def (sales_in_usd DEFAULT 0)
-  FOR VALUES FROM ('2018-07-01') TO ('2018-09-30');
+  FOR VALUES FROM ('2018-07-01') TO ('2018-10-01');
 ```
 
 ### Implementing list partitioning with inheritance tables (pre-PG 10 approach)
+
+> **Legacy — do not use for new migrations.** Kept for reference when reading old code. On Aurora PostgreSQL 18 always use declarative partitioning.
 
 1. Create a parent table from which all child tables (partitions) inherit.
 2. Create child tables with identical structure to the parent (acting like partitions).
@@ -253,7 +265,7 @@ show constraint_exclusion;
 -- partition
 ```
 
-Notes on PostgreSQL 9.6: it does not support declarative partitioning or several Oracle features. Replace Oracle interval partitioning with application-centric methods (PL/pgSQL or other languages). PG 9.6 does not support foreign keys on the parent table (use triggers/functions or create FKs on individual tables). PostgreSQL does not support `SPLIT`/`EXCHANGE` of partitions — plan data migrations manually between tables.
+Notes on PostgreSQL 9.6 (historical): it did not support declarative partitioning or foreign keys on the parent table. PostgreSQL still has no `SPLIT`/`EXCHANGE` statements. See the conversion notes for the PG 18 replacements.
 
 #### Inheritance example — list partitioning
 
@@ -441,6 +453,13 @@ The first partition must start at `MINVALUE`, not at the first data value — ot
 than the earliest bound have nowhere to go. Oracle's `MAXVALUE` upper partition becomes
 `TO (MAXVALUE)`.
 
+### NULL partition keys
+
+A NULL range-partition key is routed **only to the `DEFAULT` partition**. Even a
+`FROM (MINVALUE) TO (MAXVALUE)` partition rejects it (verified on 18.6: `23514`). Oracle puts
+NULLs in the `MAXVALUE` partition. List partitions can hold NULL explicitly:
+`FOR VALUES IN (NULL, 'x')`. Add `NOT NULL` to the key column if the source data never has NULLs.
+
 ### Always add a `DEFAULT` partition — this is a *runtime* failure
 
 Oracle range partitioning routes NULL and out-of-range keys to a catch-all; PostgreSQL
@@ -477,9 +496,9 @@ Options, in order of preference:
 **Never apply option 1 silently.** Annotate every occurrence inline (`-- NOTE:`) and have a
 reviewer sign it off.
 
-Related: `DEFERRABLE` unique constraints are **not supported on partitioned tables**, so
-Oracle's deferred-to-`COMMIT` uniqueness checking becomes per-statement checking — another
-behaviour change to flag.
+Related: `DEFERRABLE` unique constraints **are accepted on partitioned tables** in PG 18 (verified
+on 18.6: `UNIQUE (id, d) DEFERRABLE INITIALLY DEFERRED` created, and a temporary duplicate inside a
+transaction was resolved before commit). They still must include the partition key.
 
 ### Partition names are schema-global in PostgreSQL
 
@@ -516,19 +535,38 @@ behaviour, but it means:
   | List | Yes |
   | Range | Yes |
   | Hash | Yes |
-  | Composite partitioning (sub-partitioning) | No |
-  | Interval partitioning | No |
+  | Composite partitioning (sub-partitioning) | Yes, by nesting `PARTITION BY` inside `PARTITION OF` |
+  | Interval partitioning | No — use `pg_partman` (5.4 on Aurora 18, verified) + `pg_cron` |
   | Partition advisor | No |
-  | Reference partitioning | No |
-  | Virtual column-based partitioning | No |
-  | Automatic list partitioning | No |
-  | Split / exchange partitions | No |
+  | Reference partitioning | No — add the parent's partition key column to the child and partition it the same way |
+  | Virtual column-based partitioning | Partial — partition **by expression** works (`PARTITION BY RANGE ((d::date))`), but a generated column (stored or virtual) **cannot** be the partition key (verified) |
+  | Automatic list partitioning | No — `DEFAULT` partition + scheduled job that creates new partitions and moves rows |
+  | Split / merge partitions | No (still absent in PG 18) — create new partitions and move data |
+  | Exchange partition | Emulate with `DETACH PARTITION` + `ATTACH PARTITION` (see below) |
 
-- List, Range, and Hash convert cleanly to declarative partitioning on PostgreSQL 10/11+. Hash partitioning needs PG 11+.
+- List, Range, and Hash convert cleanly to declarative partitioning on Aurora PostgreSQL 18.
 - Composite/sub-partitioning is not "built-in" as a single declarative construct, but can be emulated by nesting `PARTITION BY` inside `PARTITION OF` (a sub-partition may differ in type from the parent).
-- Interval partitioning has no equivalent — implement application-centric partition creation (PL/pgSQL or app code). The default partition (PG 11+) helps capture out-of-range rows that interval partitioning would otherwise auto-create.
+- Interval partitioning has no native equivalent. On Aurora use **`pg_partman`** (verified on 18.6):
+  ```sql
+  CREATE SCHEMA partman;
+  CREATE EXTENSION pg_partman SCHEMA partman;
+  SELECT partman.create_parent(p_parent_table := 'app.events', p_control := 'created',
+                               p_interval := '1 month', p_premake := 3);
+  -- schedule maintenance (pg_cron lives in the postgres database by default)
+  SELECT cron.schedule('partman-maint', '@hourly', $$CALL partman.run_maintenance_proc()$$);
+  ```
+  Keep a `DEFAULT` partition to capture rows outside the pre-made range.
 - Automatic list partitioning is unsupported — pre-create all partitions or use a default partition to avoid the `23514` "no partition found for row" error.
-- `SPLIT` and `EXCHANGE` partition operations are not supported in PostgreSQL — plan manual data movement between tables.
-- Foreign keys referencing to/from partitioned tables are supported on the individual tables; PG 11+ propagates FKs, indexes, and row-level triggers from the parent to partitions automatically.
-- Pre-PG 10 (e.g., PG 9.6) requires the inheritance + trigger/function routing pattern and `constraint_exclusion = partition`; FKs on the parent are not supported there.
-- Aurora PostgreSQL follows the same partitioning capabilities as the corresponding community PostgreSQL major version; choose a version (11+) that includes hash partitioning, default partitions, and propagation features to minimize manual work. AWS DMS can migrate the underlying data into the target partitioned structure.
+- `SPLIT`/`MERGE` partition statements do not exist (verified on PG 18). Create the new partitions, move rows with `INSERT … SELECT` + `DELETE` (or detach, copy, drop), then attach.
+- **`EXCHANGE PARTITION` equivalent**: load the staging table, add a `CHECK` constraint that matches the partition bound (so `ATTACH` skips the validation scan), then:
+  ```sql
+  BEGIN;
+  ALTER TABLE orders DETACH PARTITION orders_2016;
+  ALTER TABLE orders ATTACH PARTITION orders_year_2016 FOR VALUES FROM ('2016-01-01') TO ('2017-01-01');
+  COMMIT;
+  ```
+  Use `DETACH … CONCURRENTLY` (outside a transaction block) to avoid blocking queries, but only when the table has no `DEFAULT` partition.
+- Foreign keys **to and from** partitioned tables are supported (PG 12+, verified). FKs, indexes, and row-level triggers declared on the parent propagate to partitions automatically.
+- Partition-wise join and aggregate are **off by default** (`enable_partitionwise_join`, `enable_partitionwise_aggregate`). Enable them per session or role for large equi-partitioned joins and reporting queries; they increase planning memory.
+- Keep the number of partitions moderate (low thousands at most). Planning cost rises with partition count when pruning cannot happen at plan time.
+- Pre-PG 10 inheritance + trigger routing is obsolete. Do not generate it.

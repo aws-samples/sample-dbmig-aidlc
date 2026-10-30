@@ -1,0 +1,5 @@
+ALTER TABLE adventureworks_humanresources.employeedepartmenthistory
+ADD CONSTRAINT fk_employeedepartmenthistory_department_departmentid_955150448 FOREIGN KEY (departmentid) 
+REFERENCES adventureworks_humanresources.department (departmentid)
+ON UPDATE NO ACTION
+ON DELETE NO ACTION;

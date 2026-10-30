@@ -2,6 +2,8 @@
 
 > Informational note for the dbmig-aidlc framework — not part of the AWS playbook.
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Aurora MySQL 8.4 TLS and caching_sha2_password requirements for PyMySQL (verified), Data API.
+
 The AWS playbook tooling pages reference native and AWS-managed tools (AWS SCT with JDBC drivers, AWS DMS, `sqlcmd`/`bcp` for SQL Server, the `mysql` client for MySQL). This note clarifies how the **dbmig** toolkit connects, so there is no confusion when following playbook steps.
 
 ## How dbmig connects — pure Python drivers
@@ -27,3 +29,7 @@ You can run all dbmig connectivity and data steps with only the Python toolkit i
 python3 -m venv .venv && .venv/bin/pip install -e scripts/
 ./dbmig test-connection --side both   # exits non-zero on failure
 ```
+
+## Aurora MySQL 8.4 notes (verified 2026-10-29)
+- Aurora MySQL 8.4 requires TLS by default (`require_secure_transport` = ON) and creates new users with `caching_sha2_password`; PyMySQL needs the `cryptography` package for that plugin (installed by `scripts/requirements.txt`). Set `sslmode: require` in `connections.yaml`.
+- The RDS Data API (`aws rds-data execute-statement`) works on Aurora MySQL 3 and 8.4 without a network path to the cluster; this review used it for all validation.

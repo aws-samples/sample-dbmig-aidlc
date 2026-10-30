@@ -6,6 +6,8 @@
 **Conversion category:** Manual (Three-star feature compatibility, no automation; different paradigm requires code rewrite)
 **SCT automation:** No automation; SCT action code index N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): fixed the error-handling example (`INTO STRICT`), orafce `dbms_output` (verified), `RAISE_APPLICATION_ERROR` mapping.
+
 ## Oracle
 
 `DBMS_OUTPUT` displays status/debug messages from PL/SQL. Requires `SET SERVEROUTPUT ON` to show on screen. `PUT`/`PUT_LINE` write to a buffer; `GET_LINE`/`GET_LINES` read it back.
@@ -105,13 +107,13 @@ EXCEPTION WHEN OTHERS THEN
 END;
 /
 
--- PostgreSQL
+-- PostgreSQL (STRICT is required: without it, SELECT INTO returns NULL instead of raising NO_DATA_FOUND)
 do $$
-declare Name employees%ROWTYPE;
+declare name employees.last_name%TYPE;
 BEGIN
-  SELECT last_name INTO name FROM employees WHERE employee_id = -1;
+  SELECT last_name INTO STRICT name FROM employees WHERE employee_id = -1;
 EXCEPTION WHEN OTHERS THEN
-  RAISE NOTICE 'Error code %: %', sqlstate, sqlerrm;
+  RAISE NOTICE 'Error code %: %', sqlstate, sqlerrm;   -- P0002: query returned no rows
 end$$;
 ```
 
@@ -120,5 +122,7 @@ end$$;
 - Replace every `DBMS_OUTPUT.PUT_LINE(x)` with `RAISE NOTICE '%', x;` (or `RAISE DEBUG`/`INFO` as appropriate).
 - Replace `SET SERVEROUTPUT ON` with `SET CLIENT_MIN_MESSAGES = 'debug'` (or matching level).
 - `SQLCODE` (numeric) → `SQLSTATE` (5-char string) in PG; `SQLERRM` exists in both.
-- No buffer/`GET_LINE` model — accumulate messages in a variable/array/temp table if downstream code reads them.
+- No buffer/`GET_LINE` model in core PostgreSQL. Accumulate messages in a variable/array/temp table if downstream code reads them. **orafce** (available on Aurora 18) provides a `dbms_output` package with `enable`, `put`, `put_line`, `new_line`, `get_line`, `get_lines` (verified). Use it only when converted code really reads the buffer back. For plain debug output, `RAISE NOTICE` is the idiomatic choice.
+- Messages raised with `RAISE` reach the client immediately (Oracle shows them only after the block ends) and are logged according to `log_min_messages`. Do not leave `RAISE NOTICE` in hot loops in production code.
+- `RAISE EXCEPTION … USING ERRCODE = 'P0001', DETAIL = …, HINT = …` replaces `RAISE_APPLICATION_ERROR(-20001, msg)`. Map `-20xxx` numbers to custom SQLSTATEs (for example `'P2001'`) if callers check the number.
 - `PUT` (partial line) → build a string and `RAISE` once.

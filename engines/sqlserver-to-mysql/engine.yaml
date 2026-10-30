@@ -35,7 +35,7 @@ target:
   notes:
     - "A MySQL 'schema' IS a database — the SQL Server schema (lower-cased) maps to a MySQL database."
     - "Identifiers are quoted with backticks; default storage engine is InnoDB."
-    - "No sequences pre-8.0 (AUTO_INCREMENT, one per table); no MERGE (INSERT ... ON DUPLICATE KEY UPDATE)."
+    - "No sequences in any MySQL version (AUTO_INCREMENT, one per table, or a sequence table); no MERGE (INSERT ... ON DUPLICATE KEY UPDATE)."
 
 conversion:
   mode: llm
@@ -47,6 +47,15 @@ conversion:
     - engines/sqlserver-to-mysql/datatype-map.yaml
     - engines/sqlserver-to-mysql/checks/non-portable-constructs.md
     - skills/sqlserver-to-mysql-playbook/references/
+  # Verified defaults and traps for the target version. The listed sections of
+  # this file are injected into the shared context of each phase.
+  target_baseline:
+    verified_for: ["8.0", "8.4"]   # target major versions the baseline was validated on
+    file: skills/oracle-to-mysql-playbook/references/target-baseline-aurora-mysql.md
+    sections:
+      schema: ["Conversion defaults", "Behavior differences", "Aurora MySQL 8.4 vs 3"]
+      code: ["Conversion defaults", "Behavior differences", "Aurora MySQL 8.4 vs 3"]
+      tests: ["Behavior differences"]
 
 commands:
   test_connection: "./dbmig test-connection --side both"

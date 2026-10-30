@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (Four-star feature compatibility, three-star automation; different syntax may require code rewrite)
 **SCT automation:** Three-star automation level; SCT action code index → Stored Procedures
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): NULL-concatenation semantics (verified), `NUMERIC` over `DOUBLE PRECISION`, COMMIT inside `DO` (verified), NOTICE visibility.
+
 ## Oracle
 
 Oracle PL/SQL is a procedural extension of SQL, organized into blocks via `DECLARE`, `BEGIN`, `EXCEPTION`, `END`. An **anonymous block** is unnamed/unstored PL/SQL code with:
@@ -90,6 +92,9 @@ DO $$
 - Wrap the block in `DO $$ … $$;` — there is no bare `BEGIN … END; /` anonymous block in PG.
 - Loop variables must be explicitly declared (e.g., `v RECORD;`) in PL/pgSQL; Oracle implicitly declares the FOR-loop variable.
 - `DBMS_OUTPUT.PUT_LINE` → `RAISE NOTICE`/`RAISE DEBUG`; enable output with `SET CLIENT_MIN_MESSAGES` instead of `SET SERVEROUTPUT ON`.
-- `SYSDATE` → `now()`; string concat `||` works, but the playbook uses `CONCAT_WS` to handle NULLs.
+- `SYSDATE` → `now()` (transaction start time) or `clock_timestamp()` (wall clock), cast to `timestamp(0)` if seconds precision matters.
+- **NULL concatenation differs:** Oracle treats NULL as an empty string in `||` (`'a'||NULL = 'a'`). PostgreSQL returns NULL (`'a' || NULL` is NULL, verified). Convert `||` chains whose operands can be NULL to `concat(...)` / `concat_ws(...)`, which skip NULLs (verified: `concat('a', NULL) = 'a'`).
 - `SQLERRM` is available in both for exception messages.
-- Type names differ (`NUMBER`→`DOUBLE PRECISION`/`NUMERIC`, `VARCHAR2`→`CHARACTER VARYING`).
+- Type names differ (`NUMBER`→`NUMERIC` (exact; preferred over `DOUBLE PRECISION` unless the value is truly floating-point), `VARCHAR2`→`CHARACTER VARYING`).
+- `RAISE NOTICE` is shown by default (client_min_messages = `notice`), so `SET CLIENT_MIN_MESSAGES = 'debug'` is needed only for `RAISE DEBUG`.
+- Transaction control: a top-level `DO` block can `COMMIT`/`ROLLBACK` (PG 11+, verified on 18.6), like an Oracle anonymous block that commits in a loop. It cannot do so when called inside an explicit transaction block or from a function.

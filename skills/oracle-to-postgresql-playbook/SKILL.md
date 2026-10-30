@@ -1,6 +1,6 @@
 ---
 name: oracle-to-postgresql-playbook
-description: Knowledge base for converting Oracle to PostgreSQL (Aurora PostgreSQL compatible), distilled from the AWS Oracle-to-Aurora-PostgreSQL Migration Playbook into granular per-topic references. Use when converting or assessing a specific Oracle construct — datatypes, SQL/PL-SQL (MERGE, sequences, cursors, packages, dynamic SQL, DBMS_* packages), tables/indexes, partitioning, triggers, views, materialized views, JSON/XML, database links, security/roles, HA/DR, configuration, performance tuning, or monitoring — and you need the PostgreSQL equivalent, the conversion difficulty, and the workaround. The db-migration-inception and db-migration-construction skills consult this to classify and convert objects. This is a reference index/router: load the specific topic file under references/ rather than reading everything.
+description: Knowledge base for converting Oracle to PostgreSQL (Aurora PostgreSQL compatible), distilled from the AWS Oracle-to-Aurora-PostgreSQL Migration Playbook into granular per-topic references and refreshed for an Aurora PostgreSQL 18 target (validated on 18.6). Use when converting or assessing a specific Oracle construct — datatypes, SQL/PL-SQL (MERGE, sequences, cursors, packages, dynamic SQL, DBMS_* packages), tables/indexes, partitioning, triggers, views, materialized views, JSON/XML, database links, security/roles, HA/DR, configuration, performance tuning, or monitoring — and you need the PostgreSQL equivalent, the conversion difficulty, and the workaround. The db-migration-inception and db-migration-construction skills consult this to classify and convert objects. This is a reference index/router: load the specific topic file under references/ rather than reading everything.
 ---
 
 # Oracle → PostgreSQL Playbook (reference index)
@@ -8,6 +8,24 @@ description: Knowledge base for converting Oracle to PostgreSQL (Aurora PostgreS
 Granular conversion references distilled from the AWS *Oracle Database 19c to Amazon Aurora
 PostgreSQL Migration Playbook*. **Reference only — test everything in a non-production
 environment first.**
+
+## Target version baseline: Aurora PostgreSQL 18
+
+The AWS playbook was written for Aurora PostgreSQL 10–13. Every file here has been reviewed
+and refreshed for **Aurora PostgreSQL 18** and validated on a live 18.6 cluster on 2026-10-29.
+Each topic file carries a `Reviewed for Aurora PostgreSQL 18` line naming what changed, and
+statements marked *verified* were executed on that cluster.
+
+- New migrations should target the latest major version (18). Older advice that was only a
+  workaround for missing features (procedures as `RETURNS VOID` functions, `MERGE` via
+  `ON CONFLICT`, trigger-based virtual columns, regex emulation, `SERIAL`, uuid-ossp) is
+  superseded. The topic files say so explicitly.
+- If a customer must target an older major version, the version annotations in each file
+  (for example "PG 15+", "PG 17+") show which defaults still apply. Record the decision in
+  `customer-specific/environment.md`.
+- **Start with `references/target-baseline-aurora-postgresql-18.md`**: PG 18 conversion
+  defaults, what still has no equivalent, verified behavior differences, and the Aurora 18.6
+  extension and parameter inventory.
 
 ## How to use this skill
 
@@ -25,6 +43,18 @@ Each chapter folder also has an `_index.md` with one-line summaries.
 - **Manual** — needs redesign / human judgment.
 - **Blocked** — no supported path; flag to the user and find an architectural alternative.
 
+## How this playbook is consumed
+
+Only the parts below are read by a phase; keep them current first.
+
+| Consumer | What it reads |
+|---|---|
+| Construction and Validation (automatic) | `dbmig` writes the shared `_context-<phase>.md` with: the selected sections of `references/target-baseline-aurora-postgresql-18.md` (configured by `conversion.target_baseline` in `engines/oracle-to-postgresql/engine.yaml`), `quick-tips/quick-tips.md` in full, and the `_index.md` of `tables-indexes/`, `physical-storage/`, `special-features/` (schema); `sql-plsql/`, `special-features/` (code). The test context gets the baseline's behavior-differences section. |
+| Construction (on demand) | The topic file named in each detected-construct hint (`— see skills/oracle-to-postgresql-playbook/references/…`); the converter cites it in `conversion-log.md`, and `./dbmig status` counts the citations. |
+| DMS SC ingest | `tools/sct-action-code-index.md` to judge DMS SC action items. |
+| Operations | `tools/aws-dms.md`, `tools/rds-proxy.md`, `ha-dr/`, `configuration/`, `monitoring/`, `performance-tuning/`. |
+| Reference only | the other `tools/` files (`native-tools.md`, `rds-on-outposts.md`, `aurora-serverless-v1.md`, `aws-sct.md`) and `security/`. No phase reads these; refresh them only when someone needs them. |
+
 ## Precedence: customer-specific knowledge wins
 
 `references/customer-specific/` holds this customer's environment/application rules and has
@@ -37,10 +67,14 @@ then fall back to the general references. See `customer-specific/_index.md`.
 ### customer-specific/ — HIGHEST PRECEDENCE (this customer's environment/application)
 - Populated per engagement. Overrides everything below on conflict. See `_index.md`.
 
+### target-baseline-aurora-postgresql-18.md — read first
+- PG 18 conversion defaults, remaining gaps, verified behavior differences, Aurora 18.6 inventory.
+
 ### tools/ — migration tooling
 - `native-tools.md` (sqlplus/SQLcl/psql — informational; dbmig uses Python drivers),
-  `aws-sct.md`, `sct-action-code-index.md`, `aws-dms.md`, `rds-on-outposts.md`,
-  `rds-proxy.md`, `aurora-serverless-v1.md`
+  `aws-sct.md`, `sct-action-code-index.md` (incl. codes obsolete on PG 18), `aws-dms.md`
+  (PG 18 targets need DMS 3.5.4+), `rds-on-outposts.md`, `rds-proxy.md`,
+  `aurora-serverless-v1.md` (now Serverless v2; v1 is end-of-life)
 
 ### sql-plsql/ — SQL & PL/SQL (the bulk of code conversion)
 - Functions/queries: `single-row-and-aggregate-functions.md`, `create-table-as-select.md`,

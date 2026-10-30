@@ -45,6 +45,15 @@ conversion:
     - engines/oracle-to-mysql/datatype-map.yaml
     - engines/oracle-to-mysql/checks/non-portable-constructs.md
     - skills/oracle-to-mysql-playbook/references/
+  # Verified defaults and traps for the target version. The listed sections of
+  # this file are injected into the shared context of each phase.
+  target_baseline:
+    verified_for: ["8.0", "8.4"]   # target major versions the baseline was validated on
+    file: skills/oracle-to-mysql-playbook/references/target-baseline-aurora-mysql.md
+    sections:
+      schema: ["Conversion defaults", "Behavior differences", "Aurora MySQL 8.4 vs 3"]
+      code: ["Conversion defaults", "Behavior differences", "Aurora MySQL 8.4 vs 3"]
+      tests: ["Behavior differences"]
 
 # dbmig commands that drive each phase.
 commands:

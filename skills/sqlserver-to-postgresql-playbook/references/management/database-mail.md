@@ -6,6 +6,8 @@
 **Conversion category:** N/A (one-star feature compatibility)
 **SCT automation:** N/A (SCT action code index: SQL Server Mail)
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): fixed sample bugs (table name, handler), EventBridge Scheduler, `aws_lambda` push pattern with SES API, transactional caveat, query-result attachments.
+
 Key difference: Use AWS Lambda integration.
 
 ## SQL Server
@@ -81,7 +83,7 @@ Example walkthrough — send email from Aurora PostgreSQL via Lambda + SES:
 4. Create a table to queue messages:
 
    ```sql
-   CREATE TABLE emails (title varchar(600), body varchar(600), recipients varchar(600));
+   CREATE TABLE mails (title varchar(600), body varchar(600), recipients varchar(600));
    ```
 5. Create a Lambda function (Author from scratch, Python runtime, role with correct permissions).
 6. Provide `main.py` and `db_util.py` (uses `psycopg2` to read the queued rows and `smtplib` to send via SES SMTP, then deletes the sent rows).
@@ -172,12 +174,24 @@ Example walkthrough — send email from Aurora PostgreSQL via Lambda + SES:
    ```
 
    Note: the Lambda deletes the contents of the mails table after sending.
-7. Package `main.py` + `db_util.py` (with the `psycopg2` dependency) into a ZIP, upload, set Handler to `mail.lambda_handler`.
-8. Test, then schedule via Amazon CloudWatch (e.g., every minute using a rate/cron expression — you pay per invocation).
+7. Package `main.py` + `db_util.py` (with a `psycopg2-binary`/`psycopg` Lambda layer) into a ZIP, upload, set Handler to `main.lambda_handler`.
+8. Test, then schedule with **Amazon EventBridge Scheduler** (e.g., every minute using a rate/cron expression — you pay per invocation), or call `aws_lambda.invoke` from `pg_cron`.
+
+### Simpler alternative on Aurora PostgreSQL 18: push instead of poll
+`sp_send_dbmail` can map to a direct asynchronous Lambda call from PL/pgSQL with the `aws_lambda` extension (2.1 on Aurora 18). The Lambda sends through the **SES API** with its IAM role, so no SMTP secret is needed:
+```sql
+CREATE EXTENSION IF NOT EXISTS aws_lambda CASCADE;
+SELECT * FROM aws_lambda.invoke(
+  aws_commons.create_lambda_function_arn('send-mail', 'us-west-2'),
+  json_build_object('to', 'recipient@example.com', 'subject', 'Weekly Sales Report',
+                    'query_result', (SELECT json_agg(r) FROM fn_weekly_sales_report(now()) r)),
+  'Event');
+```
+The cluster needs an IAM role with the `Lambda` feature (`aws rds add-role-to-db-cluster --feature-name Lambda`). The call is **not transactional**: a rolled-back transaction still sends the mail. Use the queue table when mail must follow commit. `@attach_query_result_as_file` → build the CSV in Lambda, or `aws_s3.query_export_to_s3` + a presigned link in the mail.
 
 ## Conversion notes
 
 - No native database mail in Aurora PostgreSQL — replace `sp_send_dbmail` with AWS Lambda + Amazon SES.
 - For alert-style notifications prefer Amazon RDS event notifications + Amazon SNS rather than custom mail (see Alerting).
-- AWS service replacements: AWS Lambda (logic), Amazon SES (SMTP delivery), Amazon CloudWatch Events (scheduling).
+- AWS service replacements: AWS Lambda (logic), Amazon SES (API or SMTP delivery), Amazon EventBridge Scheduler (scheduling), `aws_lambda.invoke` (push from SQL).
 - The queue-table + scheduled-Lambda pattern emulates Database Mail's asynchronous send queue.

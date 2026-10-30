@@ -1,0 +1,18 @@
+object: vEmployeeDepartment
+schema: HUMANRESOURCES
+type: function
+notes: ACCEPT view, compared in full (current department of every employee, EndDate IS NULL filter).
+cases:
+- id: c1
+  description: row count
+  source_sql: SELECT COUNT(*) FROM HumanResources.vEmployeeDepartment
+  target_sql: SELECT count(*) FROM adventureworks_humanresources.vemployeedepartment
+- id: c2
+  description: every row and column
+  compare: resultset
+  source_sql: >
+    SELECT BusinessEntityID, Title, FirstName, MiddleName, LastName, Suffix, JobTitle,
+           Department, GroupName, StartDate FROM HumanResources.vEmployeeDepartment
+  target_sql: >
+    SELECT businessentityid, title, firstname, middlename, lastname, suffix, jobtitle,
+           department, groupname, startdate FROM adventureworks_humanresources.vemployeedepartment

@@ -6,6 +6,8 @@
 **Conversion category:** Assisted/Manual (★★★★ feature compatibility, ★★★★ automation)
 **SCT automation:** N/A — `GREATEST`/`LEAST` may differ; `CONNECT BY` unsupported (workaround available).
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Window functions are native on 3 / 8.4 (verified); added the verified gap list (IGNORE NULLS error 1235, no PERCENTILE/MEDIAN, RATIO_TO_REPORT, LISTAGG→GROUP_CONCAT, RANGE INTERVAL rule, no GROUPING SETS); corrected the GREATEST note; 5.7 workarounds marked legacy.
+
 ## Oracle
 
 OLAP (analytic) functions compute aggregate values over logically partitioned row sets within a single query — useful for BI/analytics and often faster than equivalent non-OLAP SQL.
@@ -23,33 +25,33 @@ Common Oracle OLAP function groups:
 
 ## MySQL
 
-Some Oracle OLAP functions are plain aggregate functions in Aurora MySQL. Others need window functions — **Aurora MySQL 5.7 does NOT support window functions.** (Amazon RDS for MySQL 8 supports them: `RANK()`, `LAG()`, `NTILE()`, plus aggregate-as-window `SUM()`, `AVG()`, etc.; MySQL 8 syntax is ANSI compliant.)
-
-### Migration considerations
-- Rewrite window-function logic with traditional SQL (correlated subqueries) — usually less optimal in performance/readability.
-- Consider archiving the original code to reuse after upgrading to MySQL/Aurora 8.
+**Aurora MySQL 3 and 8.4 support SQL-standard window functions** (verified on 3.13.0 and 8.4.8): `ROW_NUMBER`, `RANK`, `DENSE_RANK`, `NTILE`, `PERCENT_RANK`, `CUME_DIST`, `LAG`, `LEAD`, `FIRST_VALUE`, `LAST_VALUE`, `NTH_VALUE`, and aggregates (`SUM`, `AVG`, `COUNT`, `MIN`, `MAX`, `BIT_*`, `JSON_ARRAYAGG`, `STD`/`VARIANCE`) with `OVER (PARTITION BY … ORDER BY … ROWS|RANGE …)`, plus named windows (`WINDOW w AS (…)`). Most Oracle analytic SQL converts unchanged.
 
 ```sql
-CREATE TABLE OrderItems(
-  OrderID INT NOT NULL, Item VARCHAR(20) NOT NULL, Quantity SMALLINT NOT NULL,
-  PRIMARY KEY(OrderID, Item));
-INSERT INTO OrderItems (OrderID, Item, Quantity)
-  VALUES (1,'M8 Bolt',100),(2,'M8 Nut',100),(3,'M8 Washer',200);
-
--- Workaround for window ranking function (RANK)
-SELECT Item, Quantity,
-  (SELECT COUNT(*) FROM OrderItems AS OI2 WHERE OI.Quantity > OI2.Quantity) + 1 AS QtyRank
-FROM OrderItems AS OI;
-
--- Workaround for partitioned window aggregate (SUM OVER PARTITION)
-SELECT Item, Quantity,
-  (SELECT SUM(Quantity) FROM OrderItems AS OI2 WHERE OI2.OrderID = OI.OrderID) AS TotalOrderQty
-FROM OrderItems AS OI;
+SELECT item, quantity,
+       RANK() OVER (ORDER BY quantity DESC)                    AS qty_rank,
+       SUM(quantity) OVER (PARTITION BY order_id)              AS total_order_qty,
+       LAG(item, 1, 'none') OVER (ORDER BY item)               AS prev_item,
+       quantity / SUM(quantity) OVER (PARTITION BY order_id)   AS ratio_to_report
+FROM order_items;
 ```
 
+Gaps on both versions (verified):
+
+| Oracle | MySQL 3 / 8.4 | Rewrite |
+|---|---|---|
+| `IGNORE NULLS` in `FIRST_VALUE`/`LAST_VALUE`/`LAG`/`LEAD` | error 1235 "doesn't yet support 'IGNORE NULLS'" | `MAX(col) OVER (…)` over a running group, or a correlated subquery |
+| `PERCENTILE_CONT` / `PERCENTILE_DISC` / `MEDIAN` | not available (syntax error / no function) | `ROW_NUMBER()` + `COUNT() OVER` and pick/average the middle rows |
+| `RATIO_TO_REPORT(x)` | not available | `x / SUM(x) OVER (PARTITION BY …)` |
+| `LISTAGG … WITHIN GROUP` | aggregate only | `GROUP_CONCAT(x ORDER BY … SEPARATOR ',')` (not a window function; raise `group_concat_max_len`, default 1024) |
+| `KEEP (DENSE_RANK FIRST/LAST)` | not available | `FIRST_VALUE … OVER` in a derived table, or `ROW_NUMBER() = 1` |
+| `RANGE BETWEEN INTERVAL … PRECEDING` | allowed only with one numeric/temporal `ORDER BY` key (error 3587 otherwise) | same rule as Oracle; order by the date column |
+| `GROUPING SETS` / `CUBE` | not available; `WITH ROLLUP` + `GROUPING()` only | `UNION ALL` of the grouping levels |
+| `MODEL` clause | not available | procedural rewrite |
+
 ## Conversion notes
-- Oracle aggregate-style OLAP functions (`AVG`, `COUNT`, `MAX`, `MIN`, `SUM`) map to MySQL aggregates directly.
-- True window/analytic functions (`RANK`, `ROW_NUMBER`, `LAG`, `LEAD`, `NTILE`, `FIRST_VALUE`, `LAST_VALUE`, `CUME_DIST`, `PERCENT_RANK`) require correlated-subquery rewrites on Aurora MySQL 5.7.
-- `CONNECT BY` hierarchical queries are unsupported — use the recursive workaround (loop in stored procedure).
-- `GREATEST`/`LEAST` may return different results in MySQL — verify.
-- If targeting MySQL 8, native window functions are available — no rewrite needed.
+- Oracle aggregate-style OLAP functions (`AVG`, `COUNT`, `MAX`, `MIN`, `SUM`) map to MySQL aggregates directly; analytic functions map to native window functions on Aurora MySQL 3 / 8.4.
+- `CONNECT BY` → `WITH RECURSIVE` (see `common-table-expressions.md`).
+- `GREATEST`/`LEAST` return NULL if any argument is NULL in both engines (verified: `GREATEST(1, NULL, 3)` → NULL), but MySQL compares mixed types differently (string vs number); cast arguments to one type.
+- Window functions cannot be used in `WHERE`, `GROUP BY` or `HAVING`; wrap the query in a derived table or CTE to filter on them (same as Oracle).
+- Legacy (Aurora MySQL 5.7 only): correlated-subquery rewrites such as `(SELECT COUNT(*) FROM t t2 WHERE t.q > t2.q) + 1` for `RANK()`. Do not use them on 3 / 8.4.

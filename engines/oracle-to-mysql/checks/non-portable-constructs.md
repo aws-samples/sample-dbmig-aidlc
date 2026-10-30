@@ -6,9 +6,10 @@ procedures, 5 functions, 1 trigger). Flag, don't silently approximate.
 
 ## 1. Packages
 MySQL has no packages. Flatten each public subprogram to a standalone routine
-`demo.<package>_<subprogram>`. **One routine per file/unit** — the apply path executes a unit
-in a single `cur.execute`; a compound `BEGIN..END` routine is fine as one statement, but
-multiple routines in one file are not. Package spec → no DDL (signatures only); convert the
+`demo.<package>_<subprogram>`. The apply path executes a unit in a single `cur.execute` with
+`MULTI_STATEMENTS`; the server parses each compound `CREATE … BEGIN … END` as one statement, so a
+package's routines can share one file — end each with `END;` (verified on Aurora MySQL 8.4.8,
+2026-10-30). Never use the client-only `DELIMITER` command. Package spec → no DDL (signatures only); convert the
 body's subprograms. Sibling calls become calls to the flattened routine.
 
 ## 2. Sequences / identity

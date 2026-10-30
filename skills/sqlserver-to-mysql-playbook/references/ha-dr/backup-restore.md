@@ -6,6 +6,8 @@
 **Conversion category:** N/A (infrastructure / managed-service topic — four-star feature compatibility)
 **SCT automation:** No automation (SCT action code index: Backup)
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Redo-log disable not available on Aurora (verified); S3 physical restore applies to MySQL sources only, not SQL Server .bak files.
+
 ## SQL Server
 
 *Backup* refers to both the process of copying data and the resulting data set used for
@@ -141,10 +143,8 @@ moment within the retention period (1–35 days, set at create/modify time). Bac
 performance impact and cause no service interruption. You can also take manual snapshots
 saved beyond the retention period (manual snapshots incur RDS storage charges).
 
-> Note: From Amazon RDS / MySQL 8.0.21, redo logging can be toggled with
-> `ALTER INSTANCE {ENABLE|DISABLE} INNODB REDO_LOG` to speed up bulk loads into a new
-> instance. The `INNODB_REDO_LOG_ENABLE` privilege controls it; `Innodb_redo_log_enabled`
-> status variable monitors it.
+> Note: `ALTER INSTANCE DISABLE INNODB REDO_LOG` (an RDS for MySQL 8.0.21+ bulk-load option) is **not available on
+> Aurora**: the master user lacks `INNODB_REDO_LOG_ENABLE` (error 1227 on 3.13 and 8.4.8, verified).
 
 ### Restoring Data
 Recover from automatically retained data or a manual snapshot. The RDS console shows
@@ -153,9 +153,7 @@ Restorable Time** (end of the retention period). Both display NULL until a clust
 completes.
 
 ### Restoring Database Backups from Amazon S3
-You can restore MySQL 5.7 backups stored on S3 to Aurora MySQL and RDS for MySQL. When
-migrating MySQL 5.5/5.6/5.7, copying full and incremental backups to S3 and restoring is
-considerably faster than `mysqldump`, which replays SQL statements to recreate the database.
+You can restore physical (Percona XtraBackup) backups of **MySQL** stored on S3 into a new Aurora MySQL cluster. This is for MySQL sources, not SQL Server: a SQL Server `.bak` cannot be restored into Aurora MySQL — use AWS DMS or the toolkit's data load. Check the current Aurora docs for supported source versions (5.7 and 8.0).
 
 ### Backtracking an Aurora DB Cluster
 Backtracking rewinds an Aurora MySQL cluster to a specified time *without* restoring from a
@@ -296,3 +294,6 @@ the retention period and take manual snapshots for special cases.
 
 - Aurora MySQL manages storage-level backups; transaction logs, filegroups, and backup
   purging are not applicable. Cluster volume max size is 64 TiB.
+- SQL Server backup features and their Aurora MySQL replacements (Aurora MySQL 3 / 8.4): `BACKUP DATABASE` → automatic continuous backups (1–35 days) and manual cluster snapshots; `BACKUP LOG` / log chain → not needed (PITR to any second in the window); `RESTORE … STOPAT` → `restore-db-cluster-to-point-in-time` (new cluster); database snapshots (`AS SNAPSHOT OF`) → **Backtrack** (supported on 2, 3 and 8.4, enabled at creation) or fast clones; `COPY_ONLY` backups → manual snapshots / AWS Backup; backup to URL / tape → AWS Backup cross-Region and cross-account copies, snapshot export to S3 (Parquet).
+- Single-database restore: restore the snapshot to a new cluster, then copy the database back with MySQL Shell `util.dumpSchemas()`/`util.loadDump()` (or `mysqldump --single-transaction --routines --events --triggers`).
+- Instance-class examples in older material (`db.r4.*`) are retired; use current classes (e.g. `db.r7g.*`) or `db.serverless`.

@@ -2,10 +2,11 @@ object: ARCHIVE_OLD_ORDERS
 schema: DEMO
 type: procedure
 notes: >
-  COMMITs in the source: NON-DESTRUCTIVE case only (p_days_old 100000 -> cutoff centuries ago, nothing deleted). LOW_COVERAGE: ORDERS empty in the source.
+  COMMITs in the source (test_mode manual) and LOW_COVERAGE (ORDERS empty). Non-destructive case only:
+  with no orders nothing is deleted on either engine.
 cases:
-  - id: a1
-    call_source: "BEGIN DEMO.ARCHIVE_OLD_ORDERS(100000); END;"
-    call_target: "CALL demo.archive_old_orders(100000)"
+  - id: p1
+    call_source: "BEGIN DEMO.ARCHIVE_OLD_ORDERS(365); END;"
+    call_target: "CALL demo.archive_old_orders(365)"
     verify:
       - {name: orders_count, source_sql: "SELECT COUNT(*) FROM DEMO.ORDERS", target_sql: "SELECT count(*) FROM demo.orders"}

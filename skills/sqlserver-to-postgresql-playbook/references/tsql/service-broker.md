@@ -6,6 +6,8 @@
 **Conversion category:** Manual (no feature compatibility, no automation)
 **SCT automation:** No automation — SCT action code index: Service Broker
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): Added verified in-database queue pattern (FOR UPDATE SKIP LOCKED, pg_notify), aws_lambda 2.1 / dblink / pg_cron options, pgmq not available, SQS FIFO for ordered delivery.
+
 ## SQL Server
 
 SQL Server Service Broker provides native messaging and queuing inside the database engine, used to build distributed, reliable, decoupled applications. Benefits: decouple application dependencies via messages, scale out by moving queues/processors to separate servers, maintain parts with minimal user impact, control when messages process (off-peak), and process on multiple servers/threads.
@@ -104,8 +106,37 @@ Aurora PostgreSQL has **no compatible equivalent** to SQL Server Service Broker.
 - **AWS Lambda**: query a table, process the data, and insert it into another database (even a different engine). Best option for moving workloads off the database to a cheaper instance type.
 - **Amazon SQS + AWS Lambda**: for maximum decoupling and to remove load from the database — more efficient and cost-effective. See "Using Lambda with Amazon SQS".
 
+### In-database options on Aurora PostgreSQL 18 (verified on 18.6)
+
+When the queue must stay transactional with the data (the main reason Service Broker was used), a queue table with `FOR UPDATE SKIP LOCKED` gives competing consumers without blocking:
+
+```sql
+CREATE TABLE app.msg_queue (
+  id      bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  msg_type text NOT NULL,
+  body    jsonb NOT NULL,
+  enqueued_at timestamptz NOT NULL DEFAULT now());
+
+-- SEND ON CONVERSATION  →
+INSERT INTO app.msg_queue (msg_type, body) VALUES ('OrderCreated', '{"id": 42}');
+
+-- RECEIVE TOP(1) … FROM queue  →  (each consumer gets a different row; locked rows are skipped)
+WITH next AS (SELECT id FROM app.msg_queue ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 1)
+DELETE FROM app.msg_queue q USING next WHERE q.id = next.id
+RETURNING q.id, q.msg_type, q.body;
+```
+
+- `WAITFOR (RECEIVE …), TIMEOUT` → the consumer polls, or waits on `LISTEN app_queue` and the producer runs `pg_notify('app_queue', id::text)` in the same transaction (the notification is delivered at commit). `LISTEN` needs a persistent client connection; it does not work through RDS Proxy pinning-free mode or the Data API.
+- Activation procedures (`ACTIVATION (PROCEDURE_NAME = …)`) → a `pg_cron` job that drains the queue, or an external worker (Lambda on a schedule, ECS task).
+- Calling out from the database: the `aws_lambda` extension (2.1 on 18.6) invokes a Lambda function from SQL (`aws_lambda.invoke`), for example from an `AFTER INSERT` trigger. Keep such calls asynchronous (`'Event'` invocation type) so a slow function does not hold row locks.
+- Cross-database dialogs → `dblink` 1.2 / `postgres_fdw` 1.2, or (better) put both sides on SQS.
+- The `pgmq` extension is **not** available on Aurora PostgreSQL 18.6.
+- Message types with `VALIDATION = WELL_FORMED_XML` → a `CHECK` constraint on an `xml`/`jsonb` body; conversation groups and ordering guarantees must be designed in the queue table (for example a `conversation_id` column plus `ORDER BY id`).
+- Queue tables churn heavily: give them aggressive per-table autovacuum settings (`autovacuum_vacuum_scale_factor = 0`, `autovacuum_vacuum_threshold = 1000`) or partition by time with `pg_partman` and drop old partitions.
+
 ## Conversion notes
-- No native equivalent — migration requires a full re-architecture of messaging/queuing outside the database.
+- No native equivalent — migration requires a re-architecture of messaging/queuing: either outside the database (SQS/Lambda) or as a `SKIP LOCKED` queue table inside it.
 - Recommended target pattern: Amazon SQS for queues + AWS Lambda for message processing, optionally DB Links for cross-database reads.
 - Moving messaging out of the DB into Lambda/SQS reduces database load and cost.
 - Consider Database Mail page for related notification scenarios.
+- Use Amazon SQS FIFO queues when Service Broker's in-order, exactly-once delivery per conversation matters; standard SQS queues are at-least-once and unordered.

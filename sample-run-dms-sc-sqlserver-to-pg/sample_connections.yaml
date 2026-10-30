@@ -8,7 +8,7 @@
 
 source:
   engine: sqlserver
-  version: "2019"
+  version: "2022"            # RDS SQL Server Express 2022
   host: ${MSSQL_HOST}
   port: 1433
   database: ${MSSQL_DATABASE}     # e.g. AdventureWorks
@@ -17,10 +17,10 @@ source:
 
 target:
   engine: postgresql              # Aurora PostgreSQL (schema already applied by DMS SC)
-  version: "17"
+  version: "18.6"
   host: ${PG_HOST}
   port: 5432
-  database: ${PG_DATABASE}
+  database: ${PG_DATABASE}       # e.g. adventureworks (DMS SC schemas adventureworks_<schema>)
   username: ${PG_USER}
   password: ${PG_PASSWORD}
   sslmode: require

@@ -1,0 +1,3 @@
+CREATE INDEX ix_emailaddress_ix_emailaddress_emailaddress
+ON adventureworks_person.emailaddress
+USING BTREE (emailaddress ASC);

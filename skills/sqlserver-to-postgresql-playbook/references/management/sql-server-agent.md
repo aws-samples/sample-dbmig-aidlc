@@ -6,6 +6,8 @@
 **Conversion category:** N/A
 **SCT automation:** N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): `pg_cron` is available on Aurora 18 (verified incl. the `schedule_in_database` restriction), EventBridge Scheduler/Step Functions for multi-step jobs.
+
 ## SQL Server
 
 SQL Server Agent provides two main functions: scheduling automated maintenance jobs and alerting. Other SQL Server built-in frameworks, such as replication, also rely on SQL Server Agent jobs.
@@ -14,17 +16,29 @@ See the related Maintenance Plans and Alerting topics for the job and alert capa
 
 ## PostgreSQL
 
-There is currently no equivalent in Amazon Aurora PostgreSQL-Compatible Edition for scheduling tasks. To schedule work, create a scheduled AWS Lambda function that runs a stored procedure.
+Aurora PostgreSQL 18 has two scheduling options (the original playbook said there was none in-engine; `pg_cron` has since become available on Aurora):
 
-Example pattern (scheduled Lambda triggered by Amazon CloudWatch Events on a rate/cron schedule, invoking SQL against the cluster) — see the Database Mail topic for a full walkthrough of the scheduled-Lambda approach:
+**1. `pg_cron` — in-database jobs (verified on Aurora 18.6).** Add `pg_cron` to `shared_preload_libraries` in the cluster parameter group and reboot, then in the `postgres` database:
+```sql
+CREATE EXTENSION pg_cron;
+-- ≈ sp_add_job + sp_add_jobstep + sp_add_schedule (daily at 01:00 UTC)
+SELECT cron.schedule('nightly-reindex', '0 1 * * *', $$REINDEX INDEX CONCURRENTLY sales.idx1$$);
+UPDATE cron.job SET database = 'appdb' WHERE jobname = 'nightly-reindex';   -- run in another database
+SELECT * FROM cron.job_run_details ORDER BY start_time DESC LIMIT 20;      -- ≈ sysjobhistory
+SELECT cron.unschedule('nightly-reindex');                                  -- ≈ sp_delete_job
+```
+On Aurora the master user cannot call `cron.schedule_in_database` (permission denied, verified); use `cron.schedule` and then update `cron.job.database` as shown. Schedules are UTC cron expressions (or `'30 seconds'` intervals). Jobs run as the scheduling user.
 
+**2. Amazon EventBridge Scheduler → AWS Lambda / Step Functions — external jobs.** Use this for multi-step jobs with per-step success/failure branching (Step Functions), jobs that call outside the database (files, APIs, mail), and CmdExec/PowerShell/SSIS steps:
 ```text
-CloudWatch Events (rate/cron) -> AWS Lambda -> psycopg2 connection -> run stored procedure / query
+EventBridge Scheduler (rate/cron) -> Step Functions / Lambda -> RDS Data API or psycopg -> CALL proc(...)
 ```
 
 ## Conversion notes
 
-- No native scheduler exists in Aurora PostgreSQL; replace SQL Server Agent jobs with scheduled AWS Lambda functions triggered by Amazon CloudWatch Events (rate or cron expressions).
+- T-SQL job steps that only run SQL/procedures → `pg_cron` (`CALL schema.proc()`). Multi-step jobs with step logic, retries, notifications, or non-SQL steps → EventBridge Scheduler + Step Functions/Lambda.
+- `pg_cron` has no job categories, operators, step-level retry or alert-on-failure. Monitor `cron.job_run_details` (or export the PostgreSQL log to CloudWatch and alarm on failures).
+- Agent jobs that SQL Server replication or CDC created are not migrated; DMS/logical replication replaces them.
 - Replace Agent alerting with Amazon RDS event notifications + Amazon SNS (see Alerting).
 - Replace Agent-driven maintenance jobs with RDS automated snapshots and SQL maintenance commands (`VACUUM`, `ANALYZE`, `REINDEX`) — see Maintenance Plans.
 - You pay per Lambda invocation, so choose schedule intervals accordingly.

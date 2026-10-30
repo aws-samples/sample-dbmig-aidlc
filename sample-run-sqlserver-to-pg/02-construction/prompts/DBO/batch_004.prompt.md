@@ -14,8 +14,8 @@ Shared schema context for this run: `migrations/<project>/02-construction/_conte
 === TASK ===
 Convert the following SQL Server object unit to PostgreSQL DDL. Return only valid PostgreSQL DDL, ready to execute. Do not include explanation outside SQL comments. Preserve table and column intent; choose appropriate PostgreSQL types, index types, and constraint forms based on the whole unit. Fold UPPERCASE identifiers to lower_case unquoted PostgreSQL identifiers unless quoting is required. Qualify every created object with the target schema `dbo` (derived from the source schema — do NOT use the connection's database/catalog name for qualification).
 
-=== CONSTRUCTS DETECTED IN THIS OBJECT (apply the matching guidance in the context) ===
-- IDENTITY → GENERATED ... AS IDENTITY; reset after load
+=== CONSTRUCTS DETECTED IN THIS PROMPT'S SOURCE (apply the matching guidance; open the named playbook file when the context is not enough, and cite it in the conversion log) ===
+- IDENTITY → GENERATED ... AS IDENTITY; reset after load — see `skills/sqlserver-to-postgresql-playbook/references/tsql/identity-and-sequences.md`
 
 --- SOURCE DDL (SQL Server) — dbo.ProductSales (~15 rows) ---
 -- === TABLE ===
@@ -56,7 +56,7 @@ CREATE TABLE [dbo].[Shopping] (
 );
 
 -- === CONSTRAINTS (PK / UNIQUE / CHECK) ===
-ALTER TABLE [dbo].[Shopping] ADD CONSTRAINT [PK__Shopping__C3905BAFB39FAAB4] PRIMARY KEY ([OrderID]);
+ALTER TABLE [dbo].[Shopping] ADD CONSTRAINT [PK__Shopping__C3905BAF415046C1] PRIMARY KEY ([OrderID]);
 
 --- SOURCE DDL (SQL Server) — dbo.ShoppingCart (~0 rows) ---
 -- === TABLE ===

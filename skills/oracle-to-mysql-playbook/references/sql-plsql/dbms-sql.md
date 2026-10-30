@@ -6,6 +6,8 @@
 **Conversion category:** Manual (★ feature compatibility, ★ automation)
 **SCT automation:** N/A — different paradigm/syntax requires application and driver rewrite.
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Pointer to the verified PREPARE rules; DESCRIBE_COLUMNS → information_schema.
+
 ## Oracle
 
 `DBMS_SQL` parses and runs dynamic SQL, DML, and DDL (usually from a PL/SQL package/procedure/function) with granular cursor control. Flow: `OPEN_CURSOR` → `PARSE` → `BIND_VARIABLE` → `EXECUTE` → `GET_NEXT_RESULT`/`FETCH` → `CLOSE_CURSOR`.
@@ -51,3 +53,5 @@ No `DBMS_SQL` equivalent. Aurora MySQL options:
 - MySQL prepared statements bind only data values (`?` placeholders) — for dynamic identifiers, build the SQL string with `CONCAT` before `PREPARE`.
 - No equivalent for `RETURN_RESULT`/`TO_REFCURSOR`/`TO_CURSOR_NUMBER` — restructure to return result sets directly from a procedure or use server-side cursors.
 - This is a low-compatibility area: expect application and driver code changes, not just SQL rewrites.
+- `DBMS_SQL.DESCRIBE_COLUMNS` (unknown column lists) has no in-database equivalent; query `information_schema.columns` for tables, or move the dynamic-shape logic to the application.
+- Same `PREPARE` rules as in `execute-immediate-and-prepare.md`: user-variable bind arguments only, one statement per prepare, not available in functions or triggers (verified on Aurora MySQL 3.13 and 8.4.8).

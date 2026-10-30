@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (Four-star feature compatibility, four-star automation; `GREATEST`/`LEAST` may differ; `CONNECT BY` not supported, workaround available)
 **SCT automation:** Four-star automation level; SCT action code index → OLAP Functions
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): PG 11–16 window/aggregate features (`GROUPS`, `EXCLUDE`, `FILTER`, `any_value`), Oracle `LISTAGG`/`MEDIAN`/`KEEP`/`RATIO_TO_REPORT`/`CONNECT BY LEVEL` rewrites (verified), GREATEST/LEAST NULL semantics.
+
 ## Oracle
 
 Oracle OLAP functions extend standard SQL analytic functions, computing aggregate values over logically partitioned result sets within a single query. Commonly used for BI/reporting and can outperform equivalent non-OLAP SQL.
@@ -43,8 +45,23 @@ PostgreSQL calls ANSI SQL analytic functions **Window Functions**. They operate 
 
 | Type | Related functions |
 |---|---|
-| Aggregate | `avg`, `count`, `max`, `min`, `sum`, `string_agg` |
+| Aggregate | `avg`, `count`, `max`, `min`, `sum`, `string_agg`, `array_agg`, `any_value` (PG 16), `bool_and/or`, `stddev*`, `var*`, `corr`, `regr_*` |
+| Ordered-set | `percentile_cont`, `percentile_disc`, `mode` … `WITHIN GROUP (ORDER BY …)` |
 | Ranking | `row_number`, `rank`, `dense_rank`, `percent_rank`, `cume_dist`, `ntile`, `lag`, `lead`, `first_value`, `last_value`, `nth_value` |
+
+Frames support `ROWS`, `RANGE` (with offsets, PG 11+), `GROUPS`, and `EXCLUDE CURRENT ROW | GROUP | TIES`. Aggregates accept `FILTER (WHERE …)`. All of these are verified on 18.6.
+
+**Oracle analytic constructs that need a rewrite** (verified on 18.6):
+
+| Oracle | PostgreSQL |
+|---|---|
+| `LISTAGG(x, ',') WITHIN GROUP (ORDER BY y)` | `string_agg(x, ',' ORDER BY y)` (`LISTAGG … ON OVERFLOW` has no equivalent) |
+| `MEDIAN(x)` | `percentile_cont(0.5) WITHIN GROUP (ORDER BY x)` |
+| `RATIO_TO_REPORT(x) OVER ()` | `x / sum(x) OVER ()` |
+| `MAX(x) KEEP (DENSE_RANK FIRST ORDER BY y)` | `(array_agg(x ORDER BY y))[1]` as an aggregate, or `first_value(x) OVER (… ORDER BY y)` |
+| `SELECT LEVEL FROM DUAL CONNECT BY LEVEL <= n` (row generator) | `SELECT g FROM generate_series(1, n) g` |
+| `STATS_MODE(x)` | `mode() WITHIN GROUP (ORDER BY x)` |
+| `ANY_VALUE(x)` (Oracle 21c) | `any_value(x)` (PG 16+) |
 
 Equivalent `RANK()` (identical syntax, different numeric formatting):
 
@@ -113,6 +130,8 @@ For heavy OLAP/BI workloads against large datasets, consider Amazon Redshift (co
 
 - Window function syntax (`OVER (PARTITION BY … ORDER BY …)`) is identical; standard ranking/aggregate window functions migrate directly.
 - Watch for **return-type differences** (e.g., `bigint`, `double`) that may require application-side casting or formatting changes.
-- `GREATEST`/`LEAST` can produce different results in PostgreSQL — verify NULL handling.
+- `GREATEST`/`LEAST` ignore NULL arguments in PostgreSQL (`greatest(1, NULL) = 1`, verified) but return NULL in Oracle if any argument is NULL. Where Oracle's NULL result matters, add `CASE WHEN a IS NULL OR b IS NULL THEN NULL ELSE greatest(a,b) END`.
+- Default NULL ordering matches Oracle (`ASC NULLS LAST`, `DESC NULLS FIRST`), so explicit `NULLS FIRST/LAST` clauses carry over unchanged.
+- Numeric results: `sum`/`avg` over `numeric` return `numeric` with possibly many decimal digits (`x / sum(x)` gave 20 decimal places, verified). Round explicitly where Oracle output was compared textually.
 - Rewrite Oracle hierarchical `CONNECT BY` queries using `WITH RECURSIVE` or `generate_series`.
 - Oracle hierarchical OLAP functions (`hier_*`) have no PG window-function equivalent; redesign as recursive CTEs.

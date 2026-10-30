@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (Three-star feature compatibility, three-star automation)
 **SCT automation:** SCT action code index: Materialized Views. Key difference: PostgreSQL doesn't support automatic or incremental REFRESH.
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): `REFRESH … CONCURRENTLY` (unique index required, verified), `WITH NO DATA`, `MAINTAIN` privilege, `pg_cron` scheduling, `pg_ivm` unavailable, trigger-maintained summary tables for fast-refresh MViews.
+
 ## Oracle
 
 Oracle materialized views (MViews) store a pre-computed query result as a table segment, refreshed periodically. Useful for replication, data warehousing, and persisting complex query results. Source objects = master tables (replication) / detail tables (DW).
@@ -54,7 +56,7 @@ PostgreSQL supports materialized views but with three key limitations vs Oracle:
 - **Only complete (full) refresh** — no incremental/fast refresh.
 - **DML on materialized views is not supported.**
 
-(PG 10: statistics collector updates properly after `REFRESH MATERIALIZED VIEW`.)
+**`REFRESH MATERIALIZED VIEW CONCURRENTLY`** rebuilds without blocking readers (closest to Oracle's online complete refresh). It requires a **unique index without a `WHERE` clause** on the MView (verified: fails with a hint otherwise). `WITH NO DATA` creates an unpopulated MView that errors on `SELECT` until refreshed (verified), like Oracle `BUILD DEFERRED`. The `MAINTAIN` privilege (PG 17, `GRANT MAINTAIN ON mv TO role`) lets a non-owner refresh it.
 
 ```sql
 CREATE MATERIALIZED VIEW sales_summary AS
@@ -71,7 +73,7 @@ CREATE UNIQUE INDEX sales_summary_seller
 ON sales_summary (seller_no, sale_date);
 ```
 
-Automatic refresh requires a trigger on underlying tables:
+Automatic refresh can use a trigger on underlying tables. This refreshes the whole MView on **every** write statement, so use it only for small, rarely written sources. Prefer a scheduled `pg_cron` job (`SELECT cron.schedule('mv1', '*/5 * * * *', 'REFRESH MATERIALIZED VIEW CONCURRENTLY mv1')`):
 ```sql
 CREATE OR REPLACE FUNCTION refresh_mv1()
 returns trigger language plpgsql as
@@ -82,7 +84,7 @@ end $$;
 
 create trigger refresh_mv1 after insert or update
 or delete or truncate on employees for each statement
-execute procedure refresh_mv1();
+execute function refresh_mv1();
 ```
 
 ### Summary mapping
@@ -91,12 +93,14 @@ execute procedure refresh_mv1();
 |---|---|---|
 | Create MView | `CREATE MATERIALIZED VIEW mv1 AS SELECT * FROM employees;` | `CREATE MATERIALIZED VIEW mv1 AS SELECT * FROM employees;` |
 | Manual refresh | `DBMS_MVIEW.REFRESH('mv1', 'cf');` | `REFRESH MATERIALIZED VIEW mv1;` |
-| Online refresh | `CREATE MATERIALIZED VIEW mv1 REFRESH FAST ON COMMIT AS ...` | Trigger calling `refresh materialized view mv1` after DML |
+| Online refresh | `CREATE MATERIALIZED VIEW mv1 REFRESH FAST ON COMMIT AS ...` | `REFRESH MATERIALIZED VIEW CONCURRENTLY mv1` (needs a unique index) on a `pg_cron` schedule, or a trigger after DML |
+| Deferred build | `BUILD DEFERRED` | `WITH NO DATA`, then `REFRESH` |
 | Automatic incremental refresh | `CREATE MATERIALIZED VIEW LOG ... INCLUDING NEW VALUES; CREATE MATERIALIZED VIEW mv1 REFRESH FAST AS ...` | Not Supported |
 | DML on MView data | Supported | Not Supported |
 
 ## Conversion notes
-- PostgreSQL has **no fast/incremental refresh** and **no ON COMMIT auto-refresh** — emulate with statement-level triggers calling `REFRESH MATERIALIZED VIEW`, or schedule the refresh.
+- PostgreSQL has **no fast/incremental refresh** and **no ON COMMIT auto-refresh**. The `pg_ivm` extension is **not** available on Aurora 18. For `REFRESH FAST ON COMMIT` aggregates over large tables, convert to a **summary table maintained by triggers** (incremental, exact) and record it as a design change. Otherwise schedule `REFRESH … CONCURRENTLY`.
+- Always create a unique index on converted MViews so `CONCURRENTLY` is possible.
 - **No DML** allowed on PostgreSQL materialized views (Oracle allows it via FOR UPDATE).
 - Add indexes directly on the materialized view to speed queries.
 - Materialized view logs have no PostgreSQL equivalent.

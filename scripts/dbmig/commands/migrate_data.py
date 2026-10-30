@@ -133,6 +133,7 @@ def _copy_unit(unit: Dict) -> Dict:
     chunk through the pipelined COPY. Returns a result dict.
     """
     schema = unit["schema"]; table = unit["table"]; shard = unit.get("shard")
+    tgt_schema = unit.get("tgt_schema") or schema.lower()
     result = {"table": table, "shard": shard, "copied": 0, "status": "ok", "error": None}
     try:
         pair = load_pair()
@@ -171,7 +172,7 @@ def _copy_unit(unit: Dict) -> Dict:
             if i < done:
                 continue
             rows = _prefetch_rows(source.fetch_iter(sql, params))
-            n = target.bulk_insert(schema.lower(), table.lower(), tgt_cols, rows)
+            n = target.bulk_insert(tgt_schema, table.lower(), tgt_cols, rows)
             copied += n
             _save_state(wm, {"signature": signature, "done_chunks": i + 1,
                              "copied": copied, "complete": (i + 1) == len(chunks)})
@@ -247,19 +248,21 @@ def _effective_shards(requested: int, estimate: int) -> int:
 
 
 def _plan_units(source, target, schema: str, table: str, shards: int, batch_size: int,
-                project: str, truncate: bool) -> List[Dict]:
+                project: str, truncate: bool,
+                tgt_schema: Optional[str] = None) -> List[Dict]:
     """Build work units for one table: align columns, (optionally) truncate, and split
     into PK shards when eligible. Returns [] with a raised error handled by the caller."""
     columns = [c for c, _ in source.data_columns(schema, table)]
     tgt_cols = [c.lower() for c in columns]
+    tgt_schema = tgt_schema or schema.lower()
     # Column-alignment guard (fail fast, like the original single-pass loader).
     try:
-        actual = set(target.target_columns(schema.lower(), table.lower()))
+        actual = set(target.target_columns(tgt_schema, table.lower()))
     except Exception:
         actual = None
     if actual is not None:
         if not actual:
-            raise RuntimeError(f"target table {schema.lower()}.{table.lower()} not found "
+            raise RuntimeError(f"target table {tgt_schema}.{table.lower()} not found "
                                "(apply-schema before migrate-data)")
         missing = [c for c in tgt_cols if c not in actual]
         if missing:
@@ -268,12 +271,13 @@ def _plan_units(source, target, schema: str, table: str, shards: int, batch_size
     pk = source.primary_key_columns(schema, table)
 
     if truncate:
-        target.truncate(schema.lower(), table.lower())
+        target.truncate(tgt_schema, table.lower())
         for f in _state_dir(project).glob(f"{schema.upper()}.{table.upper()}*.json"):
             with contextlib.suppress(OSError):   # already gone
                 f.unlink()
 
-    base = {"schema": schema, "table": table, "pk": pk, "tgt_cols": tgt_cols,
+    base = {"schema": schema, "tgt_schema": tgt_schema, "table": table, "pk": pk,
+            "tgt_cols": tgt_cols,
             "batch_size": batch_size, "project": project}
     bounds = source.numeric_pk_bounds(schema, table, pk[0]) if (shards > 1 and len(pk) == 1) else None
     if bounds is not None:
@@ -330,6 +334,9 @@ def run(args) -> int:
     mode = getattr(args, "mode_parallel", None) or "process"
     truncate = bool(getattr(args, "truncate", False))
 
+    tgt_schema = config.resolve_target_schema(args)
+    if tgt_schema != args.schema.lower():
+        console.info(f"target schema: {tgt_schema}")
     disco = engines.get_source_engine(pair)
     tgt = engines.get_target_engine(pair)
     try:
@@ -349,7 +356,8 @@ def run(args) -> int:
             tier_units: List[Dict] = []
             for table in tier:
                 tier_units.extend(_plan_units(disco, tgt, args.schema.upper(), table,
-                                              shards, batch_size, args.project, truncate))
+                                              shards, batch_size, args.project, truncate,
+                                              tgt_schema))
             units_by_tier.append(tier_units)
     finally:
         disco.close(); tgt.close()
@@ -408,7 +416,7 @@ def run(args) -> int:
         try:
             for name in ok_tables:
                 try:
-                    rid.reset_identity(args.schema.lower(), name.lower())
+                    rid.reset_identity(tgt_schema, name.lower())
 
                 except Exception as exc:  # noqa: BLE001 - report, keep loading others
                     console.warn(f"{name}: identity reset failed ({exc}) — run "

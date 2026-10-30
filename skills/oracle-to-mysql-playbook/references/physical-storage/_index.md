@@ -15,3 +15,5 @@ physical-storage chapter.
 
 - **Partitioning** converts with assistance: hash, list, range, composite/subpartitioning, split, and exchange all have MySQL equivalents. Adjust datatypes, drop tablespace clauses, and use `KEY`/`LIST COLUMNS`/`RANGE COLUMNS` for non-integer keys. Interval, partition advisor, preference, virtual-column, and automatic list partitioning are unsupported in Aurora MySQL.
 - **Sharding** has no MySQL equivalent — re-architect at the application tier or adopt a purpose-built store (Amazon Redshift, EMR, or DynamoDB).
+
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): partitioned tables cannot have FKs (1506) and every unique key must include the partition columns (1503); `REORGANIZE PARTITION` splits any partition; no built-in sharding (Limitless is PostgreSQL-only).

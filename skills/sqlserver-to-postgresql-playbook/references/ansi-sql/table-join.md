@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (Four-star compatibility, four-star automation)
 **SCT automation:** N/A. Key differences: `OUTER JOIN` with commas (ANSI 89) not supported; `CROSS APPLY`/`OUTER APPLY` not supported.
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): `LATERAL … ON true` patterns incl. `OUTER APPLY (TOP 1)` (verified), APPLY over JSON/XML/split functions, join hints.
+
 ## SQL Server
 
 Standard ANSI joins: `CROSS JOIN`, `INNER JOIN ... ON`, `LEFT/RIGHT/FULL OUTER JOIN ... ON`.
@@ -98,4 +100,14 @@ FULL OUTER JOIN T2 ON T1.Col1 = T2.Col1;
 
 - Most joins need no rewrite — ANSI 92 `ON`-clause syntax is equivalent.
 - ANSI SQL 89 comma joins for INNER work but are discouraged; outer-join `*=`/`=*` syntax is not supported and must be rewritten.
-- Convert `CROSS APPLY` → `INNER JOIN LATERAL`, `OUTER APPLY` → `LEFT JOIN LATERAL`.
+- Convert `CROSS APPLY` → `CROSS JOIN LATERAL` (or `INNER JOIN LATERAL … ON true`), `OUTER APPLY` → `LEFT JOIN LATERAL … ON true`. The `ON true` is required for the `JOIN … LATERAL` forms.
+  ```sql
+  -- SQL Server: latest order per customer
+  SELECT c.id, o.order_date FROM customers c
+  OUTER APPLY (SELECT TOP 1 order_date FROM orders WHERE customer_id = c.id ORDER BY order_date DESC) o;
+  -- PostgreSQL (LATERAL + LIMIT verified on 18.6)
+  SELECT c.id, o.order_date FROM customers c
+  LEFT JOIN LATERAL (SELECT order_date FROM orders WHERE customer_id = c.id ORDER BY order_date DESC LIMIT 1) o ON true;
+  ```
+- `CROSS APPLY` over a table-valued function → `CROSS JOIN LATERAL f(c.id)`. `CROSS APPLY` over `OPENJSON`/`STRING_SPLIT`/`.nodes()` → `LATERAL` with `json_table`/`jsonb_array_elements`, `string_to_table`/`unnest(string_to_array(...))`, or `xmltable` (see `../tsql/json-and-xml.md`, `../tsql/string-functions.md`).
+- Join hints (`INNER HASH JOIN`, `LOOP JOIN`) are dropped; see `../performance-tuning/query-hints-and-plan-guides.md`.

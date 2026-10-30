@@ -6,6 +6,8 @@
 **Conversion category:** N/A (tooling)
 **SCT automation:** This page *is* the SCT walkthrough. SCT auto-converts most schema objects; objects it can't convert are flagged with action codes (see sct-action-code-index.md).
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): DMS Schema Conversion, choose the newest target version, legacy SCT patterns to modernize, `aws_sqlserver_ext`, Babelfish on Aurora 18.6 as an alternative path.
+
 ## SQL Server
 - AWS SCT is a Java utility that connects to source and target databases, scans source schema objects (tables, views, indexes, procedures, etc.), and converts them to target objects.
 - Acts as the **source connector** for the migration project; SQL Server is selected as the **Source engine**.
@@ -29,3 +31,7 @@
 - **Apply:** Right-click target database → either **Apply to database** (runs conversion script against target automatically) or **Save as SQL** (save to file).
 - **Recommendation:** Prefer **Save as SQL** so you can verify/QA the converted code and adjust objects that couldn't be auto-converted.
 - Walkthrough uses the AWS DMS Sample Database (available on GitHub: aws-samples/aws-database-migration-samples).
+- **AWS DMS Schema Conversion (DMS SC)** is the managed, console-based successor to the desktop SCT workflow. This toolkit can import a DMS SC project and continue from it (`db-migration-dms-sc-ingest` skill; sample run `sample-run-dms-sc-sqlserver-to-pg/`).
+- **Target version:** pick the newest PostgreSQL target SCT/DMS SC offers. Output written for older targets uses patterns PG 18 no longer needs (procedures as functions returning `void` or refcursors, `SERIAL` for `IDENTITY`, `ON CONFLICT` instead of `MERGE`, `VARCHAR(8000)` for `hierarchyid`/`sql_variant`/`rowversion`). Review and modernize them using this playbook.
+- SCT installs the `aws_sqlserver_ext` extension-pack schema to emulate T-SQL functions. Decide whether to keep it or replace calls with native PostgreSQL. Record the decision.
+- **Babelfish alternative:** Aurora PostgreSQL 18.6 ships Babelfish (`babelfishpg_tsql` 6.2.0; cluster parameter `rds.babelfish_status`, set at creation). Babelfish runs much T-SQL unchanged over the TDS port and is assessed with **Babelfish Compass**. It is an alternative to converting with SCT or this toolkit. Present the choice to the customer; do not mix both paths for the same database.

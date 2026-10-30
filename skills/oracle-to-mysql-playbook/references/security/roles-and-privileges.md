@@ -6,7 +6,9 @@
 **Conversion category:** Assisted
 **SCT automation:** N/A
 
-Key difference: there are no roles in MySQL 5.7, only privileges. (MySQL 8 / RDS MySQL 8 reintroduces roles.)
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Roles are native on Aurora MySQL 3 / 8.4 (5.7 text marked legacy); default roles must be set (activate_all_roles_on_login OFF, verified); column grants, rds_superuser_role limits, AWS_* integration roles, 8.4 SET_ANY_DEFINER.
+
+Key difference: Aurora MySQL 3 and 8.4 support roles (MySQL 5.7 / Aurora MySQL 2 had only privileges), but granted roles are inactive until set as default roles.
 
 ## Oracle
 
@@ -36,7 +38,7 @@ Users granted the role inherit all privileges granted to that role.
 
 ## MySQL
 
-In MySQL 5.7 there is no ROLE feature — you must grant the required privileges directly, though wildcards let you target multiple objects in one statement.
+**Aurora MySQL 3 and 8.4 support roles** (`CREATE ROLE`, `GRANT role TO user`, verified). MySQL 5.7 (Aurora MySQL 2) had none; there you had to grant privileges directly, using wildcards to target multiple objects:
 
 ```sql
 -- Grant privileges using wildcards / object scopes
@@ -62,8 +64,12 @@ GRANT ALL ON *.* TO u1 WITH GRANT OPTION;
 
 ## Conversion notes
 
-- MySQL 5.7 has no roles — flatten each Oracle role into the explicit set of privileges and `GRANT` them directly to each user. Conversion is assisted because the privilege mapping must be reviewed manually.
-- Target MySQL 8 / Aurora MySQL 8 where possible: it supports `CREATE ROLE` / `GRANT role TO user`, allowing a closer mapping of Oracle roles. Note that granted roles must be activated (`SET ROLE` / `activate_all_roles_on_login`).
+- Map each Oracle role to a MySQL role (`CREATE ROLE`, `GRANT … TO role`, `GRANT role TO user`). Conversion is assisted because the privilege mapping must be reviewed manually.
+- **Granted roles are inactive by default:** `activate_all_roles_on_login` is OFF on both versions (verified). Run `SET DEFAULT ROLE ALL TO user` after granting (verified: recorded in `mysql.default_roles`), or users will see no role privileges — Oracle enables default roles automatically.
+- Column-level grants (`GRANT SELECT (col) ON db.t TO …`) work (verified) and replace Oracle column privileges; Oracle VPD/row-level security has no equivalent (use views with `SQL SECURITY DEFINER` and a `CURRENT_USER()` predicate).
+- The Aurora master user holds `rds_superuser_role`, not `SUPER` (verified: `SHOW GRANTS`), and cannot use `SET GLOBAL`, resource groups or `INNODB_REDO_LOG_ENABLE`; Oracle `DBA`-style grants must map to what `rds_superuser_role` allows.
+- Aurora-specific roles `AWS_LOAD_S3_ACCESS`, `AWS_SELECT_S3_ACCESS`, `AWS_LAMBDA_ACCESS`, `AWS_SAGEMAKER_ACCESS`, `AWS_COMPREHEND_ACCESS`, `AWS_BEDROCK_ACCESS` exist on both versions (verified) and gate the AWS integrations.
+- On 8.4, creating routines/views with another account as `DEFINER` needs `SET_ANY_DEFINER` (`SET_USER_ID` on 3.x).
 - Oracle 12c common (`c##`) vs. local roles are tied to the CDB/PDB model, which MySQL lacks; collapse them into ordinary MySQL roles/privileges.
 - Watch privilege-scope differences: Oracle system privileges (e.g. `ALTER SYSTEM`, `SELECT ANY DICTIONARY`, `RESOURCE`) often have no one-to-one MySQL counterpart and may map to global (`*.*`), database (`db.*`), or object-level grants — or to managed-service limitations on RDS/Aurora.
 - Be mindful of the MySQL 8 `SYSTEM_USER` privilege: `GRANT ALL ON *.*` includes it, which affects who can manage system accounts.

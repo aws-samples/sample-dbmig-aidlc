@@ -6,6 +6,8 @@
 **Conversion category:** N/A (infrastructure / managed-service topic) — multi-replica, scale-out solution using Aurora clusters and Availability Zones
 **SCT automation:** N/A
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): PostgreSQL port 5432 (playbook showed 3306), 128/256 TiB volume and 32 TiB table limit, Global Database, targeted failover, synchronous-quorum durability, custom endpoints.
+
 ## SQL Server
 
 SQL Server offers several HA/DR solutions: Always On Failover Cluster Instances (FCI), Always On Availability Groups, Database Mirroring, and Log Shipping. SQL Server 2017 added read-scale availability groups without a cluster, the Minimum Replica Commit setting, and cross-OS (Windows–Linux) support. SQL Server 2019 added database snapshots of memory-optimized filegroups and secondary-to-primary read/write connection redirection for Always On AGs.
@@ -96,14 +98,14 @@ A cluster = one or more DB instances + a **cluster volume** (virtual storage spa
 - **Aurora Replica** — read-only; 0 to 15 per cluster (max 16 instances total). Enables read scale-out; place across AZs to increase availability.
 
 ### Endpoints
-- **Cluster Endpoint** — connects to the current primary regardless of AZ; use for all writes (DML/DDL) and for transparent failover. On primary failure, Aurora automatically fails over to a new primary. Example: `mydbcluster.cluster-123456789012.us-east-1.rds.amazonaws.com:3306`.
-- **Reader Endpoint** — connects to one of the read replicas; load-balances read-only *connections* (not individual queries/workloads). Falls back to the primary if no replicas exist. Example: `mydbcluster.cluster-ro-123456789012.us-east-1.rds.amazonaws.com:3306`.
-- **Instance Endpoint** — unique per instance; use only when the application handles failover and read scale-out itself. Example: `pgsdbinstance.123456789012.us-east-1.rds.amazonaws.com:3306`.
+- **Cluster Endpoint** — connects to the current primary regardless of AZ; use for all writes (DML/DDL) and for transparent failover. On primary failure, Aurora automatically fails over to a new primary. Example: `mydbcluster.cluster-123456789012.us-east-1.rds.amazonaws.com:5432`.
+- **Reader Endpoint** — connects to one of the read replicas; load-balances read-only *connections* (not individual queries/workloads). Falls back to the primary if no replicas exist. Example: `mydbcluster.cluster-ro-123456789012.us-east-1.rds.amazonaws.com:5432`.
+- **Instance Endpoint** — unique per instance; use only when the application handles failover and read scale-out itself. Example: `pgsdbinstance.123456789012.us-east-1.rds.amazonaws.com:5432`. (The playbook examples showed the MySQL port 3306; Aurora PostgreSQL listens on 5432 by default.)
 
 Considerations: prefer the cluster endpoint for HA (auto-redirects to new primary); use instance endpoints for custom read-distribution rules; the reader endpoint may temporarily redirect to the primary during a replica promotion.
 
 ### Amazon Aurora Storage
-Data lives in a single virtual cluster volume on SSDs, with **multiple copies distributed across AZs**. The volume auto-grows up to a maximum of **64 TiB** (so the max table size is also 64 TiB).
+Data lives in a single virtual cluster volume on SSDs, with **six copies distributed across three AZs**. The volume auto-grows to a maximum of **128 TiB**, or **256 TiB** on Aurora PostgreSQL versions that support the larger limit (announced July 2025; check your version). A single PostgreSQL table is limited to 32 TiB (8 kB pages). Partition larger tables.
 
 ### Storage Auto-Repair
 Aurora maintains multiple data copies across **three AZs**. It detects disk-segment failures and repairs them automatically using data from other copies, greatly minimizing data loss and the need to restore.
@@ -114,10 +116,10 @@ On instance start, Aurora pre-loads the buffer pool with frequently used pages. 
 ### Crash Recovery
 Aurora recovers from crashes near-instantly, performing recovery asynchronously with parallel threads so the database stays open and available immediately after a crash.
 
-### Example — create a read replica (AWS Console)
-1. AWS Console → **RDS**.
-2. Select the instance → **Instance actions** → **Create cross-region read replica**.
-3. Enter required details → **Create**.
+### Example — add a reader / a secondary Region (AWS Console)
+1. AWS Console → **RDS** → select the cluster.
+2. Same Region: **Actions** → **Add reader** (Aurora Replica, failover target).
+3. Another Region: **Actions** → **Add AWS Region** (creates an **Aurora Global Database** secondary cluster; typical lag under 1 second; `switchover-global-cluster` / `failover-global-cluster` for DR).
 
 After creation, run reads/writes on the primary and read-only operations on the replica.
 
@@ -128,6 +130,10 @@ After creation, run reads/writes on the primary and read-only operations on the 
 - **Log Shipping / log replication** has no equivalent — Aurora replicates data at the **storage level** across AZs automatically.
 - **Disk error protection** — SQL Server uses `RESTORE … PAGE=`; Aurora does this **automatically** via storage auto-repair.
 - **Maximum read-only replicas** — SQL Server: 8 + primary; Aurora: **15 + primary**.
-- **Failover address** — SQL Server's Availability Group Listener maps to the Aurora **cluster endpoint**.
+- **Failover address** — SQL Server's Availability Group Listener maps to the Aurora **cluster endpoint**. For faster client failover use RDS Proxy or the AWS Advanced JDBC / .NET / Python wrappers (topology-aware).
+- **Synchronous-commit AG** → Aurora commits are synchronous to a 4-of-6 storage quorum across three AZs, so committed data survives an AZ loss even without replicas. **Asynchronous DR replica in another Region** → Aurora Global Database (`rds.global_db_rpo` caps lag in seconds).
+- **Manual failover to a chosen replica** → `aws rds failover-db-cluster --target-db-instance-identifier …` (promotion tiers 0–15 decide automatic failover order).
+- **Log shipping with delay** (protection against human error) → no delayed replica. Use point-in-time restore or a fast clone at a past time.
+- **Distributed AG / readable secondaries for reporting** → Aurora custom endpoints over a group of readers.
 - **Read-only workloads** — SQL Server's `READ INTENT` connection maps to the Aurora **reader endpoint**.
 - **Aurora HA specifics:** six-way replication across three AZs, automatic failover via cluster endpoint, survivable cache warming, near-instant parallel crash recovery, and a 64 TiB auto-growing cluster volume — HA is delivered by the managed service rather than configured DDL.

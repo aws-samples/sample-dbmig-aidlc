@@ -6,6 +6,8 @@
 **Conversion category:** Manual (Two-star feature compatibility — different paradigm and syntax will require rewriting the application)
 **SCT automation:** N/A (No automation)
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): `REFRESH … CONCURRENTLY` (verified), `pg_cron` scheduling, trigger-maintained summary tables, no automatic view matching, `pg_ivm` unavailable, PG 18 doc link.
+
 ## SQL Server
 
 The first index created on a view must be a clustered index. Subsequent indexes can be non-clustered indexes.
@@ -47,7 +49,7 @@ PostgreSQL doesn't support indexed views, but provides similar functionality wit
 
 The PostgreSQL implementation of materialized views has three primary limitations:
 
-- You can refresh materialized views either manually or via a job running `REFRESH MATERIALIZED VIEW`. To refresh automatically, create a trigger.
+- You can refresh materialized views either manually or via a job running `REFRESH MATERIALIZED VIEW` (schedule it with `pg_cron`, available on Aurora 18). `REFRESH MATERIALIZED VIEW CONCURRENTLY` keeps the view readable during refresh and requires a unique index without a `WHERE` clause (verified on 18.6). To refresh automatically, create a trigger.
 - Materialized views only support complete (full) refresh.
 - DML on materialized views isn't supported.
 
@@ -90,7 +92,7 @@ end $$;
 
 Then create the `refresh_mv1` trigger after insert, update, delete, or truncate on the underlying table, running `refresh_mv1();` for each statement.
 
-For more information, see [Materialized Views](https://www.postgresql.org/docs/13/rules-materializedviews.html) in the PostgreSQL documentation.
+For more information, see [Materialized Views](https://www.postgresql.org/docs/18/rules-materializedviews.html) in the PostgreSQL documentation.
 
 ## Conversion notes
 
@@ -98,6 +100,9 @@ For more information, see [Materialized Views](https://www.postgresql.org/docs/1
 - DML directly against the view: supported (indirectly via base tables) for SQL Server indexed views; not supported for PostgreSQL materialized views.
 - Refresh strategy: SQL Server = automatic; PostgreSQL = manual or trigger-driven. Trigger-based auto-refresh can be expensive on large/high-DML tables — consider scheduled refreshes or a sync-table pattern instead.
 - This is a paradigm shift requiring application changes; no SCT automation is available.
+- **Choosing the replacement**: if the application tolerates staleness, use a materialized view + unique index + `REFRESH … CONCURRENTLY` on a `pg_cron` schedule. If it needs the always-current behavior of an indexed view, use a **summary table maintained by statement-level triggers with transition tables** (`REFERENCING NEW TABLE AS nt`), which updates incrementally. Incremental-refresh extensions (`pg_ivm`) are **not** available on Aurora 18.
+- Queries that SQL Server Enterprise matched to an indexed view automatically (without naming it) must be rewritten to read the materialized view or summary table explicitly; PostgreSQL does no view matching.
+- The `MAINTAIN` privilege (PG 17+) lets a non-owner role refresh the materialized view.
 
 ### Feature comparison
 

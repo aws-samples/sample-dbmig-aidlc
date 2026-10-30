@@ -12,6 +12,8 @@
 **Conversion category:** Manual (two-star feature compatibility) — use Aurora MySQL S3 integration; different paradigm and syntax.
 **SCT automation:** No automation. SCT action code index: Creating Tables.
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): S3 load/unload verified on both versions (roles, parameters, CSV HEADER, no PARQUET); Athena/Redshift Spectrum for in-place queries; zero-ETL.
+
 ## Oracle
 
 External tables read data from a source outside the database. Since 12.2 they can be partitioned; 18c adds inline external tables (query an external source without first defining the table).
@@ -117,3 +119,5 @@ SET column3 = CURRENT_TIMESTAMP;
 - No equivalent to Oracle 18c inline external tables — use AWS Glue or another ETL service.
 - Compressed source files are not supported by `LOAD DATA FROM S3`.
 - Aurora cluster needs an IAM role granting S3 access; manifests enable multi-file loads with load-history tracking.
+- Verified on Aurora MySQL 3.13 and 8.4.8: `LOAD DATA FROM S3` and `SELECT … INTO OUTFILE S3 … FORMAT CSV HEADER` are available and need `aurora_load_from_s3_role` / `aurora_select_into_s3_role` (or `aws_default_s3_role`) plus the `AWS_LOAD_S3_ACCESS` / `AWS_SELECT_S3_ACCESS` database roles. `FORMAT PARQUET` is not accepted.
+- To **query files in place** (the real external-table use case) use Amazon Athena or Redshift Spectrum over the S3 data, and keep Aurora for the loaded subset. A zero-ETL integration from Aurora MySQL to Amazon Redshift covers the reverse direction (analytics over Aurora data without exports).

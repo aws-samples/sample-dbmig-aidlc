@@ -6,6 +6,8 @@
 **Conversion category:** Manual (Three-star feature compatibility, no automation)
 **SCT automation:** No automation. SCT action code index: Database Links. Key differences: different paradigm and syntax.
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): `oracle_fdw`/`tds_fdw`/`mysql_fdw` are available on Aurora 18 (verified), so the 'oracle_fdw not supported' claim is obsolete; prefer `postgres_fdw` with PG 14–18 options; credential hygiene.
+
 ## Oracle
 
 Database links are schema objects to interact with remote database objects (e.g. tables). Oracle Net Services must be installed on both local and remote servers.
@@ -97,7 +99,7 @@ OPTIONS (host 'hostname', dbname 'postgresql', port '5432');
 
 CREATE USER MAPPING FOR local_user
 SERVER remote_db
-OPTIONS (user 'remote_user', password 'remote_password');
+OPTIONS (user 'remote_user', password '<from Secrets Manager>');   -- never commit a literal
 
 CREATE FOREIGN TABLE foreign_emp_tbl (
   id int, name text)
@@ -123,8 +125,17 @@ FROM SERVER remote_db INTO local_hr;
 ## Conversion notes
 - No automation; requires manual rewrite due to different paradigm and syntax.
 - PostgreSQL has **no permanent named database link** like Oracle. With dblink you open a connection per session/query; with FDW you define a server + user mapping + foreign table.
-- **Heterogeneous links** (Oracle↔PostgreSQL): Oracle supports them; `oracle_fdw` is **not supported by Amazon RDS**.
-- Both dblink and FDW store remote credentials as **plain text** (in `pg_user_mapping`, viewable only by superusers; dblink passwords may also live in code/procedures). Changing a PostgreSQL user password requires updating the FDW/dblink specs.
+- **Heterogeneous links** (PostgreSQL → Oracle/SQL Server/MySQL): Aurora PostgreSQL 18 ships **`oracle_fdw` 1.2**, **`tds_fdw` 2.0.5** and **`mysql_fdw` 1.2** (all created successfully on 18.6). The older "oracle_fdw is not supported by Amazon RDS" note is **obsolete**. A former Oracle `@dblink` to another Oracle database can stay an Oracle link through `oracle_fdw`:
+  ```sql
+  CREATE EXTENSION oracle_fdw;
+  CREATE SERVER ora_hr FOREIGN DATA WRAPPER oracle_fdw OPTIONS (dbserver '//ora-host:1521/ORCLPDB1');
+  CREATE USER MAPPING FOR app SERVER ora_hr OPTIONS (user 'HR_RO', password '<from Secrets Manager>');
+  IMPORT FOREIGN SCHEMA "HR" LIMIT TO ("EMPLOYEES") FROM SERVER ora_hr INTO hr_remote;
+  ```
+  The Aurora cluster needs a network path to the remote database (VPC routing, security groups).
+- **Prefer `postgres_fdw` over `dblink`** for converted `table@link` references. `postgres_fdw` pushes down filters, joins, aggregates and `ORDER BY`. It supports `async_capable` (PG 14), `parallel_commit` (PG 15), `TRUNCATE` on foreign tables (PG 14), and `use_scram_passthrough` (PG 18) to forward the caller's SCRAM credentials instead of storing a password (all options accepted on 18.6). Add `password_required 'true'` to user mappings.
+- Synonyms on remote objects (`CREATE SYNONYM emp FOR employees@remote`) → a foreign table named like the synonym, or a view over the foreign table.
+- Both dblink and FDW store remote credentials as **plain text** (in `pg_user_mapping`, viewable only by superusers; dblink passwords may also live in code/procedures). Changing a PostgreSQL user password requires updating the FDW/dblink specs. Use a dedicated least-privilege remote user, rotate it through Secrets Manager, and never write a literal password into converted DDL. Use `dblink_connect('myconn', 'remote_server')` with a foreign server + user mapping instead of inline connection strings with passwords.
 - FDW queries **fail if remote columns are dropped/renamed** — the foreign tables must be re-created.
 - Oracle cannot run DDL directly over a link, but can submit a remote job (e.g. `dbms_job@remote.submit(...)`) to run DDL.
 - "Delete a database link": Oracle `drop database link`; PostgreSQL dblink has no equivalent — close the connection with `SELECT dblink_disconnect('myconn');`.

@@ -1,0 +1,3 @@
+CREATE UNIQUE INDEX ix_businessentity_ak_businessentity_rowguid
+ON adventureworks_person.businessentity
+USING BTREE (rowguid ASC);

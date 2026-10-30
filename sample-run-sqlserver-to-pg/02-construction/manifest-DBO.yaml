@@ -1,7 +1,7 @@
-project: s2pg
+project: sqlserver-pg18-20261030
 schema: DBO
 phase: construction
-generated_at: '2026-09-28T16:17:21Z'
+generated_at: '2026-10-30T07:24:55Z'
 provider: kiro
 model: kiro
 unit_count: 20
@@ -47,7 +47,9 @@ units:
   output_file: ddl/dbo/book.sql
   source_fk_count: 0
   status: applied
+  attempts: 2
   last_error: null
+  retry_prompt: retries/DBO/Book.retry.md
   post_status: applied
 - name: Coupons
   schema: dbo
@@ -107,7 +109,9 @@ units:
   output_file: ddl/dbo/offer.sql
   source_fk_count: 5
   status: applied
+  attempts: 2
   last_error: null
+  retry_prompt: retries/DBO/Offer.retry.md
   post_status: applied
   post_last_error: null
 - name: Order
@@ -180,7 +184,9 @@ units:
   output_file: ddl/dbo/referencedata.sql
   source_fk_count: 0
   status: applied
+  attempts: 2
   last_error: null
+  retry_prompt: retries/DBO/ReferenceData.retry.md
   post_status: applied
 - name: Shopping
   schema: dbo

@@ -18,3 +18,7 @@ Implications:
   Outposts, Aurora Serverless v1) are **AWS-managed services / GUI utilities** referenced
   by the playbook. They are separate from `dbmig`'s Python-driver path and are documented
   here for context and hand-off (e.g. production data movement via AWS DMS).
+
+For manual inspection outside `dbmig`, use **PostgreSQL 18 client binaries** (`psql`, `pg_dump`) against an Aurora PostgreSQL 18 target. Connect with `sslmode=verify-full` (TLS is required by default via `rds.force_ssl = 1`). Without network access to port 5432, use the **RDS Data API** (`aws rds-data execute-statement`). This review validated all PG 18 statements through it.
+
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): added PG 18 client, TLS and Data API notes.

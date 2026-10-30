@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (Four-star feature compatibility, four-star automation)
 **SCT automation:** N/A (action code index N/A)
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): added the PG 17/18 locale providers (builtin, ICU) and their sort-order impact versus Oracle `NLS_SORT`, case-insensitive collations with PG 18 `LIKE` support, NCHAR syntax behavior (verified), and fixed the re-encode example.
+
 ## Oracle
 
 Oracle supports most national/international encoded character set standards, with extensive Unicode support. Two scalar string-specific data types:
@@ -48,20 +50,32 @@ select datname, datcollate, datctype from pg_database;
 select datname, pg_encoding_to_char(encoding), datcollate, datctype from pg_database;
 ```
 
-**Collation version (Windows, PG 13+):** Starting with PostgreSQL 13 on Windows, collation version info is obtained from the OS. Prior to 13, `collversion` from `pg_collation` had no value reflecting OS collation version.
+**Locale providers (Aurora PostgreSQL 18, verified on 18.6).** Aurora databases default to encoding `UTF8` with libc locale `en_US.UTF-8`. Three providers are available when you create a database or collation:
+
+| Provider | Use for | Example |
+|---|---|---|
+| `libc` | Default; OS (glibc) collations | `CREATE DATABASE app TEMPLATE template0 ENCODING 'UTF8' LOCALE 'en_US.UTF-8';` |
+| `icu` | Language-aware sorting matching Oracle linguistic sorts (`NLS_SORT`), case/accent-insensitive collations | `CREATE DATABASE app TEMPLATE template0 ENCODING 'UTF8' LOCALE_PROVIDER icu ICU_LOCALE 'en-US';` |
+| `builtin` (PG 17+) | Fast, stable code-point ordering like Oracle `NLS_SORT=BINARY`; `C.UTF-8` and `PG_UNICODE_FAST` (PG 18) | `CREATE DATABASE app TEMPLATE template0 ENCODING 'UTF8' LOCALE_PROVIDER builtin BUILTIN_LOCALE 'C.UTF-8';` |
+
+Choosing the order matters for converted queries: Oracle's default `NLS_SORT=BINARY` sorts `'B'` before `'a'`. The PostgreSQL `C` / builtin collations match that, while `en_US` / ICU collations do not (verified: `'a' < 'B'` is false under `"C"` and true under `"en-US-x-icu"`). Decide per database and record it, because `ORDER BY` results, range predicates and `MIN`/`MAX` on text change with the collation.
+
+**Case-insensitive comparison (Oracle `NLS_COMP=LINGUISTIC`, `NLS_SORT=BINARY_CI`)** → a nondeterministic ICU collation. PostgreSQL 18 also supports `LIKE` with nondeterministic collations (verified):
 ```sql
-CREATE COLLATION german (provider = libc, locale = 'de_DE');
-select oid,collname,collversion from pg_collation where collprovider='c' and collname='german';
--- PG 13: collversion shows e.g. 1539.5,1539.5
-select pg_collation_actual_version (32769);
+CREATE COLLATION ci (provider = icu, locale = 'und-u-ks-level2', deterministic = false);
+SELECT 'ABC' = 'abc' COLLATE ci;        -- true
+SELECT 'ABC' LIKE 'a%' COLLATE ci;       -- true (PG 18+)
 ```
+Indexes on nondeterministic collations support equality, but not pattern prefix optimization.
+
+**Collation versions:** libc and ICU collation definitions can change with OS/ICU upgrades, which can corrupt indexes on text. Aurora manages the OS. After major upgrades, check `SELECT datname, datcollversion, pg_database_collation_actual_version(oid) FROM pg_database;` and `REINDEX` text indexes if the versions differ. The `builtin` provider avoids this risk.
 
 **Changing encoding** (no in-place modification supported): export, recreate, re-import.
-```sql
-pg_dump mydb1 > mydb1_export.sql
-ALTER DATABASE mydb1 TO mydb1_backup;          -- rename or delete current db
-CREATE DATABASE mydb1_new_encoding WITH ENCODING 'UNICODE' TEMPLATE=template0;
-PGCLIENTENCODING=OLD_DB_ENCODING psql -f mydb1_export.sql mydb1_new_encoding
+```bash
+pg_dump -h <endpoint> -U <user> -f mydb1_export.sql mydb1
+psql -c "ALTER DATABASE mydb1 RENAME TO mydb1_backup;"          # or drop it
+psql -c "CREATE DATABASE mydb1 WITH ENCODING 'UTF8' TEMPLATE template0;"
+PGCLIENTENCODING=OLD_DB_ENCODING psql -f mydb1_export.sql mydb1
 ```
 (`client_encoding` parameter overrides `PGCLIENTENCODING`.)
 
@@ -80,7 +94,9 @@ CREATE TABLE test1 (col1 text COLLATE "de_DE", col2 text COLLATE "es_ES");
 ```
 
 ## Conversion notes
-- **No NCHAR/NVARCHAR in PostgreSQL** and **no UTF-16 support**. Oracle UTF16 (NVARCHAR2) has no PostgreSQL equivalent; Oracle UTF8 (VARCHAR2/NVARCHAR) maps to PostgreSQL `VARCHAR`.
+- **No separate national character types and no UTF-16 storage.** PostgreSQL accepts `NCHAR(n)` and `NATIONAL CHARACTER VARYING(n)` as syntax, but they become ordinary `character(n)` / `character varying(n)` (verified). `NVARCHAR` is not a type name. With a `UTF8` database every string type stores any Unicode character, so map Oracle `NVARCHAR2(n)` → `varchar(n)` and `NCHAR(n)` → `char(n)`.
+- **Length semantics:** PostgreSQL `varchar(n)` counts **characters**, like Oracle `VARCHAR2(n CHAR)`. Oracle `VARCHAR2(n BYTE)` (the common default) can therefore hold more multibyte text after conversion. That is safe, but if exact byte limits matter, add `CHECK (octet_length(col) <= n)`.
+- Oracle `AL32UTF8` → create the Aurora database with `ENCODING 'UTF8'` (the default). Pick the collation deliberately (see the table above).
 - Character set granularity differs: Oracle = instance (11g/12cR1) or database (12cR2); PostgreSQL = database.
 - Modifying a database character set in PostgreSQL requires full export → drop/rename → recreate with new charset → re-import (no in-place change). Oracle uses full Export/Import or the DMU utility for Unicode conversion.
 - Some client-side-only characters cannot be used within the server.

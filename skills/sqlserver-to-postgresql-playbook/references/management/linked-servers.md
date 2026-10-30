@@ -6,6 +6,8 @@
 **Conversion category:** N/A (three-star feature compatibility)
 **SCT automation:** SCT action code index: Linked Servers
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): `tds_fdw` for SQL Server remotes (verified), `oracle_fdw`/`mysql_fdw`, `postgres_fdw` options, credential hygiene, four-part name/OPENQUERY mapping, no distributed transactions.
+
 Key difference: Syntax and option differences, similar functionality.
 
 ## SQL Server
@@ -49,9 +51,22 @@ SELECT * FROM MyTextLinkedServer...[FileName#text];  -- four-part name query
 
 ## PostgreSQL
 
-Querying remote databases is available via two options:
-- `dblink` database link function.
-- Foreign data wrapper (FDW) `postgres_fdw` extension (newer, closer to the SQL standard, often better performance).
+Querying remote databases is available via:
+- `postgres_fdw` (PostgreSQL remotes; preferred: foreign tables, filter/join/aggregate push-down, `async_capable`, `parallel_commit`, PG 18 `use_scram_passthrough`).
+- **`tds_fdw` 2.0.5** — foreign tables on **SQL Server / Sybase** (available on Aurora 18, verified), so a linked server back to a remaining SQL Server keeps working after migration.
+- `oracle_fdw` 1.2 and `mysql_fdw` 1.2 for Oracle and MySQL remotes (both available on Aurora 18).
+- `dblink` database link function (ad-hoc queries and remote DDL).
+
+```sql
+-- Linked server to a SQL Server that stays on SQL Server (verified: server creation on 18.6)
+CREATE EXTENSION tds_fdw;
+CREATE SERVER mssql FOREIGN DATA WRAPPER tds_fdw
+  OPTIONS (servername 'mssql.example.internal', port '1433', database 'AdventureWorks');
+CREATE USER MAPPING FOR app SERVER mssql OPTIONS (username 'app_ro', password '<from Secrets Manager>');
+CREATE FOREIGN TABLE remote_person (businessentityid int, firstname text, lastname text)
+  SERVER mssql OPTIONS (schema_name 'Person', table_name 'Person');
+SELECT * FROM remote_person WHERE lastname = 'Smith';   -- ≈ SELECT … FROM MSSQL.AdventureWorks.Person.Person
+```
 
 Examples (`dblink`):
 
@@ -59,9 +74,8 @@ Examples (`dblink`):
 -- Load the extension
 CREATE EXTENSION dblink;
 
--- Create a persistent named connection
-SELECT dblink_connect('myconn',
-    'dbname=postgres port=5432 host=hostname user=username password=password');
+-- Create a persistent named connection (prefer a foreign server + user mapping over an inline password)
+SELECT dblink_connect('myconn', 'remote_server_name');
 
 -- Run a query via the named connection (must declare result columns/types)
 SELECT * FROM dblink('myconn', 'SELECT id, name FROM EMPLOYEES') AS p(id int, fullname text);
@@ -69,9 +83,9 @@ SELECT * FROM dblink('myconn', 'SELECT id, name FROM EMPLOYEES') AS p(id int, fu
 -- Close the connection
 SELECT dblink_disconnect('myconn');
 
--- Alternatively, pass the full connection string inline
+-- Alternatively, pass a connection string inline (never commit a literal password; read it from Secrets Manager)
 SELECT * FROM dblink(
-    'dbname=postgres port=5432 host=hostname user=username password=password',
+    'dbname=postgres port=5432 host=hostname user=username',
     'SELECT id, name FROM EMPLOYEES') AS p(id int, fullname text);
 
 -- DML on remote tables
@@ -97,3 +111,6 @@ SELECT * FROM dblink('myconn', $$CREATE table new_remote_tbl (a int, b text)$$) 
 - Similar functionality, different syntax — replace linked servers / four-part names / `OPENQUERY` with `dblink` or `postgres_fdw`.
 - `dblink` requires declaring the result column list and types for each query; `postgres_fdw` defines foreign tables once and queries them like local tables (preferred for standards alignment and performance).
 - SCT flags linked servers (action code index "Linked Servers") for manual review during conversion.
+- Four-part names `Server.Db.Schema.Object` → a foreign table (or a view over one) with the local name the code expects. `OPENQUERY(srv, '…')` → `dblink(…)` or a foreign table on a remote view. `OPENROWSET`/`OPENDATASOURCE` on files → `aws_s3.table_import_from_s3`.
+- **Distributed transactions** (`BEGIN DISTRIBUTED TRANSACTION`, MSDTC) are not supported. `postgres_fdw` commits the remote side when the local transaction commits, but not atomically (no automatic two-phase commit). Redesign flows that need atomic cross-server writes.
+- The Aurora cluster needs network access (VPC routing, security groups) to the remote server.

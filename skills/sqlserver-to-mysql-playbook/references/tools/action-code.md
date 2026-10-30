@@ -6,6 +6,8 @@
 **Conversion category:** N/A (tooling)
 **SCT automation:** This page IS the master automation-level + action-code reference for every topic in the playbook.
 
+> **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): added a verified status table for Aurora MySQL 3 / 8.4: CHECK, computed columns, expression defaults on TEXT/BLOB, window functions, CTEs, LATERAL now native; ON DELETE SET DEFAULT is a silent trap; list of limits that remain.
+
 ## SQL Server
 Reference of AWS SCT automation levels and action codes emitted when converting Microsoft SQL Server 2019 objects to Amazon Aurora MySQL. Each topic below lists its automation level and the specific action codes/messages SCT may raise.
 
@@ -20,9 +22,26 @@ Reference of AWS SCT automation levels and action codes emitted when converting 
 | No automation | Not supported by SCT; manual conversion required. |
 
 ## MySQL
-The action codes below indicate Aurora MySQL (v5.7-based) limitations relative to SQL Server. Note: Aurora MySQL 5.7 lacks window functions, CTEs, PIVOT/UNPIVOT, MERGE, synonyms, sequences, and check constraints (older note — newer MySQL 8.0 engines add several of these).
+The action codes below were written for Aurora MySQL 5.7. On **Aurora MySQL 3 and 8.4** several no longer apply. Status verified on 3.13.0 and 8.4.8 (2026-10-29):
+
+| Code(s) | Original limitation | Status on Aurora MySQL 3 / 8.4 |
+|---|---|---|
+| 678 | No CHECK constraints | **Native** — `CHECK` enforced (8.0.16+) |
+| 679 | Computed columns via triggers | **Native** — `GENERATED ALWAYS AS (…) VIRTUAL\|STORED` |
+| 677 | No expression defaults on `BLOB`/`TEXT` | **Native** — `DEFAULT ('x')`, `DEFAULT (JSON_ARRAY())` on `TEXT`/`BLOB`/`JSON` work |
+| 647–650, 619, 839 | No window functions / CTEs | **Native** — `RANK`, `DENSE_RANK`, `NTILE`, `OVER (…)`, `WITH [RECURSIVE]` |
+| 611 | No `WITH` in `UPDATE` | **Native** — `WITH c AS (…) UPDATE t JOIN c …` |
+| 831 | No `CROSS/OUTER APPLY` with outer references | **Native** — `JOIN LATERAL` / `LEFT JOIN LATERAL … ON TRUE` (8.0.14+) |
+| 697 | Identity outside the PK | **Works** if the column is the first column of some index (for example a `UNIQUE` key) |
+| 732 | Identity in a compound PK | **Works** only as the **first** PK column; as a later column → error 1075 |
+| 646 | No `COLLATE` clause | **Works** in expressions and column definitions; SCT may still flag SQL Server collation names, which must be mapped |
+| 676 | No `ON DELETE SET DEFAULT` | **Trap:** accepted and stored, but InnoDB behaves as `RESTRICT` (delete fails with 1451). Treat as unsupported; emulate with a trigger or application logic |
+
+Still **not** supported on either version (verified): `STDEV/VAR(DISTINCT …)` (754–757, syntax error), `PIVOT`/`UNPIVOT` (905/906), `TOP … PERCENT`/`WITH TIES` (604/605), `LIMIT` inside `IN/ALL/ANY` subqueries (830, error 1235 — wrap in a derived table), updatable CTEs (840, error 1288), `SCROLL` cursors (638), `SNAPSHOT` isolation (916 — use `REPEATABLE READ`), `FOR STATEMENT` triggers (686), `CUBE`/`GROUPING SETS` (654/655), sequences (815), `MERGE` (832), index `INCLUDE` (682) and filtered indexes (683), `DECIMAL` scale > 30 (919, error 1425), `BLOB`/`TEXT` in foreign keys (601), synonyms (792), table types (690).
 
 ## Conversion notes
+
+The per-topic messages below are SCT's original (5.7-era) texts, kept so you can match them against SCT/DMS SC output. Where a message contradicts the status table above, the table wins on Aurora MySQL 3 / 8.4.
 
 ### Creating Tables — High automation (4★)
 Auto-converts most `CREATE TABLE` constructs (names, columns, basic data types, constraints, defaults, PK/UNIQUE/FK). Changes may be needed for computed columns and global temporary tables.
@@ -189,7 +208,7 @@ Aurora MySQL has minimal XML support but a native JSON type and 25+ JSON functio
 - **843** — AWS SCT can't convert `FOR XML` statements in functions.
 
 ### Table Joins — High automation (4★)
-Auto-converts `INNER`, `OUTER`, `CROSS` joins. `APPLY`/`LATERAL` joins not supported by Aurora MySQL — manual conversion.
+Auto-converts `INNER`, `OUTER`, `CROSS` joins. `APPLY` joins need manual conversion to `JOIN LATERAL` / `LEFT JOIN LATERAL … ON TRUE`, which Aurora MySQL 3 / 8.4 support (verified) *(corrected: the playbook said LATERAL is not supported)*.
 - **831** — MySQL doesn't support `CROSS APPLY`/`OUTER APPLY` where the subquery references a column of the attachable table.
 
 ### MERGE — No automation

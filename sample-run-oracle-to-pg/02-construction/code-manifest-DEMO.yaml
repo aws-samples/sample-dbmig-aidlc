@@ -1,7 +1,7 @@
-project: o2pg
+project: oracle-pg18-20261030
 schema: DEMO
 phase: construction-code
-generated_at: '2026-09-28T15:38:01Z'
+generated_at: '2026-10-30T06:36:46Z'
 provider: kiro
 model: kiro
 unit_count: 15

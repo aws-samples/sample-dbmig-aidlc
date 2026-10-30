@@ -11,7 +11,9 @@ prompt files still pending (deduplicated — a batch prompt covers several units
 """
 from __future__ import annotations
 
+import re
 from collections import Counter
+from pathlib import Path
 from typing import Dict, List
 
 import yaml
@@ -24,6 +26,17 @@ _PHASES = {
     "tests": ("03-validation", "test-manifest", "status", "generated"),
 }
 _TODO = {"pending", "failed"}
+_CITATION = re.compile(r"[\w-]+-playbook/references/[\w./-]+?\.md")
+
+
+def playbook_citations(log_path: Path) -> Counter:
+    """Count playbook topic files cited in the conversion log (traceability check:
+    the construction skill requires a citation for every detected construct)."""
+    try:
+        text = log_path.read_text()
+    except OSError:
+        return Counter()
+    return Counter(_CITATION.findall(text))
 
 
 def summarize(units: List[dict], status_field: str = "status") -> Dict[str, int]:
@@ -78,4 +91,14 @@ def run(args) -> int:
             print(f"  next: {sub}/{p['prompt']}  ({len(p['units'])} unit(s): {shown})")
         if not nxt:
             console.ok(f"nothing pending in {ph} (all {done} or beyond)")
+    log = root / "02-construction" / "conversion-log.md"
+    if log.exists():
+        cited = playbook_citations(log)
+        if cited:
+            top = ", ".join(f"{Path(k).stem} ({v})" for k, v in cited.most_common(5))
+            console.info(f"playbook topics cited in conversion-log.md: {len(cited)} "
+                         f"distinct — {top}")
+        else:
+            console.warn("conversion-log.md cites no playbook topic file — cite the file "
+                         "named in each detected-construct hint (traceability)")
     return 0 if any_found else 2

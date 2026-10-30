@@ -6,6 +6,8 @@
 **Conversion category:** Manual (two-star feature compatibility)
 **SCT automation:** No automation. Indexes action code index. PostgreSQL doesn't support index-organized tables; a partial workaround exists.
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): `pg_repack` online re-cluster (verified), covering-index alternative, ORDER BY caveat, fillfactor.
+
 ## Oracle
 An **index-organized table (IOT)** is an index/table hybrid. A normal (heap-organized) table stores rows unsorted; an IOT stores the actual table data inside a **B-tree index structure sorted by primary key**, with each leaf block holding both the PK and the non-key columns. This improves performance for primary-key access because rows are clustered/co-located by PK. Created with `ORGANIZATION INDEX`.
 
@@ -54,4 +56,7 @@ CLUSTER SYSTEM_EVENTS USING PK_EVENT_ID;   -- re-cluster -> 1,2,7,9
 ## Conversion notes
 - No persistent IOT in PostgreSQL/Aurora — use `CLUSTER ... USING <index>` as a partial workaround.
 - `CLUSTER` is one-time and not maintained on DML; schedule periodic re-clustering if PK-order locality matters.
-- `CLUSTER` takes an exclusive lock and rewrites the table.
+- `CLUSTER` takes an exclusive lock and rewrites the table. **`pg_repack`** (1.5.3, available on Aurora 18, verified) re-orders a table online (`pg_repack --table t --order-by id`) without the long exclusive lock. Run it from a client host.
+- Often a better substitute for an IOT than re-clustering: a **covering index** on the primary key plus the frequently read columns (`CREATE UNIQUE INDEX … ON t (id) INCLUDE (code, event_time)`). It gives index-only scans without table access, and the visibility map keeps this efficient when autovacuum runs.
+- `ORDER BY` is required for ordered results in both engines. An IOT returning rows in key order without `ORDER BY` is incidental behavior that converted code must not rely on.
+- Set `fillfactor` (for example 90) on frequently updated tables to keep HOT updates in place.

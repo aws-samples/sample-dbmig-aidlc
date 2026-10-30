@@ -1,0 +1,2 @@
+ALTER TABLE adventureworks_person.businessentityaddress
+ADD CONSTRAINT pk_businessentityaddress_businessentityid_addressid_ad$a462f190_1454628225 PRIMARY KEY (businessentityid, addressid, addresstypeid);

@@ -6,6 +6,8 @@
 **Conversion category:** Assisted (Four-star compatibility, four-star automation)
 **SCT automation:** N/A. Key difference: PostgreSQL doesn't support indexed or partitioned views.
 
+> **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): views are implicitly schema-bound (verified), `CREATE OR REPLACE` rules, `security_invoker`, `MERGE` on views, indexed-view redesign options.
+
 ## SQL Server
 
 Views are stored query definitions (virtual tables). Except for indexed views, they store no data and are re-evaluated each invocation. Used as abstraction layers and security filters.
@@ -60,7 +62,7 @@ UNION ALL SELECT * FROM Table3
 
 Basic views are similar. Indexed and partitioned views are not supported (may require redesign/rewrite). Simple views are automatically updatable; no DML restrictions on updatable columns (read-only columns raise an error on INSERT/UPDATE).
 
-Note: For RDS PostgreSQL 13+, rename a view column with `ALTER VIEW ... RENAME COLUMN`; for older versions use `ALTER TABLE`.
+Note: rename a view column with `ALTER VIEW ... RENAME COLUMN` (PG 13+). PG 15+ adds `WITH (security_invoker = true)`; PG 17+ supports `MERGE` into updatable views (verified on 18.6).
 
 Privileges: grant `SELECT` and DML on base tables/views to the role.
 
@@ -99,12 +101,13 @@ UPDATE VW_DEP SET LOCATION_ID=1600;  -- ERROR: new row violates check option
 | Indexed views | Supported | N/A |
 | Partitioned views | Supported | N/A |
 | Updateable views | Supported | Supported |
-| Prevent schema conflicts | `SCHEMABINDING` | N/A |
+| Prevent schema conflicts | `SCHEMABINDING` | Implicit: PostgreSQL views always record dependencies, so dropping or altering a referenced column fails (`cannot drop column … because other objects depend on it`, verified) unless `CASCADE` is used |
 | Triggers on views | `INSTEAD OF` | `INSTEAD OF` |
 | Temporary views | `CREATE VIEW #View…` | `CREATE [OR REPLACE] [TEMP] [TEMPORARY] VIEW` |
-| Refresh view definition | `sp_refreshview` / `ALTER VIEW` | `ALTER VIEW` |
+| Refresh view definition | `sp_refreshview` / `ALTER VIEW` | `CREATE OR REPLACE VIEW` (`SELECT *` is expanded at creation time, so new base columns appear only after re-creating the view) |
+| `CREATE OR ALTER VIEW` | Supported | `CREATE OR REPLACE VIEW` (may only add columns at the end; otherwise `DROP` + `CREATE`) |
 
-- Indexed views: redesign (e.g., use materialized views with manual refresh, or summary tables).
+- Indexed views: redesign as a **materialized view** with a unique index and `REFRESH MATERIALIZED VIEW CONCURRENTLY` on a `pg_cron` schedule (staleness accepted), or as a **trigger-maintained summary table** when the SQL Server view had to be always current. See `../physical-storage/indexed-and-materialized-views.md`.
 - Partitioned views: redesign using native partitioning or `UNION ALL` views without index optimization.
-- No `SCHEMABINDING` equivalent.
+- `SCHEMABINDING` → drop the clause; PostgreSQL dependency tracking already gives the protection.
 - Simple PostgreSQL views are automatically updatable; `INSTEAD OF` triggers available for complex cases.
