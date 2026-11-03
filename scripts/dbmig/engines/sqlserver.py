@@ -30,6 +30,16 @@ def _q(ident: str) -> str:
     return "[" + str(ident).replace("]", "]]") + "]"
 
 
+def _xml_agg(item_expr: str, from_where: str, order_by: str) -> str:
+    """SQL Server 2008-2016 replacement for ``STRING_AGG(x, ', ') WITHIN GROUP
+    (ORDER BY o)`` as a correlated scalar subquery. ``item_expr`` must start with
+    the ``', ' +`` separator; STUFF strips the leading one. ``FOR XML PATH(''),
+    TYPE`` + ``.value()`` returns the text with XML entities (&, <, >) decoded.
+    All arguments are trusted module-level SQL fragments, never user input."""
+    return (f"STUFF((SELECT {item_expr} FROM {from_where} ORDER BY {order_by} "  # nosec B608
+            "FOR XML PATH(''), TYPE).value('.', 'nvarchar(max)'), 1, 2, '')")
+
+
 # Types whose binary wire representation is unusable by a generic COPY: extract a
 # portable text form at read time so the value lands in a target text column.
 #   hierarchyid       -> the '/1/2/' path string  (col.ToString())
@@ -82,7 +92,19 @@ def summarize_cross_schema_deps(rows, schema: str) -> List[Dict[str, Any]]:
 
 
 class SQLServerEngine(SourceEngine):
-    """Microsoft SQL Server source adapter."""
+    """Microsoft SQL Server source adapter.
+
+    Minimum supported source: SQL Server 2008 (major version 10). Catalog reads use
+    one modern query each; where a construct is newer than 2008 (STRING_AGG, 2017)
+    a legacy form is used only when the detected major version is older.
+    """
+
+    # STRING_AGG ... WITHIN GROUP first shipped in SQL Server 2017 (major 14).
+    STRING_AGG_MIN_MAJOR = 14
+
+    # Product year -> major version, so ``source.version: 2008`` also works.
+    _YEAR_TO_MAJOR = {2008: 10, 2012: 11, 2014: 12, 2016: 13, 2017: 14,
+                      2019: 15, 2022: 16, 2025: 17}
 
     def connect(self):
         return _connections.db_connect(self.model)
@@ -93,6 +115,39 @@ class SQLServerEngine(SourceEngine):
     def server_version(self) -> str:
         v = self.scalar("SELECT @@VERSION")
         return str(v).splitlines()[0].strip() if v else "unknown"
+
+    @classmethod
+    def parse_major_version(cls, value) -> Optional[int]:
+        v = SourceEngine.parse_major_version(value)
+        return cls._YEAR_TO_MAJOR.get(v, v) if v is not None else None
+
+    def _detect_major_version(self) -> Optional[int]:
+        # SERVERPROPERTY('ProductMajorVersion') does not exist on 2008/2008 R2;
+        # 'ProductVersion' ('10.50.6000.34') does on every version.
+        v = self.scalar("SELECT CONVERT(varchar(32), SERVERPROPERTY('ProductVersion'))")
+        return SourceEngine.parse_major_version(v)
+
+    def _has_string_agg(self) -> bool:
+        v = self.major_version()
+        return v is None or v >= self.STRING_AGG_MIN_MAJOR
+
+    def legacy_syntax_note(self) -> str:
+        v = self.major_version()
+        if v is None or v >= self.STRING_AGG_MIN_MAJOR:
+            return ""
+        missing = ["STRING_AGG", "TRIM", "CONCAT_WS", "TRANSLATE"]
+        if v < 13:
+            missing += ["STRING_SPLIT", "JSON functions (OPENJSON, FOR JSON, JSON_VALUE)",
+                        "DROP ... IF EXISTS"]
+        if v < 11:
+            missing += ["IIF", "CHOOSE", "TRY_CONVERT/TRY_CAST/TRY_PARSE", "CONCAT",
+                        "FORMAT", "EOMONTH/DATEFROMPARTS", "OFFSET ... FETCH",
+                        "THROW", "sequences (NEXT VALUE FOR)"]
+        return (f"SOURCE VERSION: SQL Server major version {v}. Every source_sql / "
+                f"call_source statement runs on this server, so use only syntax it "
+                f"supports. NOT available: {', '.join(missing)}. Use legacy equivalents "
+                "(CASE, CAST/CONVERT, '+' concatenation, TOP / ROW_NUMBER(), "
+                "RAISERROR, STUFF(... FOR XML PATH(''))).")
 
     # ---- inventory / listings --------------------------------------------
     def list_tables(self, schema: str, only: Optional[List[str]] = None) -> List[str]:
@@ -189,16 +244,29 @@ class SQLServerEngine(SourceEngine):
         oid = f"OBJECT_ID({_lit(schema + '.' + table)})"
         out = []
         # PK / UNIQUE
-        _, rows = self.fetch(
-            "SELECT tc.CONSTRAINT_NAME, tc.CONSTRAINT_TYPE, "  # nosec B608
-            "(SELECT STRING_AGG(QUOTENAME(kcu.COLUMN_NAME), ', ') "
-            "   WITHIN GROUP (ORDER BY kcu.ORDINAL_POSITION) "
-            " FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu "
-            " WHERE kcu.CONSTRAINT_NAME = tc.CONSTRAINT_NAME "
-            "   AND kcu.TABLE_SCHEMA = tc.TABLE_SCHEMA) AS cols "
-            "FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc "
-            f"WHERE tc.TABLE_SCHEMA = {_lit(schema)} AND tc.TABLE_NAME = {_lit(table)} "
-            "AND tc.CONSTRAINT_TYPE IN ('PRIMARY KEY','UNIQUE')")
+        if self._has_string_agg():
+            sql = (
+                "SELECT tc.CONSTRAINT_NAME, tc.CONSTRAINT_TYPE, "  # nosec B608
+                "(SELECT STRING_AGG(QUOTENAME(kcu.COLUMN_NAME), ', ') "
+                "   WITHIN GROUP (ORDER BY kcu.ORDINAL_POSITION) "
+                " FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu "
+                " WHERE kcu.CONSTRAINT_NAME = tc.CONSTRAINT_NAME "
+                "   AND kcu.TABLE_SCHEMA = tc.TABLE_SCHEMA) AS cols "
+                "FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc "
+                f"WHERE tc.TABLE_SCHEMA = {_lit(schema)} AND tc.TABLE_NAME = {_lit(table)} "
+                "AND tc.CONSTRAINT_TYPE IN ('PRIMARY KEY','UNIQUE')")
+        else:  # SQL Server 2008-2016: ordered list via FOR XML PATH
+            sql = (
+                "SELECT tc.CONSTRAINT_NAME, tc.CONSTRAINT_TYPE, "  # nosec B608
+                + _xml_agg("', ' + QUOTENAME(kcu.COLUMN_NAME)",
+                           "INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu "
+                           "WHERE kcu.CONSTRAINT_NAME = tc.CONSTRAINT_NAME "
+                           "AND kcu.TABLE_SCHEMA = tc.TABLE_SCHEMA",
+                           "kcu.ORDINAL_POSITION") + " AS cols "
+                "FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc "
+                f"WHERE tc.TABLE_SCHEMA = {_lit(schema)} AND tc.TABLE_NAME = {_lit(table)} "
+                "AND tc.CONSTRAINT_TYPE IN ('PRIMARY KEY','UNIQUE')")
+        _, rows = self.fetch(sql)
         for cname, ctype, cols in rows:
             if cols:
                 out.append(f"ALTER TABLE {_q(schema)}.{_q(table)} ADD CONSTRAINT "
@@ -213,18 +281,35 @@ class SQLServerEngine(SourceEngine):
 
     def _foreign_keys_ddl(self, schema: str, table: str) -> str:
         oid = f"OBJECT_ID({_lit(schema + '.' + table)})"
-        _, rows = self.fetch(
-            "SELECT fk.name, "  # nosec B608
-            " STRING_AGG(QUOTENAME(COL_NAME(fkc.parent_object_id, fkc.parent_column_id)), ', ') "
-            "   WITHIN GROUP (ORDER BY fkc.constraint_column_id) AS cols, "
-            " OBJECT_SCHEMA_NAME(fk.referenced_object_id) AS ref_schema, "
-            " OBJECT_NAME(fk.referenced_object_id) AS ref_name, "
-            " STRING_AGG(QUOTENAME(COL_NAME(fkc.referenced_object_id, fkc.referenced_column_id)), ', ') "
-            "   WITHIN GROUP (ORDER BY fkc.constraint_column_id) AS ref_cols "
-            "FROM sys.foreign_keys fk "
-            "JOIN sys.foreign_key_columns fkc ON fk.object_id = fkc.constraint_object_id "
-            f"WHERE fk.parent_object_id = {oid} "
-            "GROUP BY fk.name, fk.referenced_object_id")
+        if self._has_string_agg():
+            sql = (
+                "SELECT fk.name, "  # nosec B608
+                " STRING_AGG(QUOTENAME(COL_NAME(fkc.parent_object_id, fkc.parent_column_id)), ', ') "
+                "   WITHIN GROUP (ORDER BY fkc.constraint_column_id) AS cols, "
+                " OBJECT_SCHEMA_NAME(fk.referenced_object_id) AS ref_schema, "
+                " OBJECT_NAME(fk.referenced_object_id) AS ref_name, "
+                " STRING_AGG(QUOTENAME(COL_NAME(fkc.referenced_object_id, fkc.referenced_column_id)), ', ') "
+                "   WITHIN GROUP (ORDER BY fkc.constraint_column_id) AS ref_cols "
+                "FROM sys.foreign_keys fk "
+                "JOIN sys.foreign_key_columns fkc ON fk.object_id = fkc.constraint_object_id "
+                f"WHERE fk.parent_object_id = {oid} "
+                "GROUP BY fk.name, fk.referenced_object_id")
+        else:  # SQL Server 2008-2016: one correlated FOR XML PATH list per side
+            fkc_from = ("sys.foreign_key_columns fkc "
+                        "WHERE fkc.constraint_object_id = fk.object_id")
+            sql = (
+                "SELECT fk.name, "  # nosec B608
+                + _xml_agg("', ' + QUOTENAME(COL_NAME(fkc.parent_object_id, "
+                           "fkc.parent_column_id))", fkc_from,
+                           "fkc.constraint_column_id") + " AS cols, "
+                " OBJECT_SCHEMA_NAME(fk.referenced_object_id) AS ref_schema, "
+                " OBJECT_NAME(fk.referenced_object_id) AS ref_name, "
+                + _xml_agg("', ' + QUOTENAME(COL_NAME(fkc.referenced_object_id, "
+                           "fkc.referenced_column_id))", fkc_from,
+                           "fkc.constraint_column_id") + " AS ref_cols "
+                "FROM sys.foreign_keys fk "
+                f"WHERE fk.parent_object_id = {oid}")
+        _, rows = self.fetch(sql)
         out = []
         for name, cols, ref_schema, ref_name, ref_cols in rows:
             ref_table = f"{_q(ref_schema)}.{_q(ref_name)}"
@@ -234,16 +319,30 @@ class SQLServerEngine(SourceEngine):
 
     def _indexes_ddl(self, schema: str, table: str) -> str:
         oid = f"OBJECT_ID({_lit(schema + '.' + table)})"
-        _, rows = self.fetch(
-            "SELECT i.name, i.is_unique, i.type_desc, "  # nosec B608
-            " STRING_AGG(c.name, ', ') WITHIN GROUP (ORDER BY ic.key_ordinal) AS cols "
-            "FROM sys.indexes i "
-            "JOIN sys.index_columns ic ON i.object_id = ic.object_id "
-            " AND i.index_id = ic.index_id AND ic.is_included_column = 0 "
-            "JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id "
-            f"WHERE i.object_id = {oid} AND i.is_primary_key = 0 "
-            "AND i.is_unique_constraint = 0 AND i.type IN (1,2) AND i.name IS NOT NULL "
-            "GROUP BY i.name, i.is_unique, i.type_desc")
+        if self._has_string_agg():
+            sql = (
+                "SELECT i.name, i.is_unique, i.type_desc, "  # nosec B608
+                " STRING_AGG(c.name, ', ') WITHIN GROUP (ORDER BY ic.key_ordinal) AS cols "
+                "FROM sys.indexes i "
+                "JOIN sys.index_columns ic ON i.object_id = ic.object_id "
+                " AND i.index_id = ic.index_id AND ic.is_included_column = 0 "
+                "JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id "
+                f"WHERE i.object_id = {oid} AND i.is_primary_key = 0 "
+                "AND i.is_unique_constraint = 0 AND i.type IN (1,2) AND i.name IS NOT NULL "
+                "GROUP BY i.name, i.is_unique, i.type_desc")
+        else:  # SQL Server 2008-2016: ordered key-column list via FOR XML PATH
+            sql = (
+                "SELECT i.name, i.is_unique, i.type_desc, "  # nosec B608
+                + _xml_agg("', ' + c.name",
+                           "sys.index_columns ic JOIN sys.columns c "
+                           "ON ic.object_id = c.object_id AND ic.column_id = c.column_id "
+                           "WHERE ic.object_id = i.object_id AND ic.index_id = i.index_id "
+                           "AND ic.is_included_column = 0",
+                           "ic.key_ordinal") + " AS cols "
+                "FROM sys.indexes i "
+                f"WHERE i.object_id = {oid} AND i.is_primary_key = 0 "
+                "AND i.is_unique_constraint = 0 AND i.type IN (1,2) AND i.name IS NOT NULL")
+        _, rows = self.fetch(sql)
         out = []
         for name, is_unique, type_desc, cols in rows:
             uniq = "UNIQUE " if is_unique else ""

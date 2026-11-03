@@ -13,6 +13,8 @@
 
 source:
   engine: oracle              # oracle | sqlserver (mssql / sql-server)
+  # Source version: detected from the server; set it only to override detection.
+  # Minimum supported: Oracle 11.2, SQL Server 2008 (also accepts "2008", "10.50", "11g").
   version: "19c"
   host: ${ORA_HOST}
   port: 1521
@@ -21,6 +23,10 @@ source:
   sid:                         # e.g. ORCL  (leave blank if using service_name)
   username: ${ORA_USER}
   password: ${ORA_PASSWORD}
+  # Oracle 11.2 only: python-oracledb thin mode connects to 12.1+. For 11.2 use thick
+  # mode with Oracle Instant Client 19 or later (x86-64; on Linux also `libaio`, `libnsl`).
+  #   driver_mode: thick
+  #   oracle_client_lib: /opt/oracle/instantclient_19_29   # or DBMIG_ORACLE_CLIENT_LIB
   # Encryption in transit (source): a source DB's transport security is your
   # existing posture. Encryption is opt-in — set `protocol: tcps` to use TLS
   # (Oracle TCPS / SQL Server encrypted session); otherwise plain TCP is used.

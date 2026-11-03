@@ -280,6 +280,43 @@ class SourceEngine(Engine, ABC):
 
     role = "source"
 
+    # ---- server version (legacy-compatibility gating) ----------------------
+    #
+    # Adapters keep ONE query text per catalog read and only switch to a legacy
+    # form when the source is older than the version that introduced a construct
+    # (e.g. SQL Server STRING_AGG = 2017, Oracle FETCH FIRST = 12c). When the
+    # version cannot be determined, ``major_version`` returns None and adapters
+    # use the modern form, so a supported modern source never changes behaviour.
+
+    @staticmethod
+    def parse_major_version(value) -> Optional[int]:
+        """Leading integer of a version string ('11.2.0.4' -> 11, '19c' -> 19)."""
+        import re
+        m = re.match(r"\s*(\d+)", str(value or ""))
+        return int(m.group(1)) if m else None
+
+    def _detect_major_version(self) -> Optional[int]:
+        """Ask the connected server for its major version. Default: unknown."""
+        return None
+
+    def major_version(self) -> Optional[int]:
+        """Source major version, cached per engine. ``source.version`` in
+        connections.yaml overrides detection; None means unknown (= modern)."""
+        if "_major_version" not in self.__dict__:
+            v = self.parse_major_version(self.model.version) if self.model.version else None
+            if v is None:
+                try:
+                    v = self._detect_major_version()
+                except Exception:  # noqa: BLE001 — unknown version => modern SQL
+                    v = None
+            self.__dict__["_major_version"] = v
+        return self.__dict__["_major_version"]
+
+    def legacy_syntax_note(self) -> str:
+        """One-paragraph warning for prompts whose SQL runs on the SOURCE (test
+        generation) when the source predates common modern syntax; '' otherwise."""
+        return ""
+
     @abstractmethod
     def list_tables(self, schema: str, only: Optional[List[str]] = None) -> List[str]:
         ...

@@ -433,8 +433,12 @@ def list_callables(conn, schema: str) -> List[Tuple[str, str]]:
         cur.close()
 
 
-def build_sample_rows_sql(schema: str, table: str, n: int) -> str:
+def build_sample_rows_sql(schema: str, table: str, n: int,
+                          legacy: bool = False) -> str:
     """Build a 'SELECT * ... FETCH FIRST n ROWS ONLY' statement for sampling.
+
+    ``legacy=True`` (Oracle 11g and older, which have no row-limiting clause)
+    uses ``WHERE ROWNUM <= n`` instead.
 
     Identifiers cannot be bound parameters, so they are validated against a
     strict allowlist (``assert_identifier``) before interpolation; ``n`` is
@@ -442,16 +446,18 @@ def build_sample_rows_sql(schema: str, table: str, n: int) -> str:
     """
     assert_identifier(schema, table)
     n = max(1, int(n))
+    if legacy:
+        return f"SELECT * FROM {schema}.{table} WHERE ROWNUM <= {n}"  # nosec B608
     return f"SELECT * FROM {schema}.{table} FETCH FIRST {n} ROWS ONLY"  # nosec B608
 
 
-def sample_rows(conn, schema: str, table: str, n: int = 5):
+def sample_rows(conn, schema: str, table: str, n: int = 5, legacy: bool = False):
     """Return (columns, rows) of up to ``n`` REAL rows from a source table.
 
     Used to ground test-case generation in data that actually exists, so the
     generated tests reference real keys/values rather than invented ones.
     """
-    sql = build_sample_rows_sql(schema, table, n)
+    sql = build_sample_rows_sql(schema, table, n, legacy=legacy)
     cur = conn.cursor()
     try:
         cur.execute(sql)
@@ -550,7 +556,16 @@ from .base import CodeObject, ObjectUnit, SourceEngine, assert_identifier  # noq
 
 
 class OracleEngine(SourceEngine):
-    """Oracle source adapter (oracledb thin mode)."""
+    """Oracle source adapter.
+
+    Minimum supported source: Oracle 11.2. python-oracledb thin mode (default)
+    connects to 12.1+; 11.2 needs thick mode (``driver_mode: thick`` + Oracle
+    Instant Client 19 or later). SQL newer than 11.2 (FETCH FIRST, 12c) switches to
+    a legacy form only when the detected major version is older.
+    """
+
+    # FETCH FIRST n ROWS ONLY and identity columns first shipped in 12c.
+    ROW_LIMIT_MIN_MAJOR = 12
 
     def connect(self):
         return _connections.db_connect(self.model)
@@ -560,6 +575,27 @@ class OracleEngine(SourceEngine):
 
     def server_version(self) -> str:
         return server_version(self.connection)
+
+    def _detect_major_version(self):
+        # oracledb exposes the server version on the connection in both modes.
+        return SourceEngine.parse_major_version(getattr(self.connection, "version", None))
+
+    def _legacy(self) -> bool:
+        v = self.major_version()
+        return v is not None and v < self.ROW_LIMIT_MIN_MAJOR
+
+    def legacy_syntax_note(self) -> str:
+        if not self._legacy():
+            return ""
+        return (f"SOURCE VERSION: Oracle major version {self.major_version()}. Every "
+                "source_sql / call_source statement runs on this server, so use only "
+                "syntax it supports. NOT available: FETCH FIRST / OFFSET row limiting, "
+                "identity columns, DEFAULT ON NULL, sequence.NEXTVAL as a column "
+                "DEFAULT, JSON functions (JSON_VALUE, JSON_TABLE, JSON_OBJECT), "
+                "LISTAGG ... ON OVERFLOW, VALIDATE_CONVERSION, CAST ... DEFAULT ON "
+                "CONVERSION ERROR, APPROX_COUNT_DISTINCT, inline PL/SQL WITH FUNCTION. "
+                "Use legacy equivalents (ROWNUM in a subquery, NVL/DECODE, "
+                "sequence.NEXTVAL in the INSERT).")
 
     def list_tables(self, schema, only=None):
         return list_tables(self.connection, schema, only=only)
@@ -596,7 +632,7 @@ class OracleEngine(SourceEngine):
 
     def sample_rows(self, schema, table, n=5):
         assert_identifier(schema, table)
-        return sample_rows(self.connection, schema, table, n=n)
+        return sample_rows(self.connection, schema, table, n=n, legacy=self._legacy())
 
     def _domain_indexes(self, schema):
         # Cached per schema: extract_units calls extract_object_unit per table.

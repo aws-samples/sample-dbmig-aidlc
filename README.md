@@ -155,7 +155,11 @@ The `dbmig` toolkit (`scripts/dbmig/`) connects with **Python drivers** — no `
 `psql` install required:
 
 - **Oracle (source)**: [`oracledb`](https://python-oracledb.readthedocs.io/) in *thin mode*
-- **SQL Server (source)**: [`python-tds`](https://python-tds.readthedocs.io/) (pure Python)
+  (Oracle 12.1+). **Oracle 11.2** is supported in *thick mode*: set `driver_mode: thick` on
+  the source connection and install Oracle Instant Client 19+ (x86-64 Linux/Windows, or an
+  Intel Mac; Apple Silicon has no Instant Client that reaches 11.2)
+- **SQL Server (source)**: [`python-tds`](https://python-tds.readthedocs.io/) (pure Python),
+  SQL Server **2008** and later
 - **PostgreSQL (target)**: [`psycopg`](https://www.psycopg.org/) v3 with bundled libpq
 - **MySQL (target)**: [`PyMySQL`](https://pymysql.readthedocs.io/) — pure Python
 

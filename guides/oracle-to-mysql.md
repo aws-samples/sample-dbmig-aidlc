@@ -20,6 +20,9 @@ the schema conversion** via the `db-migration-construction` skill (the LLM is Ki
   python3 -m venv .venv && .venv/bin/pip install -e scripts/   # isolated; see README "Getting started"
   ```
 - Run commands from the **repository root** via `./dbmig` (it uses `.venv` automatically).
+- **Oracle 11.2 sources** (oldest supported): thin mode connects to 12.1+. For 11.2 install
+  Oracle Instant Client 19+ (x86-64 only; on Amazon Linux 2023 also `libaio libnsl`) and set
+  `driver_mode: thick` and `oracle_client_lib: <dir>` on the `source` connection.
 
 ## 2. Configure connections
 

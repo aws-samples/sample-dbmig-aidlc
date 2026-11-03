@@ -111,6 +111,35 @@ def _resolve_ca_file(c: "Connection") -> Optional[str]:
         return None
 
 
+_ORACLE_THICK_INITIALIZED = False
+
+
+def _oracle_driver_mode(c: "Connection") -> str:
+    mode = str(c.extra.get("driver_mode") or os.environ.get("DBMIG_ORACLE_DRIVER_MODE")
+               or "thin").strip().lower()
+    if mode not in ("thin", "thick"):
+        raise config.ConfigError(f"Oracle driver_mode must be 'thin' or 'thick', not {mode!r}")
+    return mode
+
+
+def _init_oracle_thick(oracledb, c: "Connection") -> None:
+    """Enable python-oracledb thick mode once per process (it cannot be undone).
+    Thick mode loads Oracle Instant Client 19+ and is required for Oracle 11.2,
+    which thin mode cannot connect to (DPY-3010)."""
+    global _ORACLE_THICK_INITIALIZED
+    if _ORACLE_THICK_INITIALIZED:
+        return
+    lib_dir = c.extra.get("oracle_client_lib") or os.environ.get("DBMIG_ORACLE_CLIENT_LIB")
+    try:
+        oracledb.init_oracle_client(lib_dir=str(lib_dir) if lib_dir else None)
+    except Exception as exc:  # noqa: BLE001
+        raise config.ConfigError(
+            f"Oracle thick mode could not load Oracle Instant Client ({exc}). Install "
+            "Instant Client 19 or later and set 'oracle_client_lib' (or "
+            "DBMIG_ORACLE_CLIENT_LIB / LD_LIBRARY_PATH) to its directory.") from exc
+    _ORACLE_THICK_INITIALIZED = True
+
+
 def _connect_oracle(c: Connection):
     import oracledb  # imported lazily so the package imports without the driver
 
@@ -120,6 +149,10 @@ def _connect_oracle(c: Connection):
 
     if not (c.service_name or c.sid):
         raise config.ConfigError("Oracle connection needs service_name or sid")
+
+    thick = _oracle_driver_mode(c) == "thick"
+    if thick:
+        _init_oracle_thick(oracledb, c)
 
     kw: Dict[str, Any] = dict(
         user=c.username, password=c.password,
@@ -135,6 +168,12 @@ def _connect_oracle(c: Connection):
     # (protocol: tcps). Otherwise connect over plain TCP — a source DB's transport
     # security is the customer's existing posture prior to migration.
     proto = (c.protocol or c.extra.get("protocol") or "tcp").strip().lower()
+    if proto == "tcps" and thick:
+        # Thick mode takes TLS settings from an Oracle wallet / sqlnet.ora, not
+        # from a Python SSLContext.
+        raise config.ConfigError(
+            "Oracle 'protocol: tcps' is not supported with driver_mode: thick; use "
+            "thin mode (Oracle 12.1+) or connect over tcp.")
     if proto == "tcps":
         mode = (c.sslmode or "").strip().lower()
         kw["protocol"] = "tcps"
@@ -151,7 +190,16 @@ def _connect_oracle(c: Connection):
             kw["ssl_context"] = ctx
             kw["ssl_server_dn_match"] = False
     # Thin mode is the default (no Oracle Client libraries required).
-    return oracledb.connect(**kw)
+    try:
+        return oracledb.connect(**kw)
+    except oracledb.Error as exc:
+        if not thick and "DPY-3010" in str(exc):
+            raise config.ConfigError(
+                "This Oracle server is older than 12.1, which python-oracledb thin mode "
+                "cannot connect to (DPY-3010). For Oracle 11.2 set 'driver_mode: thick' "
+                "on the connection and install Oracle Instant Client 19 or later "
+                "('oracle_client_lib' / DBMIG_ORACLE_CLIENT_LIB).") from exc
+        raise
 
 
 def _connect_postgres(c: Connection):

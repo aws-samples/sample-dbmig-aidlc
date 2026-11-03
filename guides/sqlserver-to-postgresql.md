@@ -22,6 +22,9 @@ deterministic work; **Kiro performs the schema/T-SQL conversion** via the
   python3 -m venv .venv && .venv/bin/pip install -e scripts/   # isolated; see README "Getting started"
   ```
 - Run commands from the **repository root** via `./dbmig` (it uses `.venv` automatically).
+- **Source versions:** SQL Server 2008 and later. The version is detected at connect time;
+  on 2008–2016 catalog reads avoid `STRING_AGG` (2017+) and the test-generation prompt lists
+  the T-SQL the source does not support. Set `source.version` (e.g. `"2008"`) only to override.
 
 ## 2. Configure connections
 

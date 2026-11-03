@@ -889,7 +889,8 @@ def _shape(obj_type: str) -> str:
 def build_test_batch_prompt(objs, schema: str, sample: dict,
                             repo_root: Optional[Path] = None,
                             pair: Optional[str] = None,
-                            shared_context: Optional[str] = None) -> str:
+                            shared_context: Optional[str] = None,
+                            source_note: str = "") -> str:
     """Prompt for the assistant to write equivalence-test specs for one or more
     objects (``objs`` = dicts with obj_type, name, source_ddl, target_code).
 
@@ -897,7 +898,8 @@ def build_test_batch_prompt(objs, schema: str, sample: dict,
     calls use the real flattened names/signatures instead of guesses). Sampled real
     data is included once for the union of tables the batch reads. The phase
     context (spec format + test-relevant engine checks + customer rules) is
-    referenced via ``shared_context`` or inlined when absent.
+    referenced via ``shared_context`` or inlined when absent. ``source_note`` (from
+    ``SourceEngine.legacy_syntax_note``) restricts source-side SQL on old sources.
     """
     root = repo_root or config.find_repo_root()
     pair = pair or config.active_pair()
@@ -929,6 +931,7 @@ def build_test_batch_prompt(objs, schema: str, sample: dict,
         f"{_source_display(pair)} source: same input → same return value (functions) or "
         f"same net effect (procedures). Tests run on BOTH engines and the results are "
         f"compared. Use the spec format and Rules in the context above.\n\n"
+        + (f"{source_note}\n\n" if source_note else "")
         + "\n".join(sections) +
         f"\n--- SAMPLED REAL DATA (use these actual values) ---\n{_format_sample(sample)}\n"
     )

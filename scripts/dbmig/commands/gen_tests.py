@@ -181,6 +181,10 @@ def run(args) -> int:
         tests_dir.mkdir(parents=True, exist_ok=True)
 
         shared = prompt_builder.write_shared_context(ws, prompt_builder.TESTS, root)
+        source_note = source.legacy_syntax_note()
+        if source_note:
+            console.warn(f"legacy source (major version {source.major_version()}): "
+                         "test prompts restrict source SQL to that version's syntax")
         converted = converted_code_index(config.workspace_dir(args.project),
                                          args.schema)
         units: List[dict] = []
@@ -241,7 +245,7 @@ def run(args) -> int:
                 tabs += [t for t in o["refs"] if t in sample and t not in tabs]
             prompt = prompt_builder.build_test_batch_prompt(
                 batch, args.schema.upper(), {t: sample[t] for t in tabs},
-                repo_root=root, shared_context=shared)
+                repo_root=root, shared_context=shared, source_note=source_note)
             pname = (f"{batch[0]['base']}.prompt.md" if len(batch) == 1
                      else f"batch_{i:04d}.prompt.md")
             notes = [n for o in batch for n in o["notes"]]

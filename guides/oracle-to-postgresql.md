@@ -47,6 +47,13 @@ This installs `oracledb` (thin mode — no Oracle client install), `psycopg[bina
 (PostgreSQL driver with bundled libpq), `pyyaml` and the other drivers, plus a `dbmig`
 command — all inside `.venv`. Remove everything with `rm -rf .venv`.
 
+**Oracle 11.2 sources.** Thin mode connects to Oracle 12.1 and later. For 11.2 (the oldest
+supported source), install Oracle Instant Client 19 or later and add `driver_mode: thick`
+(plus `oracle_client_lib: <instant-client-dir>`) to the `source` block. Instant Client 19
+exists for x86-64 Linux/Windows and Intel Macs only, so on Apple Silicon run `dbmig` from an
+x86-64 Linux host; on Amazon Linux 2023 also `dnf install libaio libnsl`. Without it, a
+connection to 11.2 fails with a message pointing here (`DPY-3010`).
+
 Verify the CLI is available (run from the repo root):
 
 ```bash
