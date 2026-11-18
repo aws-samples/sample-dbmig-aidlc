@@ -21,6 +21,21 @@ reviewed later.
 | Validation | Approve the equivalence test results? |
 | Operations | Approve the cutover & rollback plan? |
 
+The optional [application modernization](application-modernization.md) module adds its own four
+gates once `05-application/00-intake/app-intake.md` exists. They are ordered among themselves,
+independent of the database gates:
+
+| Gate | Question | Blockers come from |
+|---|---|---|
+| `app-inception` | Approve the application assessment & change plan? | `app-intake.md`, `change-plan.md` |
+| `app-construction` | Approve the converted application? | the conversion log, `app.diff`, a recorded backup (`./dbmig app-backup`) |
+| `app-validation` | Approve the application validation results? | `build-report.md` |
+| `app-operations` | Approve the application cutover plan? | `app-cutover.md` with the AI-generated disclaimer |
+
+`app-inception` shows a **warning** (it never blocks) while the database Construction gate is not
+approved, because the change plan relies on that conversion log. `./dbmig app-backup` warns
+(refuses with `run.enforce_gates: true`) while `app-inception` is not approved.
+
 - **Blockers** come from the artifacts: a missing inventory or plan, units not applied or
   `needs_human`, no reconcile or equivalence report, pending DMS SC VERIFY items, operations
   documents without the AI-generated disclaimer, open decisions, an earlier gate not approved.

@@ -15,13 +15,13 @@ import json
 import sys
 
 from .. import console, gates
-from ..project import GATED_PHASES, ProjectError, load, resolve_dir, whoami
+from ..project import ProjectError, load, resolve_dir, whoami
 
 _ICON = {"approved": "✔", "rejected": "✘", "stale": "!", "open": "·"}
 
 
 def _print_view(v: dict) -> None:
-    head = f"{_ICON.get(v['status'], '·')} {v['phase']:<12} {v['status']:<9}"
+    head = f"{_ICON.get(v['status'], '·')} {v['phase']:<16} {v['status']:<9}"
     if v.get("by"):
         head += f" by {v['by']} at {v['at']}" + (f" via {v['via']}" if v.get("via") else "")
     print(head)
@@ -31,6 +31,8 @@ def _print_view(v: dict) -> None:
     if v["status"] != "approved":       # blockers only matter for approving
         for b in v["blockers"]:
             print(f"    blocker: {b}")
+    for w in v.get("warnings") or []:
+        print(f"    warning: {w}")
     for k, n in v["acknowledgements"].items():
         print(f"    acknowledge: {k} ({n} open)  -> --ack {k}")
     if v["status"] == "stale":
@@ -76,7 +78,7 @@ def run_status(args) -> int:
     except ProjectError as exc:
         console.err(str(exc))
         return 2
-    views = [gates.view(proj, p) for p in GATED_PHASES]
+    views = [gates.view(proj, p) for p in proj.gated_phases]
     if getattr(args, "json", False):
         for v in views:
             v.pop("history", None)

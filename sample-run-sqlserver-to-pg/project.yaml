@@ -171,6 +171,89 @@ gates:
         04-operations/monitoring.md: a7ada4afc9dffb82e134b7050c5c39c7baf4da21d71b05bcb3df1711dfbd1b05
         04-operations/rollback-plan.md: f56c450247c578a6f9f3a36a56393eab0aa727590943132efd370ce3f241fa06
     note: cutover plan approved
+  app-inception:
+    status: approved
+    history:
+    - status: approved
+      by: framework owner (release test)
+      at: '2026-11-18T09:50:43Z'
+      via: cli
+      note: archived sample run
+    by: framework owner (release test)
+    at: '2026-11-18T09:50:43Z'
+    via: cli
+    acknowledged: []
+    fingerprint:
+      algo: sha256
+      files:
+        05-application/00-intake/app-intake.md: 4e091ca96af59cc7c75b195bb73f0aa01841ed670ec9ec32932529d81753137c
+        05-application/01-assessment/app-contract.md: c13e650ac5cf6e04a9784b6e616bd2b9ad4f24e34bff6fade04d5613bdf7aef7
+        05-application/01-assessment/app-scan.md: 69a46dfef928912f947c1087b11e5418a497d811a51275bda16974d592fd72ce
+        05-application/01-assessment/app-scan.yaml: dbb17a61b0c5585463092826f6f2f0a89d232db73ea49586ad31d0de8b830e59
+        05-application/01-assessment/change-plan.md: d4c66aa5303ec01cf9cb3705d54a8a69cdc94b008943cbf63348095e0065826c
+      decisions: {}
+      policies: {}
+      digest: 00e80ab31399329fc24431dee29830612b3af045825450a065380b602f103a68
+    note: archived sample run
+  app-construction:
+    status: approved
+    history:
+    - status: approved
+      by: framework owner (release test)
+      at: '2026-11-18T09:50:44Z'
+      via: cli
+      note: archived sample run
+    by: framework owner (release test)
+    at: '2026-11-18T09:50:44Z'
+    via: cli
+    acknowledged: []
+    fingerprint:
+      algo: sha256
+      files:
+        05-application/02-construction/app.diff: 0c257546efcaf7b4cbe19a36ff2e731a11d4bf928511008b7c44ba6ddbf9b5a4
+        05-application/02-construction/conversion-log.md: df5ed0e0b760737581cd846a1b9bfdc77cdd1ae352bb606be7f1f853fafc313e
+        05-application/backup/20261030-154646/MANIFEST.md: 25508be273077eb9a9349d6c791ee7c0bab24828309d38cc011dac1e51b13dc0
+      decisions: {}
+      digest: b82a720259fcada4a9131453985d7bdb66c9cc7212286e40176b4c16356588ca
+    note: archived sample run
+  app-validation:
+    status: approved
+    history:
+    - status: approved
+      by: framework owner (release test)
+      at: '2026-11-18T09:50:44Z'
+      via: cli
+      note: archived sample run
+    by: framework owner (release test)
+    at: '2026-11-18T09:50:44Z'
+    via: cli
+    acknowledged: []
+    fingerprint:
+      algo: sha256
+      files:
+        05-application/03-validation/build-report.md: f47e63e83a33ff9b939454979ca16c3ec6e9812381919abeb9d195d6e9112678
+      decisions: {}
+      digest: 1420e9842c5bcf1ecee0535d9003aa4f43b804787b225365a87682fb34aebc99
+    note: archived sample run
+  app-operations:
+    status: approved
+    history:
+    - status: approved
+      by: framework owner (release test)
+      at: '2026-11-18T09:50:44Z'
+      via: cli
+      note: archived sample run
+    by: framework owner (release test)
+    at: '2026-11-18T09:50:44Z'
+    via: cli
+    acknowledged: []
+    fingerprint:
+      algo: sha256
+      files:
+        05-application/04-operations/app-cutover.md: 02c323ab58b53462515963b2c190cf06735353b4c748a6849bdd1403bcc1d2a1
+      decisions: {}
+      digest: 0f5e7ac341639607709b392cd2f321004e5a961161ee6c1e160f4f9a04f03121
+    note: archived sample run
 decisions: []
 sample: 'Framework validation run: gates were approved by the framework owner for the release test, not
   by a customer. In a real migration each gate is an explicit human approval.'

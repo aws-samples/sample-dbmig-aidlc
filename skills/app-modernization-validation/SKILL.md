@@ -59,8 +59,10 @@ These are expected. Fixing them is part of this module's job.
 Rules while fixing:
 - Fix the **root cause**, not the symptom. Widening a variable to silence a type error is correct;
   casting a `long` down to `int` to keep a signature is not.
-- Every fix is still subject to the backup policy — if a file was not previously backed up, back it
-  up (mirrored tree) before editing.
+- Every fix is still subject to the backup policy. `./dbmig app-backup` already covered the whole
+  in-scope tree (git base commit or file copy); a file **outside** the recorded scope needs a new
+  backup first (`./dbmig app-backup --project <P> --app <APP_DIR> --scope <path> --force`). Add each
+  fixed file to the backup's `MANIFEST.md` and regenerate `02-construction/app.diff`.
 - If a fix requires a decision beyond the approved plan, **stop and ask**.
 - Re-run the build after each logical group of fixes; do not batch unrelated changes into one
   attempt. If the same error survives two fix attempts, stop and reconsider the diagnosis rather

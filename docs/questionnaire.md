@@ -83,3 +83,28 @@ different sections; each section has an `[Answered by]:` line.
 
 Questions live in `engines/_common/questionnaire.yaml` (common) and
 `engines/<pair>/questionnaire.yaml` (per-pair policies), so a new engine pair needs no code change.
+
+## Application questionnaire
+
+The optional [application modernization](application-modernization.md) module has its own
+questionnaire, for the application team. It has **one round**: the application's open questions
+come up in the change plan, which is approved at the `app-inception` gate anyway.
+
+```bash
+./dbmig questionnaire new   --module app --project P      # 05-application/00-intake/app-questionnaire.md
+./dbmig questionnaire check --module app --project P [--apply]
+```
+
+It asks for the application directory and scope, build and test commands, how the application
+finds its database (names only, never values), the backup mode (`auto`: git when possible, else a
+file copy) and where edits go in git, plus conversion policies that repeat across many call sites.
+`--apply` stores the answers in `project.yaml` under `app:` (never in the database policies, so no
+database gate goes stale) and writes `05-application/00-intake/app-policies.md` for the
+application skills. Changing an application answer after approval makes `app-inception` stale.
+
+Questions live in `engines/_common/app-questionnaire.yaml` and `engines/<pair>/app/questionnaire.yaml`.
+
+| File | What it shows |
+|---|---|
+| [app-answered-oracle-to-postgresql.md](examples/questionnaire/app-answered-oracle-to-postgresql.md) | an answered application questionnaire (masked), with one `X) Other` answer |
+| [app-blank-oracle-to-postgresql.md](examples/questionnaire/app-blank-oracle-to-postgresql.md) | exactly what `./dbmig questionnaire new --module app --pair oracle-to-postgresql` writes |

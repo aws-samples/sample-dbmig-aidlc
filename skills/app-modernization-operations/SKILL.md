@@ -52,7 +52,10 @@ app-side half of that contract.
 
 ## Gate
 
-Present the plan and **stop: "Approve the application cutover plan?"** Cutover execution itself
+Present the plan and **stop: "Approve the application cutover plan?"**; after the user approves,
+record it with `./dbmig gate approve app-operations --project <P> --approved-by "<name>" --via
+chat`. `04-operations/app-cutover.md` must start with the AI-generated disclaimer (the gate
+checks it). Cutover execution itself
 is a production action — only proceed under explicit user direction, step by step, never
 unattended.
 
@@ -62,3 +65,5 @@ unattended.
 - Never echo secret values when describing configuration.
 - If the DB migration has not itself passed its Operations gate, say so — the app cutover plan
   cannot be approved ahead of the database's.
+- The rollback section uses the recorded backup (`00-intake/backup.yaml`): `git restore --source
+  <commit>` in git mode, the mirrored copy in file-copy mode.

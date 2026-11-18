@@ -1,0 +1,27 @@
+# Application questionnaire — Oracle -> MySQL conversion policies
+# (see engines/_common/app-questionnaire.yaml).
+version: 1
+sections:
+  - id: "5"
+    title: Conversion policies — Oracle to MySQL application code
+    questions:
+      - id: Q5.1
+        key: app_empty_string
+        optional: true
+        text: Code that relies on Oracle treating '' as NULL
+        options:
+          - {id: A, recommended: true, label: "Follow the database migration's empty-string policy",
+             guidance: "Follow the empty-string policy recorded for the database migration (project.yaml policies): send NULL where the code sends '' if Oracle behaviour is kept; otherwise keep '' and flag checks that relied on '' IS NULL."}
+          - {id: B, label: "Normalise '' to NULL in the application before writing",
+             guidance: "Normalise empty strings to NULL at the data-access boundary before inserts/updates, and list each site."}
+        writes_to: [policy]
+      - id: Q5.2
+        key: app_sequences
+        optional: true
+        text: Explicit sequence calls in SQL (seq.NEXTVAL)
+        options:
+          - {id: A, recommended: true, label: "Use AUTO_INCREMENT and read the key with LAST_INSERT_ID() / generated keys",
+             guidance: "Drop explicit seq.NEXTVAL where the target column is AUTO_INCREMENT; read the new key with the driver's generated-key support or LAST_INSERT_ID() in the same session."}
+          - {id: B, label: "Call the sequence emulation created by the database migration",
+             guidance: "Replace seq.NEXTVAL with the sequence emulation the database migration created (see its conversion log), keeping explicit key assignment."}
+        writes_to: [policy]

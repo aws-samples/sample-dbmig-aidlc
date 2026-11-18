@@ -29,7 +29,7 @@ KIND_OPTIONS: Dict[str, Dict[str, Any]] = {
     "fulltext_redesign": {
         "question": "How should the Oracle Text (CONTEXT/CTXCAT) index be redesigned on the target?",
         "options": [
-            {"id": "native", "label": "Native full-text search: generated tsvector column + GIN index",
+            {"id": "native", "label": "Native full-text search: GIN index on a tsvector (expression index or generated column)",
              "recommended": True},
             {"id": "trigram", "label": "Substring search with pg_trgm GIN index"},
             {"id": "external", "label": "Move search to an external engine (e.g. Amazon OpenSearch Service); "

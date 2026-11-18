@@ -23,6 +23,8 @@ from .project import load_yaml
 ROUND1 = "00-intake/questionnaire.md"
 ROUND2 = "01-assessment/decisions-questionnaire.md"
 ROOT_FILE = "questionnaire.md"
+APP_FILE = "05-application/00-intake/app-questionnaire.md"
+APP_POLICIES = "05-application/00-intake/app-policies.md"
 MARK = "<!-- dbmig questionnaire"
 _ENV_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _LETTERS = "ABCDEFGHIJKLMNOPQRSTUVW"
@@ -47,6 +49,15 @@ def load_sections(pair: Optional[str], root: Optional[Path] = None) -> List[Dict
     if pair:
         secs += list(_yaml(root / "engines" / pair / "questionnaire.yaml").get("sections") or [])
     return secs
+
+
+def load_app_sections(pair: Optional[str], root: Optional[Path] = None) -> List[Dict[str, Any]]:
+    """Application questionnaire: common questions plus the pair's app policies."""
+    root = root or config.find_repo_root()
+    secs = list(_yaml(root / "engines" / "_common" / "app-questionnaire.yaml").get("sections") or [])
+    if pair:
+        secs += list(_yaml(root / "engines" / pair / "app" / "questionnaire.yaml").get("sections") or [])
+    return sorted(secs, key=lambda x: int(re.sub(r"\D", "", str(x.get("id"))) or 0))
 
 
 def _questions(sections) -> List[Tuple[Dict[str, Any], Dict[str, Any]]]:
@@ -261,6 +272,65 @@ def render_round1(sections, answers: Dict[str, str], by: Dict[str, str],
             if cond:
                 lines += [f"<!-- only when {cond} -->"]
             lines += _render_q(q, answers.get(q["id"], ""))
+    return "\n".join(lines).rstrip() + "\n"
+
+
+_APP_INTRO = """\
+# Application modernization questionnaire
+
+Optional. It collects what a code scan cannot know about the application, so the
+assistant asks fewer questions later. Answer each question on its `[Answer]:` line: the
+option letter (for example `A`), or `X) <your own answer>`. Blank answers on questions
+marked *(optional)* take the recommended option. Put your name on each section's
+`[Answered by]:` line.
+
+**Never write a password or connection value in this file**, only names of environment
+variables or configuration keys.
+
+When you are done, tell the assistant ("the application questionnaire is answered"), or
+run `./dbmig questionnaire check --module app`. Nothing is edited because of this file:
+the change plan still has to be approved first.
+"""
+
+
+def render_app(sections, answers: Dict[str, str], by: Dict[str, str], *, pair: Optional[str]) -> str:
+    vals = evaluate(sections, answers)["values"]
+    lines = [f"{MARK} round=app pair={pair or 'unknown'} -->", _APP_INTRO]
+    for s in sections:
+        qs = [q for q in s.get("questions") or [] if _cond(q.get("applies_when"), vals)
+              or answers.get(q["id"])]
+        if not qs:
+            continue
+        lines += ["---", "", f"## Section {s['id']} — {s['title']}", ""]
+        if s.get("note"):
+            lines += [str(s["note"]).strip(), ""]
+        lines += [f"[Answered by]: {by.get(str(s['id']), '')}".rstrip(), ""]
+        for q in qs:
+            lines += _render_q(q, answers.get(q["id"], ""))
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def app_policies_md(app: Dict[str, Any]) -> str:
+    """``05-application/00-intake/app-policies.md``: the answered application policies
+    and intake values, for the application skills' context (highest precedence)."""
+    pol = (app or {}).get("policies") or {}
+    intake = (app or {}).get("intake") or {}
+    lines = ["# Application policies — HIGHEST PRECEDENCE", "",
+             "<!-- written by ./dbmig questionnaire check --module app --apply -->", "",
+             "Recorded in project.yaml (`app:`) from the application questionnaire. Apply them; "
+             "they override the general app-layer rules. Cite the policy key in the conversion "
+             "log where you apply one.", ""]
+    if intake:
+        lines += ["## Intake answers", ""]
+        for k, v in intake.items():
+            lines.append(f"- **{k}**: {', '.join(map(str, v)) if isinstance(v, list) else v}")
+        lines.append("")
+    if pol:
+        lines += ["## Policies", ""]
+        for k, p in pol.items():
+            if isinstance(p, dict) and p.get("guidance"):
+                flag = " (free-text answer; confirm with the user if unclear)" if p.get("needs_review") else ""
+                lines.append(f"- **{k}**: {p['guidance']}{flag}")
     return "\n".join(lines).rstrip() + "\n"
 
 

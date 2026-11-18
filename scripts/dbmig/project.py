@@ -25,8 +25,15 @@ import yaml
 from . import config
 
 FILE = "project.yaml"
-PHASES = ("intake", "inception", "construction", "validation", "operations", "cutover")
+PHASES = ("intake", "inception", "construction", "validation", "operations", "cutover",
+          "app-intake", "app-inception", "app-construction", "app-validation", "app-operations")
 GATED_PHASES = ("inception", "construction", "validation", "operations")
+# Optional application modernization module (05-application/): its own four gates,
+# recorded only once the module has started (05-application/00-intake/app-intake.md).
+APP_GATED_PHASES = ("app-inception", "app-construction", "app-validation", "app-operations")
+ALL_GATED_PHASES = GATED_PHASES + APP_GATED_PHASES
+APP_DIR = "05-application"
+APP_INTAKE = "05-application/00-intake/app-intake.md"
 VIA = ("cli", "chat", "questionnaire")
 
 PHASE_TITLES = {
@@ -36,13 +43,27 @@ PHASE_TITLES = {
     "validation": "Validation & Testing",
     "operations": "Operations & Cutover Planning",
     "cutover": "Cutover",
+    "app-intake": "Application — Intake",
+    "app-inception": "Application — Assessment & Change Plan",
+    "app-construction": "Application — Conversion",
+    "app-validation": "Application — Build & Test",
+    "app-operations": "Application — Cutover Plan",
 }
 GATE_QUESTIONS = {
     "inception": "Approve the assessment & migration plan?",
     "construction": "Approve the converted schema + code?",
     "validation": "Approve the equivalence test results?",
     "operations": "Approve the cutover & rollback plan?",
+    "app-inception": "Approve the application assessment & change plan?",
+    "app-construction": "Approve the converted application?",
+    "app-validation": "Approve the application validation results?",
+    "app-operations": "Approve the application cutover plan?",
 }
+
+
+def gate_group(phase: str) -> tuple:
+    """The ordered gates ``phase`` belongs to (database or application)."""
+    return APP_GATED_PHASES if phase in APP_GATED_PHASES else GATED_PHASES
 
 _HEADER = ("# dbmig project file. Gate records and decisions are written by `./dbmig gate`\n"
            "# and `./dbmig decision`; do not approve by hand-editing. Settings live in\n"
@@ -194,10 +215,36 @@ class Project:
     def strategy_mode(self) -> str:
         return str(self.data.get("strategy") or "full")
 
+    @property
+    def app_active(self) -> bool:
+        """The application module has started: its intake exists or a gate was recorded."""
+        gates = self.data.get("gates") or {}
+        return (self.dir / APP_INTAKE).exists() or any(
+            isinstance(gates.get(p), dict) and gates[p].get("history") for p in APP_GATED_PHASES)
+
+    @property
+    def gated_phases(self) -> tuple:
+        """Database gates, plus the application gates once that module has started."""
+        return ALL_GATED_PHASES if self.app_active else GATED_PHASES
+
     def gate(self, phase: str) -> Dict[str, Any]:
-        if phase not in GATED_PHASES:
-            raise ProjectError(f"not a gated phase: {phase} (one of {', '.join(GATED_PHASES)})")
-        return self.data["gates"][phase]
+        if phase not in ALL_GATED_PHASES:
+            raise ProjectError(f"not a gated phase: {phase} (one of {', '.join(ALL_GATED_PHASES)})")
+        g = self.data["gates"].get(phase)
+        if not isinstance(g, dict):
+            g = self.data["gates"][phase] = _blank_gate()
+        g.setdefault("status", "open")
+        if not isinstance(g.get("history"), list):
+            g["history"] = []
+        return g
+
+    @property
+    def app(self) -> Dict[str, Any]:
+        """Application module answers: ``intake`` and ``policies`` (app questionnaire)."""
+        a = self.data.get("app")
+        if not isinstance(a, dict):
+            a = self.data["app"] = {}
+        return a
 
     @property
     def decisions(self) -> List[Dict[str, Any]]:
@@ -214,7 +261,7 @@ class Project:
         gates = d.setdefault("gates", {})
         if not isinstance(gates, dict):
             gates = d["gates"] = {}
-        for p in GATED_PHASES:
+        for p in GATED_PHASES + (APP_GATED_PHASES if (self.dir / APP_INTAKE).exists() else ()):
             g = gates.setdefault(p, _blank_gate())
             if not isinstance(g, dict):
                 g = gates[p] = _blank_gate()

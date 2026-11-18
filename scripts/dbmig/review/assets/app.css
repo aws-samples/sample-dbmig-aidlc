@@ -43,3 +43,7 @@ article.md{background:var(--card);border:1px solid var(--line);border-radius:6px
 .hide{display:none}details{margin:8px 0}summary{cursor:pointer;color:var(--acc)}
 @media (max-width:900px){.timeline{grid-template-columns:1fr 1fr}.split{grid-template-columns:1fr}}
 .step .why{margin-top:6px;font-size:12px;color:var(--warn)}
+.tl-group{grid-column:1/-1;font-weight:600;color:var(--mut);margin-top:6px}
+h2.group{margin-top:28px;border-bottom:2px solid var(--line)}
+.warnings li{color:var(--warn)}
+details.appfile summary h3{display:inline;font-size:14px}

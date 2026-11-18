@@ -1,0 +1,27 @@
+# Application questionnaire — SQL Server -> MySQL conversion policies
+# (see engines/_common/app-questionnaire.yaml).
+version: 1
+sections:
+  - id: "5"
+    title: Conversion policies — SQL Server to MySQL application code
+    questions:
+      - id: Q5.1
+        key: app_identity_readback
+        optional: true
+        text: Code that reads a new key with SCOPE_IDENTITY() / @@IDENTITY / OUTPUT INSERTED
+        options:
+          - {id: A, recommended: true, label: "The driver's generated-key support (or LAST_INSERT_ID())",
+             guidance: "Replace SCOPE_IDENTITY()/@@IDENTITY/OUTPUT INSERTED with the driver or ORM generated-key support, or SELECT LAST_INSERT_ID() in the same session."}
+          - {id: B, label: "Keep a separate SELECT of the key by a natural key",
+             guidance: "Read the new key back with a SELECT on a unique natural key after the insert; only where no generated-key support exists."}
+        writes_to: [policy]
+      - id: Q5.2
+        key: app_bracket_identifiers
+        optional: true
+        text: Bracketed identifiers in SQL ([Order], [dbo].[Customer])
+        options:
+          - {id: A, recommended: true, label: "Backticks only where the name is a MySQL reserved word; plain names otherwise",
+             guidance: "Replace [name] with the plain target name; use backticks only for MySQL reserved words. Drop the dbo. prefix when the database migration mapped dbo to the target database."}
+          - {id: B, label: "Backticks on every identifier",
+             guidance: "Replace every [name] with `name`, keeping the original quoting intent."}
+        writes_to: [policy]

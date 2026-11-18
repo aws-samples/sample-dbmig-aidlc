@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .. import gates
-from ..project import GATED_PHASES, Project, exists, load, load_yaml, propose
+from ..project import APP_DIR, Project, exists, load, load_yaml, propose
 
 _SOURCE_HEAD = re.compile(r"^--- SOURCE[^\n]*? — (\S+)[^\n]*---\s*$", re.M)
 _DOC_DIRS = ("00-intake", "01-assessment", "02-construction", "03-validation", "04-operations",
@@ -205,13 +205,67 @@ def collect(ws: Path) -> Dict[str, Any]:
             verify[s] = [dict(x, key=k) for k, x in led.items() if isinstance(x, dict)]
 
     fu = (_y(ws / "follow-up.yaml") or {}).get("items") or []
+    app = _app(ws, proj)
 
     return {
         "dir": str(ws), "project": proj.name, "pair": proj.data.get("pair"),
         "entry": proj.entry_path, "schemas": schemas, "has_project_file": exists(ws),
-        "gates": [gates.view(proj, p) for p in GATED_PHASES], "next_gate": gates.next_gate(proj),
+        "gates": [gates.view(proj, p) for p in proj.gated_phases], "next_gate": gates.next_gate(proj),
         "decisions": decisions, "policies": proj.data.get("policies") or {},
         "intake": proj.data.get("intake") or {},
         "objects": objects, "tests": tests, "reconcile": reconcile, "summaries": summaries,
         "docs": docs, "verify": verify, "followups": [i for i in fu if isinstance(i, dict)],
+        "app": app,
+    }
+
+
+def _diff_files(text: str) -> List[Dict[str, Any]]:
+    """Split a unified diff (git diff, diff -ru, or diff -u) into per-file chunks."""
+    lines = (text or "").splitlines()
+    starts_on = "diff " if any(ln.startswith("diff ") for ln in lines) else "--- "
+    files: List[Dict[str, Any]] = []
+    cur: Optional[Dict[str, Any]] = None
+    for ln in lines:
+        if ln.startswith(starts_on):
+            cur = {"path": "", "lines": [], "add": 0, "del": 0}
+            files.append(cur)
+        if cur is None:
+            continue
+        if ln.startswith("+++ "):
+            name = ln[4:].split("\t")[0].strip()
+            cur["path"] = name[2:] if name.startswith("b/") else name
+        elif ln.startswith("+"):
+            cur["add"] += 1
+        elif ln.startswith("-") and not ln.startswith("--- "):
+            cur["del"] += 1
+        cur["lines"].append(ln)
+    for f in files:
+        if not f["path"]:
+            m = re.search(r"\s(\S+)$", f["lines"][0]) if f["lines"] else None
+            f["path"] = m.group(1) if m else "?"
+    return files
+
+
+def _app(ws: Path, proj: Project) -> Dict[str, Any]:
+    from .. import appmod
+    base = ws / APP_DIR
+    if not base.is_dir():
+        return {"present": False}
+    backups = []
+    if (base / "backup").is_dir():
+        for d in sorted((base / "backup").iterdir()):
+            if d.is_dir():
+                n = sum(1 for f in d.rglob("*") if f.is_file() and f.name != "MANIFEST.md")
+                backups.append({"dir": str(d.relative_to(ws)), "files": n,
+                                "manifest": _text(d / "MANIFEST.md", 100_000)})
+    app = proj.data.get("app") or {}
+    diff = _text(base / "02-construction" / "app.diff", 2_000_000) or ""
+    return {
+        "present": True, "active": proj.app_active,
+        "backup": appmod.read_record(ws), "backups": backups,
+        "intake": app.get("intake") or {}, "policies": app.get("policies") or {},
+        "questionnaire": app.get("questionnaire"),
+        "diff_files": _diff_files(diff), "has_diff": bool(diff.strip()),
+        "docs": [str(f.relative_to(ws)) for f in sorted(base.rglob("*.md"))
+                 if "backup" not in f.relative_to(base).parts],
     }

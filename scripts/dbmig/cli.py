@@ -286,7 +286,8 @@ def _add_channel(p: argparse.ArgumentParser) -> None:
 
 
 def _add_gate_parsers(sub) -> None:
-    phases = ["inception", "construction", "validation", "operations"]
+    from .project import ALL_GATED_PHASES, PHASES
+    phases = list(ALL_GATED_PHASES)
 
     g = sub.add_parser("gate", help="phase gate records: status / approve / reject")
     gs = g.add_subparsers(dest="gate_cmd", metavar="<status|approve|reject>")
@@ -320,9 +321,7 @@ def _add_gate_parsers(sub) -> None:
     p.add_argument("--json", action="store_true")
     p = ds.add_parser("raise", help="record an ambiguity that needs the user's choice")
     _add_dir(p)
-    p.add_argument("--phase", required=True,
-                   choices=["intake", "inception", "construction", "validation",
-                            "operations", "cutover"])
+    p.add_argument("--phase", required=True, choices=list(PHASES))
     p.add_argument("--kind", required=True, help="e.g. fulltext_redesign, needs_human")
     p.add_argument("--objects", default="", help="comma-separated SCHEMA.NAME objects")
     p.add_argument("--question", default=None, help="required for non-standard kinds")
@@ -362,6 +361,20 @@ def _add_gate_parsers(sub) -> None:
     p = ps.add_parser("init", help="create project.yaml for a new or existing workspace")
     _add_dir(p)
 
+    p = sub.add_parser("app-backup",
+                       help="application modernization: back up the application before the "
+                            "first edit (git when possible, else a file copy)")
+    _add_dir(p)
+    p.add_argument("--app", default=None, metavar="DIR", help="application directory")
+    p.add_argument("--mode", choices=["auto", "git", "file-copy"], default="auto",
+                   help="auto (default): git when the app is in a clean git repo, else file "
+                        "copy. git falls back to file copy when git cannot be used")
+    p.add_argument("--scope", default="", metavar="PATHS",
+                   help="comma-separated in-scope paths relative to the app (default: all)")
+    p.add_argument("--force", action="store_true",
+                   help="make a new backup even when one is recorded")
+    p.add_argument("--json", action="store_true")
+
     q = sub.add_parser("questionnaire",
                        help="optional markdown intake: new / check (round 1 before the "
                             "inventory, round 2 for the decisions found)")
@@ -375,6 +388,9 @@ def _add_gate_parsers(sub) -> None:
                             "without one, round 1 is ./questionnaire.md)")
         p.add_argument("--dir", default=None, metavar="PATH", help="migration folder")
         p.add_argument("--round", type=int, choices=[1, 2], default=1)
+        p.add_argument("--module", choices=["db", "app"], default="db",
+                       help="db (default): the database migration; app: the optional "
+                            "application modernization module (one round, needs --project)")
         p.add_argument("--file", default=None, metavar="PATH", help="questionnaire file to use")
         if name == "new":
             p.add_argument("--pair", default=None,
@@ -412,6 +428,9 @@ def _dispatch_gates(args):
     if cmd == "review":
         from .commands import review
         return review.run(args)
+    if cmd == "app-backup":
+        from .commands import app_backup
+        return app_backup.run(args)
     return None
 
 

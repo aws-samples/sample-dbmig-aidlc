@@ -1,0 +1,27 @@
+# Application questionnaire — SQL Server -> PostgreSQL conversion policies
+# (see engines/_common/app-questionnaire.yaml).
+version: 1
+sections:
+  - id: "5"
+    title: Conversion policies — SQL Server to PostgreSQL application code
+    questions:
+      - id: Q5.1
+        key: app_case_insensitive
+        optional: true
+        text: SQL Server compares text case-insensitively by default. How should application queries keep that?
+        options:
+          - {id: A, recommended: true, label: "Follow the database migration's collation decision",
+             guidance: "Follow the case-insensitivity decision of the database migration (case_insensitive_collation): if columns use citext or a nondeterministic collation, keep equality and LIKE as written; otherwise use ILIKE / lower() for comparisons that relied on case-insensitivity, and list each site."}
+          - {id: B, label: "Use ILIKE / lower() in the application for every text comparison that needs it",
+             guidance: "Rewrite text comparisons that relied on case-insensitivity to ILIKE or lower(col) = lower(?) in the application, regardless of the column type, and list each site."}
+        writes_to: [policy]
+      - id: Q5.2
+        key: app_identity_readback
+        optional: true
+        text: Code that reads a new key with SCOPE_IDENTITY() / @@IDENTITY / OUTPUT INSERTED
+        options:
+          - {id: A, recommended: true, label: "INSERT ... RETURNING (or the ORM's generated-key support)",
+             guidance: "Replace SCOPE_IDENTITY()/@@IDENTITY/OUTPUT INSERTED with INSERT ... RETURNING <key>, or the framework's generated-key support where it already uses one."}
+          - {id: B, label: "currval/lastval after the insert",
+             guidance: "Replace SCOPE_IDENTITY() with currval(pg_get_serial_sequence('<table>', '<col>')) in the same session; never use lastval()."}
+        writes_to: [policy]

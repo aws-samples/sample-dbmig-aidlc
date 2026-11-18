@@ -17,7 +17,8 @@ statically. **This skill reads and reports only — it never edits.**
 
 Inputs: `00-intake/app-intake.md` (stack, scope), `01-assessment/app-contract.md`
 (what the migration changed), `engines/<pair>/app/app-config.yaml` and `app-sql-rules.md`,
-and — **as the highest-precedence context** — every `*.md` in
+`00-intake/app-policies.md` when the application questionnaire was answered (its policies rank
+with the customer-specific rules), and — **as the highest-precedence context** — every `*.md` in
 `engines/<pair>/app/customer-specific/` (the customer's own app conventions/overrides;
 `_index.md` is the guide). Where customer-specific rules conflict with the generic app
 rules, the customer file wins.

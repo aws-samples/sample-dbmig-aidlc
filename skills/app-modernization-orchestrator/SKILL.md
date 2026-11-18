@@ -89,6 +89,22 @@ Create a task list with the four phases and their gates, plus intake.
 
 ## Phase 0 — Intake (ask only for what is missing)
 
+**Optional application questionnaire.** Some teams prefer to answer up front, often because the
+application owner is not the person running the database migration. Mention it once, in one
+sentence, and continue without waiting: *"If you prefer, I can generate a questionnaire your
+application team fills in (`./dbmig questionnaire new --module app --project <P>`); otherwise
+I'll ask as we go."* When the user wants it, or an answered
+`05-application/00-intake/app-questionnaire.md` already exists:
+1. `./dbmig questionnaire check --module app --project <P>` lists missing / invalid answers and
+   free-text "Other" answers. Clarify "Other" answers with the user.
+2. `./dbmig questionnaire check --module app --project <P> --apply` records the answers in
+   `project.yaml` (`app.intake`, `app.policies`) and writes
+   `05-application/00-intake/app-policies.md`. **Read that file before the change plan and before
+   every edit: its policies take precedence over the general app-layer rules**, and cite the
+   policy key in the conversion log where you apply one.
+3. Ask only the intake items below that the questionnaire did not answer. A questionnaire never
+   approves a gate.
+
 1. **Application directory** — absolute path. Required; never guess.
 2. **Database-migration project folder** — the `migrations/<project>/` workspace of the completed
    migration. If the user does not know it:
@@ -107,13 +123,16 @@ Create a task list with the four phases and their gates, plus intake.
    Record the build and test commands to be used in Validation.
 5. **Scope** — in-scope directories, and confirm exclusions. Build output (`target/`, `bin/`,
    `obj/`, `dist/`, `out/`) and vendored dependencies are **always** excluded.
-6. **Git state** — if the app is a git repo, run `git status`. A dirty tree makes review hard;
-   recommend committing or stashing first. Record the current commit.
-   **If it is NOT a git repo, say so loudly** in the intake summary: *the mirrored backup is the
-   only rollback.* Record `backup_mode: full-tree` — Construction then backs up the **whole
-   in-scope tree once, up front** (see Backup policy), not file-by-file. In a real run,
-   file-by-file backup of a non-git app led to editing files (discovered at boot-time fixing)
-   that had not been pre-backed-up.
+6. **Git state and backup mode** — if the app is a git repo, run `git status`. **When the app is in
+   git, git is the backup by default** (`backup_mode: auto`, or `git` if the customer asks). Git can
+   be used only with a clean in-scope working tree: recommend committing or stashing first. Ask
+   which to use only if the customer has a preference: `auto` (git when possible, else a file
+   copy, recommended), `git`, or `file-copy`. Ask where edits go in git: left **uncommitted** in
+   the working tree (recommended; never commit or push), or on a new local branch
+   `dbmig/<project>`. **If it is NOT a git repo, say so loudly** in the intake summary: *the
+   mirrored file copy is the only rollback.* Record the choice in `app-intake.md`; the backup
+   itself is made by `./dbmig app-backup` at the start of Construction (see Backup policy), which
+   falls back to a file copy whenever git cannot be used, so no file is edited without a backup.
 7. **Source-dialect state** — confirm the application still speaks the SOURCE dialect. If it was
    already converted for a different target (e.g. a PostgreSQL run preceding a MySQL one), do
    **not** convert the converted app: restore an original-state copy from that run's mirrored
@@ -170,11 +189,13 @@ Write `01-assessment/change-plan.md` containing:
 3. **Behavioural changes first and separate** — anything that can alter results silently
    (`ROWNUM`+`ORDER BY`, NULL/empty string, format masks, search ranking, count types).
 4. **Blocked / needs-a-decision** items with options, not a guess.
-5. **Backup location** to be used.
+5. **Backup** to be used: mode (`auto` / `git` / `file-copy`), in-scope paths, and where edits go
+   in git (uncommitted, or branch `dbmig/<project>`).
 6. **Verification plan** — the exact build and test commands.
 7. An explicit statement that **nothing has been edited yet**.
 
-Then **stop: "Approve the application assessment & change plan?"** Approval may be partial —
+Then **stop: "Approve the application assessment & change plan?"** and record the gate (see
+*Gates are recorded* below) as `app-inception`. Approval may be partial —
 record deferred items and skip them. For a large change set keep the *presented* summary readable:
 group mechanical changes by rule with counts and file lists, enumerate behavioural ones
 individually, and leave full detail in the file.
@@ -188,28 +209,37 @@ Only after approval, invoke **`app-modernization-construction`**.
 **Never create `.bak` files beside the originals.** They clutter the source tree, get picked up by
 builds and packaging, and are easy to commit by accident.
 
-Back up into a **mirrored tree**:
+Make the backup with one command, **before the first edit**:
 
+```bash
+./dbmig app-backup --project <P> --app <APP_DIR> [--mode auto|git|file-copy] [--scope src,pom.xml]
 ```
-migrations/<project>/05-application/backup/<YYYYMMDD-HHMMSS>/<path relative to app root>
-```
 
-e.g. `src/main/resources/application.properties` →
-`…/backup/20260817-153000/src/main/resources/application.properties`
+- `auto` (default) uses **git** when the app is in a git repository with a commit and no
+  uncommitted in-scope changes: it records the base commit, and copies only the in-scope files
+  git ignores (local config, for example), because git cannot restore those. Otherwise it makes a
+  **file copy** of the whole in-scope tree into
+  `migrations/<project>/05-application/backup/<YYYYMMDD-HHMMSS>/` (mirrored paths, timestamps and
+  modes kept; build output and dependencies excluded).
+- `git` falls back to a file copy when git cannot be used (not a repo, no commit, uncommitted
+  changes, git not installed), and says why. **Never edit a file without a backup.**
+- The record is `05-application/00-intake/backup.yaml`; `MANIFEST.md` in the backup folder holds
+  the restore commands. Append every edited file to its *Edited files* table as you go.
+- Backups are never written inside the application directory or inside build output.
+- If the user chose a branch: `git -C <APP_DIR> switch -c dbmig/<project>` **after** the backup
+  is recorded. Never commit or push.
 
-- One timestamped directory per run; never overwrite a previous run.
-- Copy a file immediately before its first edit, preserving the relative path and mode (`cp -p`).
-- **git repo**: back up only files actually edited; write `MANIFEST.md` listing each with size
-  and reason.
-- **Not a git repo** (`backup_mode: full-tree`): copy the **whole in-scope source tree once,
-  before the first edit** (excluding build output/dependencies), so any file edited later —
-  including boot-time fixes — is already covered. `MANIFEST.md` then marks which files were
-  actually edited.
-- Never place a backup inside the application directory or inside build output.
+Restore: git mode `git -C <APP_DIR> restore --source <commit> -- <path>`; file-copy mode one
+mirrored copy back (`cp -Rp <backup>/. <APP_DIR>/`). `diff -r` or `git diff <commit>` shows every
+change at once.
 
-Restore is one mirrored copy back, and `diff -r` compares the whole tree at once.
+At the end of Construction write `02-construction/app.diff`, the unified diff of every edit
+(`git -C <APP_DIR> diff <commit>` in git mode; `diff -ruN <backup> <APP_DIR>` limited to the
+scope in file-copy mode).
 
-Gate: **"Approve the converted application?"** — present the diff summary and the conversion log.
+Gate: **"Approve the converted application?"** — present the diff summary and the conversion log;
+record it as `app-construction`. In git mode the gate fingerprint includes the live git diff, so
+an edit after approval marks the gate stale even when `app.diff` was not regenerated.
 
 ## Phase 3 — Validation & Testing
 
@@ -219,7 +249,8 @@ against the migrated target with schema validation on** (required for runnable O
 matrix. Compile and boot errors from the migration (types, error codes, driver APIs, ORM type
 mappings) are expected, and fixing them is part of this module.
 
-Gate: **"Approve the application validation results?"** Be explicit about what is `UNVERIFIED`.
+Gate: **"Approve the application validation results?"** Be explicit about what is `UNVERIFIED`;
+record it as `app-validation`.
 
 ## Phase 4 — Operations & Cutover
 
@@ -230,14 +261,40 @@ artifact + configuration (secrets by reference), ordering against the DB runbook
 post-cutover checks that exercise the *converted* code paths, and the open behavioural risks
 with owners.
 
-Gate: **"Approve the application cutover plan?"**
+Gate: **"Approve the application cutover plan?"**; record it as `app-operations`.
+
+## Gates are recorded
+
+The four application gates live in the migration's `project.yaml`, next to the database gates:
+`app-inception`, `app-construction`, `app-validation`, `app-operations`. They appear once
+`00-intake/app-intake.md` exists. At each gate:
+
+- Run `./dbmig gate status --project <P>` and present the application gate's **blockers**
+  (missing artifacts, an earlier application gate not approved, open decisions) and
+  **warnings** (for example the database Construction gate is not approved yet: the change plan
+  relies on its conversion log).
+- Offer `./dbmig review --project <P> --open`: its **Application** page shows the gates, the
+  backup (mode, base commit or folder), the questionnaire answers and the per-file diff.
+- Wait for the user's explicit approval, then record it:
+  ```bash
+  ./dbmig gate approve app-<phase> --project <P> --approved-by "<user's name>" --via chat \
+      --note "<what the user said / conditions>"
+  ```
+  Never approve on the user's behalf. A rejected gate: `./dbmig gate reject app-<phase> ...
+  --reason "<why>"`, then loop back.
+- A stale gate (its files changed after approval) is re-presented and re-approved before the next
+  one; `gate status` says what changed and how to fix it.
+- Ambiguities become decisions: `./dbmig decision raise --phase app-<phase> --kind <kind>
+  --question ... --option id=label ...`, answered with `./dbmig decision answer`. Open decisions
+  block their gate.
 
 ## Safety
 
 - Application source is user code: **editing it is a gated action**, gated at the Inception gate.
 - Never edit build output. If a stray `.bak`/`.orig` is found there (a common leftover from ad-hoc
   conversions), report it rather than "fixing" it.
-- Never commit on the user's behalf unless asked.
+- Never commit or push on the user's behalf. In git mode the edits stay uncommitted (or on the
+  local `dbmig/<project>` branch the user chose) for the user to review.
 - Datasource files often hold **plaintext credentials**. Never echo secret values; show structure
   with the secret redacted and recommend environment variables or a secrets manager.
 - If the target database is reachable, prefer validating identifiers against the live catalog over

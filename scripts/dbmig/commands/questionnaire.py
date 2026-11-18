@@ -73,6 +73,8 @@ def _existing_pair() -> Optional[str]:
 # ---- new ---------------------------------------------------------------------
 
 def run_new(args) -> int:
+    if getattr(args, "module", "db") == "app":
+        return _new_app(args)
     if args.round == 2:
         return _new_round2(args)
     path = _round1_file(args)
@@ -176,6 +178,8 @@ def _intake_md(ws: Path, ev: Dict[str, Any], pair: Optional[str], src: str) -> N
 
 
 def run_check(args) -> int:
+    if getattr(args, "module", "db") == "app":
+        return _check_app(args)
     if args.round == 2:
         return _check_round2(args)
     path = _round1_file(args)
@@ -317,3 +321,99 @@ def _check_round2(args) -> int:
         proj.data.setdefault("intake", {})["round2"] = "answered"
         proj.save()
     return 0 if not (missing or invalid) else 1
+
+
+# ---- application module (one round) ------------------------------------------------
+
+def _app_ws(args) -> Optional[Path]:
+    ws = _explicit_ws(args)
+    if not ws:
+        console.err("the application questionnaire needs --project (the migration workspace "
+                    "the application conforms to)")
+    return ws
+
+
+def _app_file(args, ws: Path) -> Path:
+    return Path(args.file).expanduser().resolve() if getattr(args, "file", None) else ws / qn.APP_FILE
+
+
+def _new_app(args) -> int:
+    ws = _app_ws(args)
+    if not ws:
+        return 2
+    path = _app_file(args, ws)
+    if path.exists():
+        answers, _ = qn.parse(path.read_text())
+        if any(v.strip() for v in answers.values()) and not args.force:
+            console.err(f"{path} already has answers; run ./dbmig questionnaire check --module app "
+                        "(or --force to start over)")
+            return 1
+    pair = args.pair or (load(ws).data.get("pair") if exists(ws) else None) or _existing_pair()
+    if pair and not (config.find_repo_root() / "engines" / pair / "app").is_dir():
+        console.err(f"engine pair {pair} has no application rules (engines/{pair}/app/)")
+        return 2
+    sections = qn.load_app_sections(pair)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(qn.render_app(sections, {}, {}, pair=pair))
+    n = len(qn.evaluate(sections, {})["applicable"])
+    console.ok(f"wrote {path} ({n} questions, pair {pair or 'unknown'})")
+    console.info(f"Answer it, then run ./dbmig questionnaire check --module app --project {ws.name}")
+    return 0
+
+
+def _check_app(args) -> int:
+    ws = _app_ws(args)
+    if not ws:
+        return 2
+    path = _app_file(args, ws)
+    if not path.exists():
+        console.err(f"no application questionnaire at {path} (create one with "
+                    "./dbmig questionnaire new --module app)")
+        return 2
+    text = path.read_text()
+    m = re.search(r"round=app pair=([\w-]+)", text)
+    pair = m.group(1) if m and m.group(1) != "unknown" else None
+    sections = qn.load_app_sections(pair)
+    answers, by = qn.parse(text)
+    ev = qn.evaluate(sections, answers)
+    report = {"file": str(path), "pair": pair, "questions": len(ev["applicable"]),
+              "missing": ev["missing"], "invalid": [{"id": i, "error": e} for i, e in ev["invalid"]],
+              "other": [{"id": i, "answer": a} for i, a in ev["other"]]}
+    if args.json and not args.apply:
+        print(json.dumps(report, indent=2))
+        return 0 if not (ev["missing"] or ev["invalid"]) else 1
+    console.heading(f"Application questionnaire — {path}")
+    for qid in ev["missing"]:
+        console.warn(f"missing: {qid}")
+    for qid, e in ev["invalid"]:
+        console.err(f"invalid: {qid}: {e}")
+    for qid, a in ev["other"]:
+        console.info(f"other (assistant to confirm with the user): {qid}: {a}")
+    ok = not (ev["missing"] or ev["invalid"])
+    if ok:
+        console.ok(f"{len(ev['applicable'])} question(s) answered")
+    if not args.apply:
+        return 0 if ok else 1
+    if not ok:
+        console.err("not applied: answer the missing/invalid questions first")
+        return 1
+    rel = str(path.relative_to(ws)) if path.is_relative_to(ws) else str(path)
+    out = qn.build_outputs(sections, ev, source=rel, by={k: x for k, x in by.items() if x},
+                           default_by=whoami(), when=now())
+    proj = load(ws, name=ws.name)
+    app = proj.app
+    app.setdefault("intake", {}).update(out["intake"])
+    app.setdefault("policies", {}).update(out["policies"])
+    app["questionnaire"] = {"file": rel, "answered_at": now()}
+    proj.save()
+    f = ws / qn.APP_POLICIES
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(qn.app_policies_md(app))
+    console.ok(f"applied: {proj.file} (app: {len(out['intake'])} intake answer(s), "
+               f"{len(out['policies'])} policies) and {qn.APP_POLICIES}")
+    mode = out["intake"].get("backup_mode")
+    if mode:
+        console.info(f"backup: ./dbmig app-backup --project {ws.name} --app "
+                     f"{out['intake'].get('app_dir', '<app dir>')} --mode {mode} (after the "
+                     "change plan is approved)")
+    return 0

@@ -1,0 +1,130 @@
+# Application modernization questionnaire (optional, one round) — questions common to
+# every engine pair. Pair-specific conversion policies live in
+# engines/<pair>/app/questionnaire.yaml. Same field reference as questionnaire.yaml;
+# answers go to project.yaml under `app:` (intake values and policies), never to
+# migration-config.yaml or connections.yaml.
+version: 1
+sections:
+  - id: "1"
+    title: Application
+    questions:
+      - id: Q1.1
+        key: app_dir
+        type: text
+        text: Application directory (absolute path on the machine that runs the conversion)
+        help: "Example: /home/me/src/billing-service. The assistant never guesses this."
+        writes_to: [intake]
+      - id: Q1.2
+        key: scope
+        type: list
+        optional: true
+        text: In-scope paths inside the application (blank = the whole application)
+        help: "Comma-separated, relative to the application directory. Example: src, pom.xml. Build output and dependencies (target/, bin/, obj/, node_modules/ …) are always excluded."
+        writes_to: [intake]
+      - id: Q1.3
+        key: exclude
+        type: list
+        optional: true
+        text: Other paths to leave untouched (blank = none)
+        help: "Generated code, vendored libraries, other teams' modules."
+        writes_to: [intake]
+      - id: Q1.4
+        key: stack
+        optional: true
+        text: Application stack (blank = detect from the build files)
+        options:
+          - {id: A, value: java, label: "Java (Spring Boot, JPA/Hibernate, MyBatis, JDBC)"}
+          - {id: B, value: dotnet, label: ".NET (EF Core, Dapper, ADO.NET)"}
+          - {id: C, value: python, label: "Python (SQLAlchemy, Django, DB-API drivers)"}
+          - {id: D, value: node, label: "Node.js (Sequelize, TypeORM, Knex, raw driver)"}
+        writes_to: [intake]
+
+  - id: "2"
+    title: Build and test
+    note: >-
+      Validation builds and tests the converted application. Give the commands your team
+      uses, so the assistant does not guess.
+    questions:
+      - id: Q2.1
+        key: build_command
+        type: text
+        optional: true
+        text: Build command (blank = the stack's default, for example mvn -B clean package)
+        writes_to: [intake]
+      - id: Q2.2
+        key: test_command
+        type: text
+        optional: true
+        text: Test command (blank = the stack's default; "none" if there are no tests)
+        writes_to: [intake]
+      - id: Q2.3
+        key: db_settings
+        type: text
+        optional: true
+        text: How the application finds its database (environment variables or config keys)
+        help: "Names only, never values or passwords. Example: DB_HOST, DB_PORT, DB_NAME, DB_USERNAME, DB_PASSWORD (from AWS Secrets Manager)."
+        writes_to: [intake]
+
+  - id: "3"
+    title: Backup and change handling
+    questions:
+      - id: Q3.1
+        key: backup_mode
+        optional: true
+        text: How should the original application be backed up before the first edit?
+        help: "git needs a clean working tree. When git cannot be used, the backup falls back to a file copy, so no file is edited without a backup."
+        options:
+          - {id: A, value: auto, recommended: true,
+             label: "Use git when the application is in a clean git repository, else copy the files"}
+          - {id: B, value: git,
+             label: "Use git (falls back to a file copy when git cannot be used)"}
+          - {id: C, value: file-copy,
+             label: "Always copy the in-scope files into the migration workspace"}
+        writes_to: [intake]
+      - id: Q3.2
+        key: branch_policy
+        optional: true
+        text: Where should the edits go when the application is in git?
+        options:
+          - {id: A, value: uncommitted, recommended: true,
+             label: "Leave them uncommitted in the working tree for your review (the assistant never commits or pushes)"}
+          - {id: B, value: branch,
+             label: "Create a new local branch dbmig/<project> before the first edit (still uncommitted; never pushed)"}
+        writes_to: [intake]
+
+  - id: "4"
+    title: Conversion policies — all engine pairs
+    note: >-
+      These answers set defaults for changes that repeat across many call sites. Leave a
+      question blank to take the recommended option.
+    questions:
+      - id: Q4.1
+        key: app_error_codes
+        optional: true
+        text: Code that checks vendor error codes (ORA-xxxxx, SQL Server error numbers)
+        options:
+          - {id: A, recommended: true, label: "Map each check to the target's error code or SQLSTATE",
+             guidance: "Where application code inspects vendor error codes or messages, map each to the target's equivalent (PostgreSQL SQLSTATE / MySQL error number) and keep the same behaviour. List every mapped site in the conversion log."}
+          - {id: B, label: "Switch to the framework's portable exceptions where it already offers them",
+             guidance: "Where the framework already provides portable exceptions (for example Spring DataAccessException subclasses), catch those instead of vendor codes; otherwise map the code. Do not introduce a new exception layer."}
+        writes_to: [policy]
+      - id: Q4.2
+        key: app_sql_comments
+        optional: true
+        text: Mark changed SQL in the code?
+        options:
+          - {id: A, recommended: true, label: "No inline markers; the conversion log and app.diff record every change",
+             guidance: "Do not add marker comments to converted code; record each change in the conversion log."}
+          - {id: B, label: "Add a short comment at each changed statement",
+             guidance: "Add a one-line comment '// dbmig: <what changed>' (language-appropriate syntax) above each changed SQL statement or mapping."}
+        writes_to: [policy]
+
+  - id: "6"
+    title: Reviewers
+    questions:
+      - id: Q6.1
+        key: app_approvers
+        type: text
+        optional: true
+        text: Who approves the application gates? (blank = whoever runs the module)
+        writes_to: [intake]

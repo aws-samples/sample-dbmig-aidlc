@@ -3,8 +3,9 @@ name: app-modernization-construction
 description: >
   CONSTRUCTION phase of the optional application-modernization module: apply the APPROVED
   application changes from the change plan — embedded SQL, datasource/ORM configuration, entity
-  mappings, stored-routine call sites, error handling and result-set typing — backing up each
-  edited file into a mirrored backup tree (never .bak files in place). Engine-agnostic; reads the
+  mappings, stored-routine call sites, error handling and result-set typing — after backing up the
+  application with ./dbmig app-backup (git when the app is in a clean git repo, otherwise a
+  mirrored file copy; never .bak files in place). Engine-agnostic; reads the
   active pair's rules from engines/<pair>/app/. Invoked by app-modernization-orchestrator ONLY
   after the Inception change-plan gate is approved.
 ---

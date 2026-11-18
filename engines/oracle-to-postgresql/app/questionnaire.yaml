@@ -1,0 +1,37 @@
+# Application questionnaire — Oracle -> PostgreSQL conversion policies
+# (see engines/_common/app-questionnaire.yaml).
+version: 1
+sections:
+  - id: "5"
+    title: Conversion policies — Oracle to PostgreSQL application code
+    questions:
+      - id: Q5.1
+        key: app_case_insensitive
+        optional: true
+        text: Queries that compare text case-insensitively (UPPER(col) = UPPER(?), LIKE on mixed case)
+        options:
+          - {id: A, recommended: true, label: "Keep them as written (UPPER/LOWER work the same on PostgreSQL)",
+             guidance: "Keep UPPER()/LOWER() comparisons as written; do not switch to ILIKE unless the database migration created a matching index for it."}
+          - {id: B, label: "Use ILIKE for LIKE comparisons that were wrapped in UPPER/LOWER",
+             guidance: "Rewrite UPPER(col) LIKE UPPER(?) as col ILIKE ? and note each site; check that an index still supports the query (pg_trgm or a lower() expression index)."}
+        writes_to: [policy]
+      - id: Q5.2
+        key: app_empty_string
+        optional: true
+        text: Code that relies on Oracle treating '' as NULL
+        options:
+          - {id: A, recommended: true, label: "Follow the database migration's empty-string policy",
+             guidance: "Follow the empty-string policy recorded for the database migration (project.yaml policies.empty_string): if it keeps Oracle behaviour, send NULL where the code sends ''; if it uses PostgreSQL behaviour, keep '' and flag checks that relied on '' IS NULL."}
+          - {id: B, label: "Normalise '' to NULL in the application before writing",
+             guidance: "Normalise empty strings to NULL in the application layer before inserts/updates, at the data-access boundary, and list each site."}
+        writes_to: [policy]
+      - id: Q5.3
+        key: app_sequences
+        optional: true
+        text: Explicit sequence calls in SQL (seq.NEXTVAL)
+        options:
+          - {id: A, recommended: true, label: "Rewrite to nextval('seq') with the converted sequence name",
+             guidance: "Rewrite seq.NEXTVAL / CURRVAL to nextval('schema.seq') / currval(...) using the sequence names from the database conversion log."}
+          - {id: B, label: "Let the database generate the key (identity) and read it back with RETURNING",
+             guidance: "Where the target column is an identity column, drop the explicit sequence call and use INSERT ... RETURNING (or the ORM's generated-key support) to read the key."}
+        writes_to: [policy]

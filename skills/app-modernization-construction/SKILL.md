@@ -3,8 +3,9 @@ name: app-modernization-construction
 description: >
   CONSTRUCTION phase of the optional application-modernization module: apply the APPROVED
   application changes from the change plan — embedded SQL, datasource/ORM configuration, entity
-  mappings, stored-routine call sites, error handling and result-set typing — backing up each
-  edited file into a mirrored backup tree (never .bak files in place). Engine-agnostic; reads the
+  mappings, stored-routine call sites, error handling and result-set typing — after backing up the
+  application with ./dbmig app-backup (git when the app is in a clean git repo, otherwise a
+  mirrored file copy; never .bak files in place). Engine-agnostic; reads the
   active pair's rules from engines/<pair>/app/. Invoked by app-modernization-orchestrator ONLY
   after the Inception change-plan gate is approved.
 ---
@@ -17,35 +18,34 @@ Apply exactly what was approved. Nothing more.
 untrue, stop and return to the orchestrator's Inception gate. Approval may have been partial —
 convert only the approved items and record the rest as deferred.
 
-## Backup — before the first edit of each file
+## Backup — before the first edit
 
-Back up into a **mirrored tree**, never as a sibling `.bak`:
+Check the gate, then make the backup with one command:
 
-```
-BK="migrations/<project>/05-application/backup/$(date +%Y%m%d-%H%M%S)"   # once per run
-# immediately before editing <app>/<rel/path>:
-mkdir -p "$BK/$(dirname <rel/path>)"
-cp -p "<app>/<rel/path>" "$BK/<rel/path>"
+```bash
+./dbmig gate status --project <P>        # app-inception must be approved
+./dbmig app-backup --project <P> --app <APP_DIR> [--mode auto|git|file-copy] [--scope <paths>]
 ```
 
-Rules:
-- One timestamped directory for the whole run; never overwrite a previous run.
-- Preserve the path relative to the application root, so `diff -r` works over the whole tree.
-- `-p` to preserve timestamps and mode.
-- **git repo**: back up only files actually edited (git history is the second safety net).
-- **Not a git repo** (`backup_mode: full-tree` in `00-intake/app-intake.md`): the backup is the
-  *only* rollback, so copy the **whole in-scope tree once, before the first edit**, excluding
-  build output and dependencies — then any file touched later (boot-time or validation fixes)
-  is already covered:
-  ```
-  (cd "<app>" && find <in-scope dirs> -type f \
-     ! -path '*/target/*' ! -path '*/build/*' ! -path '*/bin/*' ! -path '*/obj/*' \
-     ! -path '*/node_modules/*' ! -path '*/.git/*' ! -path '*/dist/*' \
-     -exec sh -c 'mkdir -p "$0/$(dirname "$1")" && cp -p "$1" "$0/$1"' "$BK" {} \;)
-  ```
-  `MANIFEST.md` then lists which files were actually edited (and why).
+`app-backup` warns (refuses with `run.enforce_gates: true`) when `app-inception` is not approved.
+Do not work around the warning; get the approval.
+
+- Use the mode and scope recorded at intake (`00-intake/app-intake.md`, or `app.intake` from the
+  application questionnaire). `auto` is the default: **git when the app is in a clean git
+  repository**, a file copy of the whole in-scope tree otherwise.
+- **git mode**: the base commit is recorded; in-scope files git ignores are copied. Leave the
+  edits uncommitted (or on the local `dbmig/<project>` branch the user chose); never commit or
+  push.
+- **file-copy mode**: the whole in-scope tree is copied once, before the first edit, to
+  `05-application/backup/<timestamp>/`, so files touched later (boot-time or validation fixes)
+  are already covered.
+- If git was requested but cannot be used, `app-backup` falls back to a file copy and says why.
+  **Never edit a file without a recorded backup.** If `app-backup` fails, stop and report it.
 - Never write a backup inside the application directory or inside build output.
-- Append every edited file to `$BK/MANIFEST.md` as you go: relative path, bytes, why it changed.
+- Append every edited file to the *Edited files* table in the backup's `MANIFEST.md` as you go:
+  relative path, bytes, why it changed.
+- When done, write `02-construction/app.diff`: `git -C <APP_DIR> diff <commit> -- <scope>` in git
+  mode, `diff -ruN <backup folder> <APP_DIR>` over the scope in file-copy mode.
 
 Rationale: an in-place `.bak` clutters the source tree, can be picked up by builds and packaging,
 and is easy to commit by accident. A mirrored tree keeps originals grouped, greppable and
@@ -103,7 +103,7 @@ Convert in this order so the build fails for one reason at a time:
 
 ## Output — `02-construction/conversion-log.md`
 
-- Per file: relative path, sites changed, backup location.
+- Per file: relative path, sites changed, backup (git base commit or backup folder).
 - Per site: before/after, mechanical vs behavioural, and the contract row it satisfies.
 - Behavioural changes collected in their own section with the risk restated and an owner.
 - Deferred/blocked items and why.

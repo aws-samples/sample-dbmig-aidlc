@@ -30,10 +30,17 @@ def badge(s) -> str:
     return f'<span class="b {_BADGE.get(s.lower(), "muted")}">{r.esc(s or "-")}</span>'
 
 
+def _nav(data: Dict[str, Any]):
+    items = list(NAV)
+    if (data.get("app") or {}).get("present"):
+        items.insert(5, ("application.html", "Application"))
+    return items
+
+
 def page(title: str, body: str, data: Dict[str, Any], *, depth: int = 0, active: str = "") -> str:
     up = "../" * depth
     nav = "".join(f'<a class="{"on" if href == active else ""}" href="{up}{href}">{label}</a>'
-                  for href, label in NAV)
+                  for href, label in _nav(data))
     when = _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -69,9 +76,15 @@ def _filter_bar(target: str, statuses: List[str], extra: str = "") -> str:
 
 # ---- pages ---------------------------------------------------------------------
 
+_GROUP_TITLE = {"database": "Database migration", "application": "Application modernization"}
+
+
 def _overview(d) -> str:
     tl = []
-    for g in d["gates"]:
+    groups = [g.get("group", "database") for g in d["gates"]]
+    for i, g in enumerate(d["gates"]):
+        if len(set(groups)) > 1 and (i == 0 or groups[i - 1] != groups[i]):
+            tl.append(f'<div class="tl-group">{r.esc(_GROUP_TITLE.get(groups[i], groups[i]))}</div>')
         who = f"{r.esc(g.get('by'))} · {r.esc(g.get('at'))} · via {r.esc(g.get('via'))}" if g.get("by") else ""
         extra = ""
         if g["status"] == "stale":
@@ -115,7 +128,12 @@ def _overview(d) -> str:
 
 def _gates(d) -> str:
     parts = ["<h1>Gates</h1>"]
+    prev = None
     for g in d["gates"]:
+        grp = g.get("group", "database")
+        if grp != prev and any(x.get("group") == "application" for x in d["gates"]):
+            parts.append(f"<h2 class='group'>{r.esc(_GROUP_TITLE.get(grp, grp))}</h2>")
+        prev = grp
         parts.append(f'<section class="gate" id="gate-{g["phase"]}"><h2>{r.esc(g["title"])} {badge(g["status"])}</h2>'
                      f'<p class="q">{r.esc(g["question"])}</p>')
         if g.get("by"):
@@ -124,6 +142,9 @@ def _gates(d) -> str:
         if g["blockers"] and g["status"] != "approved":
             parts.append("<h3>Blockers</h3><ul class='blockers'>"
                          + "".join(f"<li>{r.esc(b)}</li>" for b in g["blockers"]) + "</ul>")
+        if g.get("warnings"):
+            parts.append("<ul class='warnings'>" + "".join(
+                f"<li>{r.esc(w)}</li>" for w in g["warnings"]) + "</ul>")
         if g["acknowledgements"] and g["status"] != "approved":
             parts.append("<h3>Needs acknowledgement</h3><ul>" + "".join(
                 f"<li><code>{r.esc(k)}</code>: {n} open item(s)</li>" for k, n in g["acknowledgements"].items())
@@ -339,6 +360,86 @@ def _documents(d) -> str:
     return "<h1>Documents</h1>" + _filter_bar("docs", []) + _table(["Title", "Phase", "File"], rows, fid="docs")
 
 
+def _diff_block(lines: List[str]) -> str:
+    out = []
+    for ln in lines:
+        cls = "add" if ln.startswith("+") and not ln.startswith("+++") else \
+            "del" if ln.startswith("-") and not ln.startswith("---") else \
+            "hunk" if ln.startswith("@@") else ""
+        out.append(f'<span class="{cls or "ctx"}">{r.esc(ln) or " "}</span>')
+    return '<pre class="code diff"><code>' + "".join(out) + "</code></pre>"
+
+
+def _application(d) -> str:
+    a = d["app"]
+    out = ["<h1>Application modernization</h1>"]
+    if not a.get("active"):
+        out.append("<p class='callout'>The application module has files here but has not started "
+                   "its intake yet (no <code>05-application/00-intake/app-intake.md</code>), so "
+                   "its gates are not tracked.</p>")
+    gates_ = [g for g in d["gates"] if g.get("group") == "application"]
+    if gates_:
+        out.append("<h2>Gates</h2>" + _table(
+            ["Gate", "Status", "By", "When", "Blockers"],
+            [[f"<a href='gates.html#gate-{g['phase']}'>{r.esc(g['title'])}</a>", badge(g["status"]),
+              r.esc(g.get("by")), r.esc(g.get("at")),
+              r.esc("; ".join(g["blockers"])) if g["status"] != "approved" else ""] for g in gates_]))
+    b = a.get("backup")
+    out.append("<h2>Backup</h2>")
+    if b:
+        rows = [("Mode", f"<span class='b info'>{r.esc(b.get('mode'))}</span>"),
+                ("Why", r.esc(b.get("reason"))), ("Application", f"<code>{r.esc(b.get('app_dir'))}</code>"),
+                ("Scope", r.esc(", ".join(b.get("scope") or []) or "whole application")),
+                ("Recorded", f"{r.esc(b.get('created_at'))} by {r.esc(b.get('by'))}")]
+        if b.get("mode") == "git":
+            g = b.get("git") or {}
+            rows += [("Base commit", f"<code>{r.esc(g.get('commit'))}</code> on <code>{r.esc(g.get('branch'))}</code>"),
+                     ("Git-ignored files copied", r.esc(g.get("ignored_copied", 0))),
+                     ("Restore", "<code>git -C &lt;app&gt; restore --source &lt;commit&gt; -- &lt;path&gt;</code>")]
+        else:
+            rows += [("Backup folder", f"<code>{r.esc(b.get('backup_dir'))}</code> ({r.esc(b.get('files_copied'))} files)"),
+                     ("Restore", "<code>cp -Rp &lt;backup folder&gt;/. &lt;app&gt;/</code>")]
+            if b.get("git_unavailable"):
+                rows.append(("Git not used", r.esc(b["git_unavailable"])))
+        out.append("<dl class='meta'>" + "".join(f"<dt>{k}</dt><dd>{v}</dd>" for k, v in rows) + "</dl>")
+    elif a.get("backups"):
+        out.append("<p>Backup folder(s) from before <code>./dbmig app-backup</code> recorded backups:</p>")
+    else:
+        out.append("<p class='callout warn'>No backup recorded yet. Run <code>./dbmig app-backup</code> "
+                   "before the first edit.</p>")
+    for bk in a.get("backups") or []:
+        out.append(f"<details><summary><code>{r.esc(bk['dir'])}</code> — {bk['files']} file(s)</summary>"
+                   f"<div class='md'>{r.markdown(bk['manifest'] or '')}</div></details>")
+    if a.get("intake") or a.get("policies"):
+        out.append("<h2>Questionnaire answers</h2>")
+        if a.get("intake"):
+            out.append(_table(["Item", "Answer"], [[f"<code>{r.esc(k)}</code>",
+                                                     r.esc(", ".join(map(str, v)) if isinstance(v, list) else v)]
+                                                    for k, v in a["intake"].items()]))
+        if a.get("policies"):
+            out.append(_table(["Policy", "Choice", "Guidance", "By"],
+                              [[f"<code>{r.esc(k)}</code>", r.esc(p.get("label") or p.get("other") or p.get("choice")),
+                                r.esc(p.get("guidance")), r.esc(p.get("by"))]
+                               for k, p in a["policies"].items() if isinstance(p, dict)]))
+    docs = {x["path"]: x for x in d["docs"]}
+    links = [f"<li><a href='docs/{docs[p]['id']}.html'>{r.esc(docs[p]['title'])}</a> <code>{r.esc(p)}</code></li>"
+             for p in a.get("docs") or [] if p in docs]
+    if links:
+        out.append("<h2>Documents</h2><ul>" + "".join(links) + "</ul>")
+    files = a.get("diff_files") or []
+    out.append(f"<h2>Changes (<code>02-construction/app.diff</code>) — {len(files)} file(s)</h2>")
+    if files:
+        out.append('<div class="bar"><input type="search" placeholder="Filter files…" '
+                   'data-filter-blocks=".appfile"></div>')
+        for f in files:
+            out.append(f"<details class='appfile test'><summary><h3>{r.esc(f['path'])} "
+                       f"<span class='b ok'>+{f['add']}</span> <span class='b bad'>-{f['del']}</span></h3></summary>"
+                       + _diff_block(f["lines"]) + "</details>")
+    else:
+        out.append("<p>No changes recorded yet.</p>")
+    return "".join(out)
+
+
 def _followups(d) -> str:
     rows = [[r.esc(i.get("ts")), r.esc(i.get("phase")), f"<code>{r.esc(i.get('kind'))}</code>",
              r.esc(i.get("object")), r.esc(i.get("detail")), badge(i.get("status")),
@@ -374,6 +475,8 @@ def build(ws: Path, out: Path) -> Dict[str, Any]:
     w("tests.html", "Tests", _tests(d), active="tests.html")
     w("documents.html", "Documents", _documents(d), active="documents.html")
     w("followups.html", "Follow-ups", _followups(d), active="followups.html")
+    if d["app"].get("present"):
+        w("application.html", "Application", _application(d), active="application.html")
     tests_by_id = {t["id"]: t for t in d["tests"]}
     for o in d["objects"]:
         w(f"objects/{o['id']}.html", f"{o['schema']}.{o['name']}", _object(d, o, tests_by_id), depth=1,

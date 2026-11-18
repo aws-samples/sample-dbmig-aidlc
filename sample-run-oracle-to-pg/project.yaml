@@ -146,6 +146,90 @@ gates:
         04-operations/monitoring.md: a4a9fb579914c394acf9f40fc596dc34cee6c05b709ad4abce121e5960467022
         04-operations/rollback-plan.md: e3ad461717a77c7205cb395d6aecc1dd1fa08bbb520105e4d4f2a2534dddb791
     note: runbook/rollback/monitoring with the AI-generated disclaimer
+  app-inception:
+    status: approved
+    history:
+    - status: approved
+      by: framework owner (release test)
+      at: '2026-11-18T09:50:42Z'
+      via: cli
+      note: archived sample run
+    by: framework owner (release test)
+    at: '2026-11-18T09:50:42Z'
+    via: cli
+    acknowledged: []
+    fingerprint:
+      algo: sha256
+      files:
+        05-application/00-intake/app-intake.md: 231898f77dfacc10322e0b9ab47e36fe0335ff152f96d5d23871df02538e9a71
+        05-application/01-assessment/app-contract.md: 566e17d42d10a446e2e52a31bbf901c92277a848275cf7fa3f26f7c8c93d0d25
+        05-application/01-assessment/app-scan.md: 8f87a736f8e16cc6b9b954aac9890284275804f85b1d67bed795f0c5550b64a6
+        05-application/01-assessment/app-scan.yaml: cbf904d71b3a632d1f4786ada69d6067c5ff4bbe9aaf3d3475fad3533e47bce8
+        05-application/01-assessment/change-plan.md: 9a4a7cf2f962d1a9c1296b3d9ca64cd6e97ec6d852ee6ec5d7dc21f11ee6a091
+        05-application/01-assessment/inventory.md: d61f784c55a154d3f47d20efb553ad3847822c88534656bde22f4b0793e74233
+      decisions: {}
+      policies: {}
+      digest: 9fc85adc289d11451bbfe966cf5418f9251e4ddc708692531ae6298cdefd7dc2
+    note: archived sample run
+  app-construction:
+    status: approved
+    history:
+    - status: approved
+      by: framework owner (release test)
+      at: '2026-11-18T09:50:42Z'
+      via: cli
+      note: archived sample run
+    by: framework owner (release test)
+    at: '2026-11-18T09:50:42Z'
+    via: cli
+    acknowledged: []
+    fingerprint:
+      algo: sha256
+      files:
+        05-application/02-construction/app.diff: 290883f6c183f18463062522ad3fd784b65229847cde694b63b76528b581bf4b
+        05-application/02-construction/conversion-log.md: 325fb816ae5bd8c68e1b16dbdb850bf15b0844e6867561102363d4c2f272a3e7
+        05-application/backup/20261030-145403/MANIFEST.md: f59b084ddb9ccab417b6d46b5804bc74b4f24c8bdd16cbad15b3e5f7bbefa75c
+      decisions: {}
+      digest: a5e32ea91d833385dfbb2779f7f9fc1d71767525c6696da742e3b4f8495e5dcb
+    note: archived sample run
+  app-validation:
+    status: approved
+    history:
+    - status: approved
+      by: framework owner (release test)
+      at: '2026-11-18T09:50:43Z'
+      via: cli
+      note: archived sample run
+    by: framework owner (release test)
+    at: '2026-11-18T09:50:43Z'
+    via: cli
+    acknowledged: []
+    fingerprint:
+      algo: sha256
+      files:
+        05-application/03-validation/build-report.md: 6cf18c6e047b7288a24faa1749c5bd5546f7645956980675d35f96ff4686cb04
+      decisions: {}
+      digest: 271a14984d9cdc1e8c30e738185e649750f3a2b17d7362fa8363f40c921b677e
+    note: archived sample run
+  app-operations:
+    status: approved
+    history:
+    - status: approved
+      by: framework owner (release test)
+      at: '2026-11-18T09:50:43Z'
+      via: cli
+      note: archived sample run
+    by: framework owner (release test)
+    at: '2026-11-18T09:50:43Z'
+    via: cli
+    acknowledged: []
+    fingerprint:
+      algo: sha256
+      files:
+        05-application/04-operations/app-cutover.md: 9e9ba8ccf5e2cebb6db74f6e54dc3104998e2a84ee2e377b78f0ed72a9cc0334
+      decisions: {}
+      digest: 3372158f4a2f51dcf20d963c60f6b2d8292cb713951c63439d230125c434843b
+    note: archived sample run
 decisions:
 - id: D-001
   phase: inception

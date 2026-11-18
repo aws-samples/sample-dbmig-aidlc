@@ -9,5 +9,9 @@ Generated from the gate records in `project.yaml`. `by` records who acted; it is
 | 2 | Construction — Conversion | Approve the converted schema + code? | approved | framework owner (release test) | 2026-11-17T15:10:42Z | cli | 20 tables, 25 code objects applied |
 | 3 | Validation & Testing | Approve the equivalence test results? | approved | framework owner (release test) | 2026-11-17T15:10:42Z | cli | reconcile and equivalence tests passed |
 | 4 | Operations & Cutover Planning | Approve the cutover & rollback plan? | approved | framework owner (release test) | 2026-11-17T15:10:42Z | cli | cutover plan approved |
+| 5 | Application — Assessment & Change Plan | Approve the application assessment & change plan? | approved | framework owner (release test) | 2026-11-18T09:50:43Z | cli | archived sample run |
+| 6 | Application — Conversion | Approve the converted application? | approved | framework owner (release test) | 2026-11-18T09:50:44Z | cli | archived sample run |
+| 7 | Application — Build & Test | Approve the application validation results? | approved | framework owner (release test) | 2026-11-18T09:50:44Z | cli | archived sample run |
+| 8 | Application — Cutover Plan | Approve the application cutover plan? | approved | framework owner (release test) | 2026-11-18T09:50:44Z | cli | archived sample run |
 
 Open follow-up items: 0.
