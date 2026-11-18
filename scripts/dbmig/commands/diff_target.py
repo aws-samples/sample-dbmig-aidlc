@@ -171,6 +171,15 @@ def run(args) -> int:
         target.close()
         return rc
     target.close()
+    if miss:
+        from .. import decisions as dec
+        dec.auto_raise(args.project, phase="construction", kind="diff_conflict",
+                       objects=[(str(m["object"]) if "." in str(m["object"])
+                                 else f"{args.schema}.{m['object']}").upper() for m in miss],
+                       raised_by="step:diff-target",
+                       detail=f"{len(miss)} object(s) converted by DMS SC are MISSING on the "
+                              f"live target; the answer applies to all of them "
+                              f"(./dbmig diff-target --resolve <choice>)")
     console.info("Report-only (no changes). Re-run with --resolve apply-ours|keep-live|ask "
                  "(and --apply to execute) to reconcile MISSING objects.")
     return 0

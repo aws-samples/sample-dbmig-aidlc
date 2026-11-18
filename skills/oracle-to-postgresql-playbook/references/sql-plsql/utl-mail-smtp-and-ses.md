@@ -8,6 +8,8 @@
 
 > **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): fixed sample bugs (table name, Python 3 `print`, handler name), EventBridge Scheduler, push pattern with `aws_lambda.invoke` + SES API (no SMTP secret), non-transactional caveat.
 
+> **Content security review** (2026-11-18): the Lambda + SES pattern now sends through the SES API with the Lambda execution role (no SMTP user); SES SMTP is a labelled fallback with long-lived credentials.
+
 ## Oracle
 
 ### UTL_MAIL
@@ -53,12 +55,12 @@ Amazon Aurora PostgreSQL has **no native in-database email**. Options:
 
 ### Lambda + SES pattern
 
-1. Configure Amazon SES: create SMTP credentials (SES → SMTP Settings → Create My SMTP Credentials), note SMTP server name and credentials (not retrievable later). Verify sender (and, in sandbox, recipient) email addresses.
+1. Verify a sending identity in Amazon SES (an email address or a domain); in the SES sandbox, also verify the recipients. The Lambda sends through the **SES API with its execution role**, so no mail credentials are created or stored. The role needs `ses:SendEmail` on the verified identity's ARN (`arn:aws:ses:<region>:<account-id>:identity/sender@example.com`) and `rds-db:connect` for the database user.
 2. Create a table to queue messages:
    ```sql
    CREATE TABLE mails (title varchar(600), body varchar(600), recipients varchar(600));
    ```
-3. Create a Lambda function (e.g., Python) that connects to the DB, reads queued mails, sends via SES SMTP, then clears the table.
+3. Create a Lambda function (e.g., Python) that connects to the DB, reads queued mails, sends them with the SES API, then clears the table.
 
 `main.py` (handler):
 
@@ -76,40 +78,31 @@ def lambda_handler(event, context):
     return result
 ```
 
-`db_util.py` (DB connect + SES SMTP send) — key parts:
+`db_util.py` (DB connect + SES API send) — key parts:
 
 ```python
-# SECURITY: no database credentials are hardcoded or stored anywhere.
+# SECURITY: no credentials are hardcoded or stored anywhere.
 #  - Aurora PostgreSQL: use IAM database authentication — make_conn() below mints a short-lived
 #    auth token at runtime (there is no DB password). The Lambda execution role needs
 #    rds-db:connect on the db-user resource ARN, and the DB role is created WITH LOGIN + rds_iam.
-#  - SES SMTP: SES SMTP requires a username/password, so keep ONLY that secret in Secrets Manager
-#    and read it at send time (least-privilege secretsmanager:GetSecretValue on that secret).
-import os, json, boto3
+#  - Amazon SES: the SES API is called with the Lambda execution role (ses:SendEmail on the
+#    verified identity), so there is no SMTP user or password.
+import os, boto3, psycopg2
 
 DB_HOST = os.environ['DB_HOST']            # cluster endpoint (non-secret config)
 DB_PORT = int(os.environ.get('DB_PORT', '5432'))
 DB_NAME = os.environ['DB_NAME']
 DB_USER = os.environ['DB_USER']            # DB role created WITH LOGIN + rds_iam
 REGION  = os.environ['AWS_REGION']
-SMTP_SECRET_ID = os.environ['SMTP_SECRET_ID']
+SENDER  = os.environ['SENDER']             # an SES-verified sending identity
+ses = boto3.client('sesv2')
 
 def sendEmail(recp, sub, message):
-    smtp = json.loads(boto3.client('secretsmanager')
-                      .get_secret_value(SecretId=SMTP_SECRET_ID)['SecretString'])
-    SENDER = 'sender@example.com'   # an SES-verified sending identity
-    SENDERNAME = 'Lambda'
-    RECIPIENT = recp
-    USERNAME_SMTP = smtp['username']
-    PASSWORD_SMTP = smtp['password']
-    HOST = smtp['host']                  # SES SMTP endpoint, e.g. email-smtp.us-west-2.amazonaws.com
-    PORT = 587
-    # build multipart/alternative message (text + html) ...
-    server = smtplib.SMTP(HOST, PORT)
-    server.ehlo(); server.starttls(); server.ehlo()
-    server.login(USERNAME_SMTP, PASSWORD_SMTP)
-    server.sendmail(SENDER, RECIPIENT, msg.as_string())
-    server.close()
+    ses.send_email(
+        FromEmailAddress=SENDER,
+        Destination={'ToAddresses': [recp]},
+        Content={'Simple': {'Subject': {'Data': sub},
+                            'Body': {'Text': {'Data': message}}}})
 
 def make_conn():
     # IAM database authentication: mint a short-lived auth token (valid ~15 min) instead of a
@@ -136,6 +129,12 @@ def fetch_data(conn, query, params=None):
 
 > Note: the Lambda deletes the contents of the mails table after sending.
 
+**Fallback: SES SMTP.** Use SMTP only when the sending code must be an SMTP client. SES SMTP
+credentials belong to an IAM user and are **long-lived**: create them only for this purpose,
+store them in AWS Secrets Manager (read at send time with `secretsmanager:GetSecretValue` on that
+one secret), never in code or environment variables, and rotate them on a schedule. See
+[Obtaining Amazon SES SMTP credentials](https://docs.aws.amazon.com/ses/latest/dg/smtp-credentials.html).
+
 4. Package `main.py` + `db_util.py` (with a `psycopg2-binary` or `psycopg` Lambda layer) into a ZIP, upload to Lambda, set Handler to `main.lambda_handler`.
 5. Schedule with **Amazon EventBridge Scheduler** (the successor to CloudWatch Events rules), e.g. every minute via a rate/cron expression, or with `pg_cron` calling `aws_lambda.invoke`. Note: you pay per Lambda execution.
 
@@ -158,8 +157,8 @@ Calling Lambda inside a transaction is **not transactional**: if the transaction
 ## Conversion notes
 
 - No in-database email — `UTL_MAIL`/`UTL_SMTP` calls must be removed and replaced with an external send mechanism.
-- Map the procedural send (`utl_mail.send` / `UTL_SMTP.*`) to: enqueue a row in an `emails`/`mails` table, then have a scheduled Lambda send it via SES SMTP.
+- Map the procedural send (`utl_mail.send` / `UTL_SMTP.*`) to: enqueue a row in an `emails`/`mails` table, then have a scheduled Lambda send it with the SES API.
 - For simple operational alerts (not arbitrary email), prefer RDS Event Notification Subscriptions or SNS.
-- Secure credentials: IAM database authentication for the Lambda's DB connection, and the SES API with an IAM role instead of SMTP credentials where possible. If SMTP is required, keep the SMTP secret in Secrets Manager.
+- Secure credentials: IAM database authentication for the Lambda's DB connection, and the SES API with the Lambda's IAM role. Only if SMTP is required: long-lived SMTP credentials in Secrets Manager, rotated.
 - `aws_lambda.invoke` with `'Event'` (async) is the closest replacement for a direct `UTL_MAIL.SEND` call. The queue-table + scheduled Lambda pattern is the transactionally safe replacement.
 - SES sandbox requires verified sender and recipient addresses; request production access to send to arbitrary recipients.

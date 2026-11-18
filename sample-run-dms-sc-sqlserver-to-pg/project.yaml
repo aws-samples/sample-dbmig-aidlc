@@ -1,0 +1,344 @@
+# dbmig project file. Gate records and decisions are written by `./dbmig gate`
+# and `./dbmig decision`; do not approve by hand-editing. Settings live in
+# migration-config.yaml.
+version: 1
+project: sample-run-dms-sc-sqlserver-to-pg
+createdAt: '2026-11-17T15:10:42Z'
+entryPath: dms-sc
+pair: sqlserver-to-postgresql
+schemas:
+- PERSON
+- HUMANRESOURCES
+strategy: full
+gates:
+  inception:
+    status: approved
+    history:
+    - status: approved
+      by: framework owner (release test)
+      at: '2026-11-17T15:10:43Z'
+      via: cli
+      note: DMS SC triage approved
+    by: framework owner (release test)
+    at: '2026-11-17T15:10:43Z'
+    via: cli
+    acknowledged: []
+    fingerprint:
+      algo: sha256
+      digest: 0a2f5ac665c1a39e7654c77dd623bc16291e9796a286747c684d4f57b5f9ea93
+      files:
+        01-assessment/dms-sc-classification-DBO.md: 606ed135022838b9844c8efa20cbbf8b2949dcb104b075dd0393d013be5ffc5d
+        01-assessment/dms-sc-classification-HUMANRESOURCES.md: 18203fec4230cd538288db620159e0161c7c7433e083d2a9bdca7735b3377823
+        01-assessment/dms-sc-classification-PERSON.md: 10c66e4d9c7b00d9a0a7fcf1e2d2a06b7a79f984d6920d57769b5f96c5d8da78
+        01-assessment/dms-sc-map-DBO.json: b96c0e52efad951333cb2c8a393f8fd2e7677d55df93030abcd2dbb199c4774b
+        01-assessment/dms-sc-map-HUMANRESOURCES.json: 9da54206885d4ee04b41b08b72d7c07bc7413b4d2a6da00e2c56cb36fb2656a5
+        01-assessment/dms-sc-map-PERSON.json: 68dca077db7652d342cc9d2417afa476ba56f1a674812056793e19ba85c0ca92
+    note: DMS SC triage approved
+  construction:
+    status: approved
+    history:
+    - status: approved
+      by: framework owner (release test)
+      at: '2026-11-17T15:10:43Z'
+      via: cli
+      note: MANUAL reconversions applied; XQuery views, XML DML trigger, XML schema collections and the
+        indexed-view index left out (documented in README)
+    by: framework owner (release test)
+    at: '2026-11-17T15:10:43Z'
+    via: cli
+    acknowledged: []
+    fingerprint:
+      algo: sha256
+      digest: 9ed71751190bcf2842a1821598065fcf541845437cdb07dadac802abb3527ced
+      files:
+        01-assessment/dms-sc-diff-HUMANRESOURCES.md: 1b8a93232f0cc18709e3fc0b281c4004204260dd5320b1f313a14c5736a8427d
+        01-assessment/dms-sc-diff-PERSON.md: ad370f072298f412746fd890f0b67d3937a91165a83e8328df77819c040fa229
+        02-construction/apply_report_code-DBO.yaml: 1215a2ef64e2d5a9f28a06b7cc457e4d1cbece6419a9e74c2cbe7d7c09607ee6
+        02-construction/apply_report_code-HUMANRESOURCES.yaml: 15046f03766c9988f47ac053991f8c839e1ac6e3c3de991c7ef9bc78a2b82891
+        02-construction/code/adventureworks_dbo/procedure_uspgetbillofmaterials__e5f40f49.sql: f4a8f95456ec0b74428267b6bd38f6de5a602115460064ef76660e8496b6ddc9
+        02-construction/code/adventureworks_dbo/procedure_uspgetemployeemanagers__6511df64.sql: 3cd80d060028880aab78b566a2f1f95deebad681334b306213e5ed13a061c5f0
+        02-construction/code/adventureworks_dbo/procedure_uspgetmanageremployees__e807c0a4.sql: 4fb14c047b0f5e11a0f76aedb66b466f9be2a8f5613307bb0b6cfaa7f0cd6e44
+        02-construction/code/adventureworks_dbo/procedure_uspgetwhereusedproductid__b1500bb1.sql: 970230b5d931bba1efb202f4fa8d376fb259e1e067b99de1283108ea66333e94
+        02-construction/code/adventureworks_dbo/procedure_usplogerror__d3186d8a.sql: 92ede9c5c2d17c340cb9a9cef60ec75cf274cf14939103b8da0d504d637cad74
+        02-construction/code/adventureworks_dbo/procedure_uspprinterror__7afea95c.sql: 04c81eb0c267401a79dc25801d879b866691c081630faee78919066e1a61b63c
+        02-construction/code/adventureworks_dbo/procedure_uspsearchcandidateresumes__57792d2a.sql: d1a920d121301307805ae6d5dab7ded5854295e9e7e310d8d74af473e9ae364d
+        02-construction/code/adventureworks_humanresources/procedure_uspupdateemployeehireinfo__4eb5e8ce.sql: 8ee58304c8f72c4e4c17bff94c3953b545f662a4759f769537b7004b1a3b9c07
+        02-construction/code/adventureworks_humanresources/procedure_uspupdateemployeelogin__4eda8f2a.sql: f4f9235ff0b3b210181db916fc5a34232d8361ace055c27ea27f96a08de4244e
+        02-construction/code/adventureworks_humanresources/procedure_uspupdateemployeepersonalinfo__8fffc337.sql: 5f7858270351d4bea67969be8b7bf0dac2da156bb2c033dce280dcdcf606c6fe
+        02-construction/code/adventureworks_humanresources/table_employee__ac5c3307.sql: 53d1e5b6df44a80537b71119d297c626dd56a51e7bb145a83527b64e74c283d0
+        02-construction/code/adventureworks_humanresources/trigger_demployee__198c336f.sql: 54f6149ae0722e807923046b51d8b99cff5bd06d86af8368fcb91487b7d07e35
+        02-construction/code/adventureworks_humanresources/view_vemployee__8b475577.sql: 2eeac4e61e1910770da68dd804bc4cebcecc4bf3b53982e00877d9ebcbf194ac
+        02-construction/code/adventureworks_humanresources/view_vemployeedepartment__467df716.sql: 8a8482eb46f6be011eb22f0eb08911ec1a30f6ecf322fb3ae5816bbc028de099
+        02-construction/code/adventureworks_humanresources/view_vemployeedepartmenthistory__20404133.sql: 9c5413fe88ea0c42394e1d615de05904b400321613f4114ee1f1649347b8af9a
+        02-construction/code/adventureworks_humanresources/view_vjobcandidate__9b74e74e.sql: 573e15b15f8f3227f6c8e228f75ea54e0708dd2a1bddf37794a038f28a95649c
+        02-construction/code/adventureworks_humanresources/view_vjobcandidateeducation__d4ec23a4.sql: 34509ddea8da3356959b9d892d854884609096ad617d78ea505156fa0186408f
+        02-construction/code/adventureworks_humanresources/view_vjobcandidateemployment__2a6d22c3.sql: 1369416fbae19c0f3235d0755a7d35668130bf4fe777e6b6063a4d7ac9384012
+        02-construction/code/adventureworks_person/trigger_iuperson__ac493fbc.sql: 9355f62aac70a689da3295231e454512f67225c81977a48b41a882786e0d56a1
+        02-construction/code/adventureworks_person/view_vadditionalcontactinfo__6f8cfa5e.sql: 979c7903f936db10173dc58de5d163cec7651ee545b0c7d74006d7fbda4ee31e
+        02-construction/code/adventureworks_person/view_vstateprovincecountryregion__c82b0937.sql: 6b0946f4ea55384d4ebf11a150219c785453eaf408c54dc456723bd2ffaaa4f5
+        02-construction/code-manifest-DBO.yaml: 9354e8240b1f2e3988815f4a2e588c2d106e2824145e4944f7fad0c383724c19
+        02-construction/code-manifest-HUMANRESOURCES.yaml: a0417f2b9b20f1d03c9a70be6898043eb60fb37e11e814edee1c2634cb5c2a5e
+        02-construction/code-manifest-PERSON.yaml: 5a4a877c2321b4138a63eabcdbd2dbd9675c7828339e36bbe5936beb3a0c324a
+        02-construction/conversion-log.md: 0c06b73a147b66cd3d4940f0f354b3ce33cbc55edc307baf028099a5fa985e83
+    note: MANUAL reconversions applied; XQuery views, XML DML trigger, XML schema collections and the
+      indexed-view index left out (documented in README)
+  validation:
+    status: approved
+    history:
+    - status: approved
+      by: framework owner (release test)
+      at: '2026-11-17T15:10:43Z'
+      via: cli
+      note: row counts match; equivalence tests pass; 5 failed VERIFY items are the XML indexes not on
+        the target (acknowledged)
+      acknowledged: &id001
+      - verify_failed (5)
+    by: framework owner (release test)
+    at: '2026-11-17T15:10:43Z'
+    via: cli
+    acknowledged: *id001
+    fingerprint:
+      algo: sha256
+      digest: eaa0607621b737ac95195764e5b0830d5f8f31201ca77127589fb1818ccb22bd
+      files:
+        03-validation/equivalence-report-HUMANRESOURCES.md: 4e2f8620f38bb7420bf132e8c3da2ae22eee7314c21f7a11a6b16807ad7c35c0
+        03-validation/equivalence-report-HUMANRESOURCES.yaml: 8ef1a862ed792dac64091f40ef4427cd1a488aef82989e7595559e34e721f90c
+        03-validation/equivalence-report-PERSON.md: 842670874ad4e816ac8a3c97c37ef260f78e6063f7313d50ed6f65e7dd93167f
+        03-validation/equivalence-report-PERSON.yaml: 12ba33ec34a2c6837de8479a469167f25034ee25a46aefba3ce77a75995053d5
+        03-validation/reconcile_report-HUMANRESOURCES.yaml: 9121119955331ceee6702a511a7e8c4d93770fe893fc63efbcf7de23ae5688c9
+        03-validation/reconcile_report-PERSON.yaml: 2622bdc98896ee0e9a6a25306d499f3363e5e2184faca08cce87bc44089d2ebd
+        03-validation/target-prep/HUMANRESOURCES/capture.json: 1609c5acff6b3ba373b36f91ea70587cb66ad3405449bf0eda2811b4830d36b8
+        03-validation/target-prep/HUMANRESOURCES/drop-preload-HUMANRESOURCES.sql: b5a85fb1deb415c41696a7519f154c326d5746609c49fef23d4853d94200fa67
+        03-validation/target-prep/HUMANRESOURCES/restore-postload-HUMANRESOURCES.sql: b04911c588aafd2748baadefcd590266a2863c9c9541dc2520de5c95cb3d77a7
+        03-validation/target-prep/PERSON/capture.json: 589635e592d9754006825935bd354f6521e3012a7271886b7b561decb77d411e
+        03-validation/target-prep/PERSON/drop-preload-PERSON.sql: 23ab6f3edb16451f268c00047cc9b9131b7e7c84f9eea1938cc6293212b7c7c8
+        03-validation/target-prep/PERSON/restore-postload-PERSON.sql: c86f3b7a80ab8b96c5637a150b621ed2a6eec3651c7325c6f062460121dd114d
+        03-validation/test-manifest-HUMANRESOURCES.yaml: 97c5e08db67e476d4f4809795c5e26d8d1477096ba801b973991b376e0f4de5d
+        03-validation/test-manifest-PERSON.yaml: e944ce377074b9cab09fb1adfa7e701f00a44af82cd025902588b5fcfb4c1b48
+        03-validation/test_prompts/HUMANRESOURCES/batch_0001.prompt.md: b291d0a17e3733c805570eb9633461eaa680b398df89263ba15f043decfd5afc
+        03-validation/test_prompts/HUMANRESOURCES/batch_0004.prompt.md: c5c9ef2b57b4d87140fd2140192753038ebbeb151b978a8906147b5fe004b9c2
+        03-validation/test_prompts/HUMANRESOURCES/procedure__uspupdateemployeepersonalinfo.prompt.md: ed7d42ebe29ce4493e3ffda528520ed4910fe75739b4e01181b15237c265b669
+        03-validation/test_prompts/HUMANRESOURCES/view__vjobcandidate.prompt.md: 5e2be43b26a5e639630146fdfcb715ffb87937d93f07a74a1bbc2ebcef49984a
+        03-validation/test_prompts/HUMANRESOURCES/view__vjobcandidateeducation.prompt.md: fd5d15687d8a073249c230de60f71182d9f302269cc657078f9d1a3dd386c801
+        03-validation/test_prompts/PERSON/batch_0001.prompt.md: ca6510d1d3a1250d29a5767b32787cffeb9afc3ac1600eb301ddc1aa2e9c8503
+        03-validation/tests/HUMANRESOURCES/procedure__uspupdateemployeelogin.test.yaml: 9fb88dd44d4c9721eb25ccf6ab929dd3ff17a484ee23923947521db61a3a71ab
+        03-validation/tests/HUMANRESOURCES/procedure__uspupdateemployeepersonalinfo.test.yaml: f1a7fdd6072e77e13f8a01c629c68131636e802d6e985b75be4a0e09391fd4dd
+        03-validation/tests/HUMANRESOURCES/table__department.test.yaml: c5d81e8a0630e4e088aefd8c12f5da78aed4b3d444b4849ac851a8977068b791
+        03-validation/tests/HUMANRESOURCES/table__employee.test.yaml: b290a5ab728a690de16fb88ee146884281111f2ffaef7d6300088dee5ca9e929
+        03-validation/tests/HUMANRESOURCES/view__vemployee.test.yaml: 13b295b175c8a8a6100eafd911f340d041312d9f3adc1e8759e552cdd826d867
+        03-validation/tests/HUMANRESOURCES/view__vemployeedepartment.test.yaml: 7ea525c688ff13588b43a600014c129ff99b6e8e9d6d8f816e6e97244d9f9a82
+        03-validation/tests/HUMANRESOURCES/view__vemployeedepartmenthistory.test.yaml: 528db1b30e96135b95e624f9c9844d6af5ec59ae4848a5699c0e27129acd475d
+        03-validation/tests/PERSON/table__addresstype.test.yaml: 7c075f04556963ba9bc181a7603f142f96ccc2976735e2c210fc075f3c2a2632
+        03-validation/tests/PERSON/view__vstateprovincecountryregion.test.yaml: 4217e7236687b881f38e44393087fff0ac7876df00fcbfcc6c43bc5415e37444
+        03-validation/validation-summary.md: e3ea97f2124f07228849619479097793b0641414ed0aab949308bc1f8f9758c9
+        data/migrate_report-HUMANRESOURCES.yaml: de2f249420ec10390f3581ecd4629279ad2499cefa8fe37db637d36ce8083623
+        data/migrate_report-PERSON.yaml: be7a057af90eb46e3b233eca165af68482467269dcf7615925d622090add8175
+        01-assessment/dms-sc-verification-DBO.yaml: a164838a01b0445ff1adda5984f10ea25eced89cfc1a0a94f3949773ccf09d30
+        01-assessment/dms-sc-verification-HUMANRESOURCES.yaml: 1b1d52335a21531b39295bfe63ede0bc92637ca739e7897037fdb6083478f3b4
+        01-assessment/dms-sc-verification-PERSON.yaml: ef17c5f7f139c6f9c8dde1c19ac3b3e7d00f4b23ef2bb36a7e53ac4ba6715203
+    note: row counts match; equivalence tests pass; 5 failed VERIFY items are the XML indexes not on the
+      target (acknowledged)
+  operations:
+    status: open
+    history: []
+decisions:
+- id: D-001
+  phase: construction
+  kind: needs_human
+  objects:
+  - PERSON.VADDITIONALCONTACTINFO
+  question: The unit failed to apply after the maximum retries. What next?
+  options:
+  - id: fix
+    label: I fix the converted file by hand; re-apply it
+    recommended: true
+  - id: rule
+    label: Re-convert with my guidance (rationale is passed to the converter)
+  - id: skip
+    label: Leave it out of the migration (documented)
+  raisedBy: step:import-dms-sc
+  raisedAt: '2026-11-17T15:10:43Z'
+  status: decided
+  choice: skip
+  by: framework owner (release test)
+  at: '2026-11-17T15:10:43Z'
+  via: cli
+  rationale: no PostgreSQL equivalent in this run; left out (README)
+- id: D-002
+  phase: construction
+  kind: needs_human
+  objects:
+  - PERSON.IX_VSTATEPROVINCECOUNTRYREGION
+  question: The unit failed to apply after the maximum retries. What next?
+  options:
+  - id: fix
+    label: I fix the converted file by hand; re-apply it
+    recommended: true
+  - id: rule
+    label: Re-convert with my guidance (rationale is passed to the converter)
+  - id: skip
+    label: Leave it out of the migration (documented)
+  raisedBy: step:import-dms-sc
+  raisedAt: '2026-11-17T15:10:43Z'
+  status: decided
+  choice: skip
+  by: framework owner (release test)
+  at: '2026-11-17T15:10:43Z'
+  via: cli
+  rationale: no PostgreSQL equivalent in this run; left out (README)
+- id: D-003
+  phase: construction
+  kind: needs_human
+  objects:
+  - PERSON.IUPERSON_AFTER_UPDATE
+  question: The unit failed to apply after the maximum retries. What next?
+  options:
+  - id: fix
+    label: I fix the converted file by hand; re-apply it
+    recommended: true
+  - id: rule
+    label: Re-convert with my guidance (rationale is passed to the converter)
+  - id: skip
+    label: Leave it out of the migration (documented)
+  raisedBy: step:import-dms-sc
+  raisedAt: '2026-11-17T15:10:43Z'
+  status: decided
+  choice: skip
+  by: framework owner (release test)
+  at: '2026-11-17T15:10:43Z'
+  via: cli
+  rationale: no PostgreSQL equivalent in this run; left out (README)
+- id: D-004
+  phase: construction
+  kind: needs_human
+  objects:
+  - PERSON.INDIVIDUALSURVEYSCHEMACOLLECTION
+  question: The unit failed to apply after the maximum retries. What next?
+  options:
+  - id: fix
+    label: I fix the converted file by hand; re-apply it
+    recommended: true
+  - id: rule
+    label: Re-convert with my guidance (rationale is passed to the converter)
+  - id: skip
+    label: Leave it out of the migration (documented)
+  raisedBy: step:import-dms-sc
+  raisedAt: '2026-11-17T15:10:43Z'
+  status: decided
+  choice: skip
+  by: framework owner (release test)
+  at: '2026-11-17T15:10:43Z'
+  via: cli
+  rationale: no PostgreSQL equivalent in this run; left out (README)
+- id: D-005
+  phase: construction
+  kind: needs_human
+  objects:
+  - PERSON.ADDITIONALCONTACTINFOSCHEMACOLLECTION
+  question: The unit failed to apply after the maximum retries. What next?
+  options:
+  - id: fix
+    label: I fix the converted file by hand; re-apply it
+    recommended: true
+  - id: rule
+    label: Re-convert with my guidance (rationale is passed to the converter)
+  - id: skip
+    label: Leave it out of the migration (documented)
+  raisedBy: step:import-dms-sc
+  raisedAt: '2026-11-17T15:10:43Z'
+  status: decided
+  choice: skip
+  by: framework owner (release test)
+  at: '2026-11-17T15:10:43Z'
+  via: cli
+  rationale: no PostgreSQL equivalent in this run; left out (README)
+- id: D-006
+  phase: construction
+  kind: needs_human
+  objects:
+  - HUMANRESOURCES.VJOBCANDIDATEEMPLOYMENT
+  question: The unit failed to apply after the maximum retries. What next?
+  options:
+  - id: fix
+    label: I fix the converted file by hand; re-apply it
+    recommended: true
+  - id: rule
+    label: Re-convert with my guidance (rationale is passed to the converter)
+  - id: skip
+    label: Leave it out of the migration (documented)
+  raisedBy: step:import-dms-sc
+  raisedAt: '2026-11-17T15:10:43Z'
+  status: decided
+  choice: skip
+  by: framework owner (release test)
+  at: '2026-11-17T15:10:43Z'
+  via: cli
+  rationale: no PostgreSQL equivalent in this run; left out (README)
+- id: D-007
+  phase: construction
+  kind: needs_human
+  objects:
+  - HUMANRESOURCES.VJOBCANDIDATE
+  question: The unit failed to apply after the maximum retries. What next?
+  options:
+  - id: fix
+    label: I fix the converted file by hand; re-apply it
+    recommended: true
+  - id: rule
+    label: Re-convert with my guidance (rationale is passed to the converter)
+  - id: skip
+    label: Leave it out of the migration (documented)
+  raisedBy: step:import-dms-sc
+  raisedAt: '2026-11-17T15:10:43Z'
+  status: decided
+  choice: skip
+  by: framework owner (release test)
+  at: '2026-11-17T15:10:43Z'
+  via: cli
+  rationale: no PostgreSQL equivalent in this run; left out (README)
+- id: D-008
+  phase: construction
+  kind: needs_human
+  objects:
+  - HUMANRESOURCES.HRRESUMESCHEMACOLLECTION
+  question: The unit failed to apply after the maximum retries. What next?
+  options:
+  - id: fix
+    label: I fix the converted file by hand; re-apply it
+    recommended: true
+  - id: rule
+    label: Re-convert with my guidance (rationale is passed to the converter)
+  - id: skip
+    label: Leave it out of the migration (documented)
+  raisedBy: step:import-dms-sc
+  raisedAt: '2026-11-17T15:10:43Z'
+  status: decided
+  choice: skip
+  by: framework owner (release test)
+  at: '2026-11-17T15:10:43Z'
+  via: cli
+  rationale: no PostgreSQL equivalent in this run; left out (README)
+- id: D-009
+  phase: construction
+  kind: needs_human
+  objects:
+  - HUMANRESOURCES.VJOBCANDIDATEEDUCATION
+  question: The unit failed to apply after the maximum retries. What next?
+  options:
+  - id: fix
+    label: I fix the converted file by hand; re-apply it
+    recommended: true
+  - id: rule
+    label: Re-convert with my guidance (rationale is passed to the converter)
+  - id: skip
+    label: Leave it out of the migration (documented)
+  raisedBy: step:import-dms-sc
+  raisedAt: '2026-11-17T15:10:43Z'
+  status: decided
+  choice: skip
+  by: framework owner (release test)
+  at: '2026-11-17T15:10:43Z'
+  via: cli
+  rationale: no PostgreSQL equivalent in this run; left out (README)
+sample: 'Framework validation run: gates were approved by the framework owner for the release test, not
+  by a customer. In a real migration each gate is an explicit human approval.'

@@ -97,6 +97,14 @@ secondary indexes, and triggers. Code objects (procedures, functions, views) com
 `OBJECT_DEFINITION` / `sys.sql_modules`. This reconstructed DDL is the **context Kiro
 converts** — faithful to the source, not necessarily byte-identical to the original script.
 
+
+**Gates, decisions, questionnaire, review site.** Work the same for every pair: each phase
+ends with `./dbmig gate status` / `gate approve <phase>` (recorded in `project.yaml`),
+ambiguities are `./dbmig decision` items, `./dbmig review --open` builds the read-only
+review site, and an optional markdown questionnaire (`./dbmig questionnaire new --pair
+sqlserver-to-postgresql`) collects the intake and the SQL Server → PostgreSQL conversion policies up front.
+See [docs/questionnaire.md](../docs/questionnaire.md) and [docs/gates-and-review.md](../docs/gates-and-review.md).
+
 ## 4. SQL Server-specific things to expect
 
 The conversion (Kiro, using the SQL Server playbook + datatype map) accounts for these; the

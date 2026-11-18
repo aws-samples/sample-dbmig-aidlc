@@ -24,6 +24,12 @@ the already-applied target for the data load (`capture-target-objects` → `pre-
 load → `post-load-restore`), then rejoins the normal Validation → Operations phases. It does
 not convert from scratch.
 
+**Prefers a questionnaire?** Intake is conversational by default. If the user asks to start
+with a questionnaire (or `intake.mode: questionnaire` is set), the orchestrator generates a
+markdown questionnaire (`./dbmig questionnaire new`), waits for the answers, and asks only
+about missing or unclear ones. In conversational mode it mentions this option once and does
+not wait for it; an already-answered questionnaire is always used.
+
 Supported engine pairs: **Oracle → PostgreSQL**, **Oracle → MySQL**,
 **SQL Server → PostgreSQL**, **SQL Server → MySQL**. The active pair is derived from the
 connection engines and defined under `engines/<pair>/` with knowledge in
@@ -34,7 +40,10 @@ connection engines and defined under `engines/<pair>/` with knowledge in
 1. **Phases, not a black box.** Work moves Inception → Construction → Validation → Operations.
    Never skip ahead.
 2. **Human gates.** At the end of every phase, present the artifacts and **stop for explicit
-   approval** before the next phase. Do not auto-advance.
+   approval** before the next phase. Do not auto-advance. Record each approval or rejection
+   with `./dbmig gate approve|reject <phase> --approved-by <name> --via chat` only after the
+   user said so; `./dbmig gate status` shows blockers and staleness, and `./dbmig review`
+   builds a read-only site for reviewing the artifacts.
 3. **Artifacts + traceability.** Every phase writes to `migrations/<project>/`. Each converted
    object traces back to the inventory and forward to its apply/test result.
 4. **Ambiguity detection is a hard GATE — ask, never assume.** For **both** database

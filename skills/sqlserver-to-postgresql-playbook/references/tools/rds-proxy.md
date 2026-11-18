@@ -8,6 +8,8 @@
 
 > **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): PG 18 support check, session-pinning caveat for converted T-SQL, Npgsql pooling note.
 
+> **Content security review** (2026-11-18): the 66% failover figure now cites the RDS Proxy FAQs and the AWS Database Blog measurements.
+
 ## SQL Server
 - Not applicable as a source consideration. RDS Proxy is a **target-side** connection-management layer; it does not proxy SQL Server.
 
@@ -20,7 +22,7 @@
 - **Problem it solves:** Applications (especially serverless) can open/close many connections at a high rate, exhausting DB memory and compute. RDS Proxy pools and shares established connections.
 - **Benefits:**
   - **Improved performance** — connection pooling reduces stress on DB compute/memory; efficiently supports a large number/frequency of connections.
-  - **Increased availability** — reduces fail-over time by up to **66%** by connecting to a new DB instance while preserving application connections.
+  - **Increased availability** — reduces failover times by up to **66%** for Amazon RDS and Aurora Multi-AZ databases, because it bypasses DNS caches and keeps application connections open while it connects to the new instance ([Amazon RDS Proxy FAQs](https://aws.amazon.com/rds/proxy/faqs/); measured client recovery times: [Improving application availability with Amazon RDS Proxy](https://aws.amazon.com/blogs/database/improving-application-availability-with-amazon-rds-proxy/)).
   - **Security** — centrally manage DB credentials via AWS Secrets Manager; integrates with AWS IAM for authentication/access.
   - **Fully managed** — no proxy server to patch/manage; no additional infrastructure to provision.
   - **Fully compatible** — compatible with supported DB engine protocols; deploy with **no application code changes** for most applications.

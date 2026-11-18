@@ -8,6 +8,8 @@
 
 > **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): fixed the Multi-AZ/cross-Region wording, removed the MySQL-only `binlog_format` step, added targeted failover, Global Database and fast clones.
 
+> **Content security review** (2026-11-18): replica lag, failover and Global Database figures now cite the AWS documentation that states them.
+
 ## Oracle
 
 Oracle Active Data Guard (ADG) is a synced database architecture with primary and standby databases. The difference between Data Guard and ADG is that ADG standby databases allow **read access only**.
@@ -64,7 +66,7 @@ Use Aurora replicas to scale read operations and increase availability (analogou
 
 Two replication options when creating Aurora PostgreSQL instances:
 - **Multi-AZ** — Aurora Replicas in other Availability Zones of the same Region. They share the cluster's storage volume and are the failover targets.
-- **Cross-Region** — an **Aurora Global Database** secondary cluster in another Region (storage-level replication, typically under 1 second of lag).
+- **Cross-Region** — an **Aurora Global Database** secondary cluster in another Region (storage-level replication; lag typically under one second, per [Using Amazon Aurora Global Database](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-global-database.html)).
 
 Instance options:
 - **Add reader** — Aurora Replica in the same Region (up to 15 per cluster).
@@ -72,7 +74,7 @@ Instance options:
 
 Differences between the two:
 - A Global Database secondary is a separate reader cluster in a different Region. It gives Region-level DR and keeps data closer to remote users.
-- Cross-Region has more lag between instances (typically under 1 second).
+- Cross-Region has more lag between instances (typically under one second, see above).
 - Additional charges apply for cross-region data transfer.
 
 Behavioral notes:
@@ -106,6 +108,6 @@ Comparison of ADG features vs. Aurora PostgreSQL replicas:
 | Open standby to R/W and continue syncing | `CONVERT DATABASE ... TO SNAPSHOT STANDBY;` then `TO PHYSICAL STANDBY;` | **Not supported.** Closest equivalent: an **Aurora fast clone** (`aws rds restore-db-cluster-to-point-in-time --restore-type copy-on-write --use-latest-restorable-time`). A clone is a read/write copy ready in minutes that shares unchanged pages. Use it for QA, then delete it. It does not keep syncing. |
 | Gapped (delayed) replication | `ALTER DATABASE RECOVER MANAGED STANDBY DATABASE DELAY 5 ...` | **Not supported.** Use point-in-time restore (or a clone at a past time) to recover from human error. |
 
-- Aurora replication latency is in milliseconds; promotion of a replica to primary is typically under 30 seconds with no data loss.
+- Aurora Replica lag is usually much less than 100 milliseconds ([Replication with Amazon Aurora](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Aurora.Replication.html)). A failover to a replica typically completes in less than 35 seconds ([FailoverDBCluster](https://docs.aws.amazon.com/AmazonRDS/latest/APIReference/API_FailoverDBCluster.html)), and committed transactions are not lost because the replicas share the cluster volume. These are typical values from AWS documentation; measure failover and lag on your own workload.
 - Key tradeoff: Aurora simplifies HA/DR management at the cost of Oracle ADG flexibility (no delayed standby, no read/write snapshot standby that resyncs).
 - Applications should connect through the **cluster (writer) endpoint** and **reader endpoint**, not instance endpoints, so failover needs no reconfiguration. To cut failover time further, use RDS Proxy or the AWS Advanced JDBC/Python/Node.js wrappers, which are topology-aware.

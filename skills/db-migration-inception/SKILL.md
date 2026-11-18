@@ -47,6 +47,15 @@ goes into the migration plan's *Open questions / decisions* list — present the
 before Construction. Carry the `app_impact` note into the plan so the application
 counterpart (CONTAINS/SCORE rewrite) is tracked together with the DB redesign.
 
+`inventory` also **records each decision item in `project.yaml`** (`./dbmig decision list
+--open --project <P>`). If a questionnaire policy already answers it, it is recorded as
+decided (`via: questionnaire`); state that in the plan instead of asking again. Record other
+ambiguities you find during assessment with `./dbmig decision raise --phase inception --kind
+<kind> --objects <S.OBJ> --question "..." --option A="..." --option B="..." --recommend A`.
+In questionnaire mode, generate the round-2 file for the open decisions
+(`./dbmig questionnaire new --round 2 --project <P>`) and stop until it is answered; otherwise
+ask them in chat and record each answer with `./dbmig decision answer`.
+
 ### 3. Compatibility assessment
 For each object type and notable construct found, consult the active pair's playbook
 references (`skills/<pair>-playbook/references/...`) and classify each item:
@@ -79,8 +88,11 @@ Write `01-assessment/migration-plan.md` with:
 - Open questions / decisions needed from the user.
 
 ## Gate
-Present `migration-plan.md` and the compatibility summary. **Stop and ask the orchestrator's
-gate question: "Approve the assessment & migration plan?"** Do not start conversion. If the
+Present `migration-plan.md` and the compatibility summary, plus `./dbmig gate status --project
+<P>` (the inception gate is blocked while an inception decision is open, or an inventory /
+the plan is missing). **Stop and ask the orchestrator's gate question: "Approve the assessment
+& migration plan?"** Do not start conversion. After the user's explicit approval, record it
+(`./dbmig gate approve inception --project <P> --approved-by "<name>" --via chat`). If the
 user wants changes (scope, ordering, strategy), revise the plan and re-present.
 
 ## Notes

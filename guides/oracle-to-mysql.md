@@ -89,6 +89,14 @@ dependency order** and identity/`AUTO_INCREMENT` values are reset afterward (OPG
 Data is loaded with batched `INSERT` (MySQL has no COPY); for production-scale movement use
 AWS DMS (`testing.data_load: dms`).
 
+
+**Gates, decisions, questionnaire, review site.** Work the same for every pair: each phase
+ends with `./dbmig gate status` / `gate approve <phase>` (recorded in `project.yaml`),
+ambiguities are `./dbmig decision` items, `./dbmig review --open` builds the read-only
+review site, and an optional markdown questionnaire (`./dbmig questionnaire new --pair
+oracle-to-mysql`) collects the intake and the Oracle → MySQL conversion policies up front.
+See [docs/questionnaire.md](../docs/questionnaire.md) and [docs/gates-and-review.md](../docs/gates-and-review.md).
+
 ## 4. MySQL-specific things to expect
 
 The conversion (done by Kiro using the MySQL playbook + datatype map) accounts for these; the

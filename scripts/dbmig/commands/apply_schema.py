@@ -114,6 +114,11 @@ def run(args) -> int:
         if u.get(status_field) == "needs_human":
             skipped_exhausted += 1
             continue
+        if u.get(status_field) in ("skipped", "empty"):
+            # skipped: left out by an answered needs_human decision;
+            # empty: nothing to apply (e.g. a DMS SC package container whose routines
+            # are separate units)
+            continue
         out_path = ws / u["output_file"]
         if not out_path.exists():
             if not post:
@@ -167,6 +172,11 @@ def run(args) -> int:
     if fk_violations:
         console.warn(f"FK guard: {len(fk_violations)} unit(s) held back (more FKs than "
                      "the source): " + ", ".join(fk_violations))
+        from .. import decisions as dec
+        for name in fk_violations:
+            dec.auto_raise(args.project, phase="construction", kind="fk_guard",
+                           objects=[f"{(args.schema or '').upper()}.{name.upper()}"],
+                           raised_by="step:apply-schema")
     if not_structural:
         console.warn(f"{not_structural} unit(s) not yet structurally applied — run "
                      "apply-schema (pre-data) before --post-data")
@@ -299,6 +309,11 @@ def run(args) -> int:
     manifest["units"] = units
     manifest["max_retries"] = max_retries
     write_manifest(manifest_path, manifest)
+    applied_now = [r["label"] for r in results if r["status"] == "applied"]
+    if applied_now:
+        n = followup.resolve("conversion_failure", applied_now, note="applied on re-run")
+        if n:
+            console.info(f"{n} conversion_failure follow-up item(s) resolved (now applied)")
 
     if post:
         report_path = ws / config.manifest_file("apply_report_postdata", args.schema)
@@ -317,6 +332,12 @@ def run(args) -> int:
     if exhausted:
         console.err(f"needs_human: {len(exhausted)} unit(s) hit max_retries "
                     f"({max_retries}): {', '.join(exhausted[:20])}")
+        from .. import decisions as dec
+        for name in exhausted:
+            dec.auto_raise(args.project, phase="construction", kind="needs_human",
+                           objects=[f"{(args.schema or '').upper()}.{name.upper()}"],
+                           raised_by="step:apply-schema",
+                           detail=str((status_by_name.get(name) or {}).get("error") or "")[:500])
     if retryable:
         console.err(f"failed (retryable): {len(retryable)} unit(s): "
                     f"{', '.join(retryable[:20])}")

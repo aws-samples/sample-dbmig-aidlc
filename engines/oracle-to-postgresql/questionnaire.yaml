@@ -1,0 +1,126 @@
+# Round 1 policy questions for Oracle -> PostgreSQL (see engines/_common/questionnaire.yaml
+# for the field reference). Every question here writes a policy to project.yaml:
+#   - `guidance` of the chosen option is injected into the conversion context
+#     (highest precedence, with the customer-specific rules);
+#   - `resolves: {decision_kind: option_id}` answers that later decision in advance.
+version: 1
+sections:
+  - id: "7"
+    title: Conversion policies — Oracle to PostgreSQL
+    note: >-
+      These answers set conversion defaults so fewer questions come up later. Leave a
+      question blank to take the recommended option. Anything not covered here is still
+      asked when it is found.
+    questions:
+      - id: Q7.1
+        key: empty_string
+        optional: true
+        text: Oracle stores '' as NULL. How should empty strings behave on PostgreSQL?
+        options:
+          - {id: A, recommended: true, label: "Keep Oracle behaviour: treat '' as NULL",
+             guidance: "Keep Oracle semantics for empty strings: where converted code assigns, concatenates or compares strings that can be '', use NULLIF(x, '') / COALESCE so '' behaves as NULL; IS NULL checks must stay true for ''."}
+          - {id: B, label: "Use PostgreSQL behaviour: '' and NULL are different",
+             guidance: "Use native PostgreSQL semantics: '' and NULL are distinct; do not add NULLIF wrappers. Flag code that relied on '' IS NULL in the conversion log."}
+        writes_to: [policy]
+      - id: Q7.2
+        key: number_without_precision
+        optional: true
+        text: Columns declared NUMBER without precision
+        options:
+          - {id: A, recommended: true, label: "numeric (exact, safe)",
+             guidance: "Map NUMBER without precision/scale to numeric."}
+          - {id: B, label: "bigint when the column only holds integers (keys, counters); numeric otherwise",
+             guidance: "Map NUMBER without precision to bigint when it is a key or counter column (PK/FK/identity or name ending _ID/_COUNT/_NO), numeric otherwise. Note each choice in the conversion log."}
+        writes_to: [policy]
+      - id: Q7.3
+        key: oracle_date
+        optional: true
+        text: Oracle DATE (always carries a time part)
+        options:
+          - {id: A, recommended: true, label: "timestamp(0) — keeps the time part",
+             guidance: "Map Oracle DATE to timestamp(0); SYSDATE to LOCALTIMESTAMP(0)."}
+          - {id: B, label: "date — the application never stores a time part",
+             guidance: "Map Oracle DATE to date (the customer confirmed no time part is stored); TRUNC(date) becomes a no-op."}
+        writes_to: [policy]
+      - id: Q7.4
+        key: packages
+        optional: true
+        text: PL/SQL packages
+        options:
+          - {id: A, recommended: true, label: "One PostgreSQL schema per package (pkg.routine keeps its name)",
+             guidance: "Convert each package into its own schema named after the package; package routines keep their names (pkg.routine). Package state variables become a session-scoped settings table or current_setting() keys.",
+             resolves: {naming_conflict: schema_per_package}}
+          - {id: B, label: "Flatten to pkg_routine in the main schema",
+             guidance: "Flatten package routines to <package>_<routine> in the main target schema; package state variables become current_setting() keys."}
+        writes_to: [policy]
+      - id: Q7.5
+        key: autonomous_transactions
+        optional: true
+        text: PRAGMA AUTONOMOUS_TRANSACTION (e.g. error logging)
+        options:
+          - {id: A, recommended: true, label: "dblink to the same database (needs the dblink extension)",
+             guidance: "Emulate PRAGMA AUTONOMOUS_TRANSACTION with dblink_exec to the same database (extension dblink)."}
+          - {id: B, label: "Redesign: let the caller commit; log through a separate connection in the application",
+             guidance: "Do not emulate autonomous transactions; convert the body as normal code and record each original autonomous block in the conversion log for an application-side redesign."}
+        writes_to: [policy]
+      - id: Q7.6
+        key: db_links
+        optional: true
+        text: Database links (table@dblink)
+        options:
+          - {id: A, recommended: true, label: "Foreign tables (oracle_fdw / postgres_fdw)",
+             guidance: "Replace table@dblink references with foreign tables (postgres_fdw for PostgreSQL remotes, oracle_fdw for Oracle remotes) in a dedicated schema."}
+          - {id: B, label: "Out of scope; the application reaches the remote system",
+             guidance: "Do not convert database-link access; record each table@dblink reference in the conversion log as an application change."}
+        writes_to: [policy]
+      - id: Q7.7
+        key: scheduler_jobs
+        optional: true
+        text: DBMS_SCHEDULER / DBMS_JOB jobs
+        options:
+          - {id: A, recommended: true, label: "pg_cron in the target database",
+             guidance: "Convert scheduler jobs to pg_cron schedules calling the converted procedures."}
+          - {id: B, label: "External scheduler (for example Amazon EventBridge Scheduler)",
+             guidance: "Do not convert scheduler jobs into the database; list each job, schedule and called procedure in the conversion log for an external scheduler."}
+        writes_to: [policy]
+      - id: Q7.8
+        key: fulltext
+        optional: true
+        text: Oracle Text (CONTEXT / CTXCAT indexes), if any
+        options:
+          - {id: A, recommended: true, label: "PostgreSQL full-text search (tsvector + GIN)",
+             resolves: {fulltext_redesign: native}}
+          - {id: B, label: "Substring search with pg_trgm", resolves: {fulltext_redesign: trigram}}
+          - {id: C, label: "Move search to an external engine (for example Amazon OpenSearch Service)",
+             resolves: {fulltext_redesign: external}}
+          - {id: D, label: "Not used, or decide when it is found"}
+        writes_to: [policy]
+      - id: Q7.9
+        key: extension_packs
+        optional: true
+        text: Compatibility extensions (aws_oracle_ext, orafce)
+        options:
+          - {id: A, recommended: true, label: "Native PostgreSQL only; no compatibility extension",
+             guidance: "Do not use aws_oracle_ext, orafce or plv8; write native PostgreSQL equivalents."}
+          - {id: B, label: "orafce is allowed where it saves rewriting (Oracle-like functions)",
+             guidance: "orafce may be used for Oracle-compatible built-ins (e.g. add_months, nvl2); never aws_oracle_ext or plv8."}
+        writes_to: [policy]
+      - id: Q7.10
+        key: sequences
+        optional: true
+        text: Sequences filled by BEFORE INSERT triggers
+        options:
+          - {id: A, recommended: true, label: "Identity columns where the sequence serves one table",
+             guidance: "Where a sequence only feeds one table's key through a BEFORE INSERT trigger, use GENERATED BY DEFAULT AS IDENTITY and drop the trigger; keep other sequences."}
+          - {id: B, label: "Keep every sequence and use DEFAULT nextval(...)",
+             guidance: "Keep every Oracle sequence as a PostgreSQL sequence; trigger-filled keys become DEFAULT nextval('seq')."}
+        writes_to: [policy]
+      - id: Q7.11
+        key: char_columns
+        optional: true
+        text: CHAR(n) columns
+        options:
+          - {id: A, recommended: true, label: "Keep char(n)", guidance: "Keep CHAR(n) as char(n)."}
+          - {id: B, label: "varchar(n) — trailing blanks are not meaningful",
+             guidance: "Convert CHAR(n) to varchar(n) and trim trailing blanks in the data load; note comparisons that relied on blank padding."}
+        writes_to: [policy]

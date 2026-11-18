@@ -264,11 +264,191 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--only-existing-output", action="store_true",
                    help="only mark units whose output_file/spec_file already exists")
 
+    _add_gate_parsers(sub)
     return parser
+
+
+def _add_dir(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--project", default=None,
+                   help="run workspace name under migrations/ (see other commands)")
+    p.add_argument("--dir", default=None, metavar="PATH",
+                   help="use this migration folder instead of migrations/<project> "
+                        "(e.g. a sample-run-* folder)")
+
+
+def _add_channel(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--approved-by", dest="approved_by", default=None,
+                   help="who decided (default: git user.name, else $USER). Recorded, "
+                        "not authenticated")
+    p.add_argument("--via", choices=["cli", "chat"], default=None,
+                   help="channel the decision was given on; an AI assistant passes "
+                        "'chat' after the user explicitly approved in the conversation")
+
+
+def _add_gate_parsers(sub) -> None:
+    phases = ["inception", "construction", "validation", "operations"]
+
+    g = sub.add_parser("gate", help="phase gate records: status / approve / reject")
+    gs = g.add_subparsers(dest="gate_cmd", metavar="<status|approve|reject>")
+    gs.required = True
+    p = gs.add_parser("status", help="each gate: status (incl. stale), blockers, "
+                                     "acknowledgements, changes since approval")
+    _add_dir(p)
+    p.add_argument("--json", action="store_true")
+    p = gs.add_parser("approve", help="record a gate approval (user action)")
+    p.add_argument("phase", choices=phases)
+    _add_dir(p)
+    _add_channel(p)
+    p.add_argument("--note", default=None, help="note recorded with the approval")
+    p.add_argument("--ack", action="append", default=None, metavar="KIND",
+                   help="acknowledge open items of this kind (repeatable)")
+    p.add_argument("--ack-all", dest="ack_all", action="store_true",
+                   help="acknowledge every open item kind of the phase")
+    p = gs.add_parser("reject", help="record a gate rejection (user action)")
+    p.add_argument("phase", choices=phases)
+    _add_dir(p)
+    _add_channel(p)
+    p.add_argument("--reason", required=True)
+
+    d = sub.add_parser("decision", help="decision queue: list / raise / answer / withdraw")
+    ds = d.add_subparsers(dest="decision_cmd", metavar="<list|raise|answer|withdraw>")
+    ds.required = True
+    p = ds.add_parser("list", help="list decisions")
+    _add_dir(p)
+    p.add_argument("--open", action="store_true", help="only open decisions")
+    p.add_argument("--phase", default=None)
+    p.add_argument("--json", action="store_true")
+    p = ds.add_parser("raise", help="record an ambiguity that needs the user's choice")
+    _add_dir(p)
+    p.add_argument("--phase", required=True,
+                   choices=["intake", "inception", "construction", "validation",
+                            "operations", "cutover"])
+    p.add_argument("--kind", required=True, help="e.g. fulltext_redesign, needs_human")
+    p.add_argument("--objects", default="", help="comma-separated SCHEMA.NAME objects")
+    p.add_argument("--question", default=None, help="required for non-standard kinds")
+    p.add_argument("--option", action="append", default=None, metavar="ID=LABEL",
+                   help="an option (repeatable; at least two for non-standard kinds)")
+    p.add_argument("--recommend", default=None, metavar="ID")
+    p.add_argument("--detail", default=None, help="context shown with the question")
+    p.add_argument("--raised-by", dest="raised_by", default=None,
+                   help="what raised it, e.g. skill:construction")
+    p = ds.add_parser("answer", help="record the user's choice")
+    p.add_argument("id")
+    p.add_argument("--choice", required=True)
+    p.add_argument("--rationale", default=None)
+    _add_dir(p)
+    _add_channel(p)
+    p = ds.add_parser("withdraw", help="withdraw an open decision that no longer applies")
+    p.add_argument("id")
+    p.add_argument("--reason", required=True)
+    _add_dir(p)
+    _add_channel(p)
+
+    p = sub.add_parser("review", help="build the read-only review site (progress, gates, "
+                                      "decisions, code and test browsers, documents)")
+    _add_dir(p)
+    p.add_argument("--out", default=None, metavar="DIR",
+                   help="output folder (default migrations/<project>/review/; a temp folder "
+                        "for folders outside migrations/)")
+    p.add_argument("--open", action="store_true", help="open it in the browser")
+    p.add_argument("--watch", action="store_true", help="rebuild when artifacts change")
+    p.add_argument("--serve", action="store_true",
+                   help="serve it read-only on 127.0.0.1 with live reload")
+    p.add_argument("--port", type=int, default=0, help="port for --serve (default: any free)")
+
+    pr = sub.add_parser("project", help="project.yaml helpers")
+    ps = pr.add_subparsers(dest="project_cmd", metavar="<init>")
+    ps.required = True
+    p = ps.add_parser("init", help="create project.yaml for a new or existing workspace")
+    _add_dir(p)
+
+    q = sub.add_parser("questionnaire",
+                       help="optional markdown intake: new / check (round 1 before the "
+                            "inventory, round 2 for the decisions found)")
+    qs = q.add_subparsers(dest="q_cmd", metavar="<new|check>")
+    qs.required = True
+    for name, hlp in (("new", "generate the questionnaire file"),
+                      ("check", "validate the answers (and --apply them)")):
+        p = qs.add_parser(name, help=hlp)
+        p.add_argument("--project", dest="qproject", default=None,
+                       help="workspace name (default: 'project:' in migration-config.yaml; "
+                            "without one, round 1 is ./questionnaire.md)")
+        p.add_argument("--dir", default=None, metavar="PATH", help="migration folder")
+        p.add_argument("--round", type=int, choices=[1, 2], default=1)
+        p.add_argument("--file", default=None, metavar="PATH", help="questionnaire file to use")
+        if name == "new":
+            p.add_argument("--pair", default=None,
+                           help="engine pair, e.g. oracle-to-postgresql (default: from "
+                                "connections.yaml when present)")
+            p.add_argument("--force", action="store_true",
+                           help="replace a file that already has answers")
+        else:
+            p.add_argument("--apply", action="store_true",
+                           help="write migration-config.yaml, connections.yaml (no "
+                                "passwords) and project.yaml / answer the decisions")
+            p.add_argument("--overwrite", action="store_true",
+                           help="replace existing values in migration-config.yaml / "
+                                "connections.yaml")
+            p.add_argument("--json", action="store_true")
+
+
+def _dispatch_gates(args):
+    cmd = args.command
+    if cmd == "gate":
+        from .commands import gate
+        return {"status": gate.run_status, "approve": gate.run_approve,
+                "reject": gate.run_reject}[args.gate_cmd](args)
+    if cmd == "decision":
+        from .commands import decision
+        return {"list": decision.run_list, "raise": decision.run_raise,
+                "answer": decision.run_answer,
+                "withdraw": decision.run_withdraw}[args.decision_cmd](args)
+    if cmd == "project":
+        from .commands import gate
+        return gate.run_project_init(args)
+    if cmd == "questionnaire":
+        from .commands import questionnaire
+        return {"new": questionnaire.run_new, "check": questionnaire.run_check}[args.q_cmd](args)
+    if cmd == "review":
+        from .commands import review
+        return review.run(args)
+    return None
+
+
+def _gate_precheck(args) -> int:
+    """Warn (default) or refuse (run.enforce_gates: true) when a command runs before
+    its prerequisite gate is approved."""
+    from . import gates
+    if args.command not in gates.REQUIRES:
+        return 0
+    try:
+        mig = config.load_migration_config()
+    except config.ConfigError:
+        mig = {}
+    enforce = bool((mig.get("run") or {}).get("enforce_gates", False))
+    try:
+        msg = gates.precheck(args.command, config.workspace_dir(args.project),
+                             enforce=enforce, apply=bool(getattr(args, "apply", False)))
+    except Exception as exc:  # noqa: BLE001 - never break a command on a gate read error
+        console.warn(f"could not read gate records: {exc}")
+        return 0
+    if not msg:
+        return 0
+    if enforce:
+        console.err(f"refused: {msg} (run.enforce_gates is true). See ./dbmig gate status")
+        return 2
+    console.warn(f"{msg} — see ./dbmig gate status")
+    return 0
 
 
 def _dispatch(args) -> int:
     cmd = args.command
+    rc = _dispatch_gates(args)
+    if rc is not None:
+        return rc
+    rc = _gate_precheck(args)
+    if rc:
+        return rc
     if cmd == "test-connection":
         from .commands import test_connection
         return test_connection.run(args)

@@ -104,6 +104,45 @@ before advancing. Per phase, the split between deterministic work and Kiro intel
 | Validation | `migrate-data` (or DMS), `compare`, `gen-tests` (sample real data), `run-tests` (execute + diff) | **generate equivalence test specs from real data** |
 | Operations | — | cutover runbook, rollback plan, monitoring checklist |
 
+### 3.1 Gate records, decisions and the questionnaire
+
+Gates and decisions are **recorded**, not only conversational. `migrations/<project>/project.yaml`
+(written by `scripts/dbmig/project.py`) holds the entry path, pair and schemas in scope, the four
+gate records with their history, the decision queue and the questionnaire policies; all settings
+stay in `migration-config.yaml`.
+
+- `gates.py` derives **blockers** from the artifacts and the item kinds that need an explicit
+  **acknowledgement** (open follow-ups, failed test cases, row-count mismatches, failed DMS SC
+  VERIFY items). An approval stores a sha256 **fingerprint** of the phase's artifacts and
+  decisions (inception also includes the questionnaire policies); a later change makes the gate
+  **stale** (computed, never stored). A gate cannot be approved while an earlier one is stale or
+  open. Volatile fields (`generated_at`, manifest `post_status`, the `identity-reset-*` reports
+  rewritten at cutover) are excluded so they do not stale a gate.
+- `decisions.py` keeps the queue (de-duplicated on kind + objects) with standard, target-aware
+  options per kind. Commands raise decisions automatically; `needs_human` answers move the unit
+  in its manifest (`fix` / `rule` / `skip`). A questionnaire policy whose option maps a decision
+  kind to an option answers that decision as soon as it is raised (`via: questionnaire`).
+- `questionnaire.py` generates and parses the markdown questionnaires from
+  `engines/_common/questionnaire.yaml` and `engines/<pair>/questionnaire.yaml`. It never
+  interprets free text: "Other" answers are returned for the assistant to clarify.
+- Approval needs a terminal confirmation (type the phase name) or, from an assistant's shell,
+  explicit `--approved-by <name> --via chat` after the user approved. `by` is recorded, not
+  authenticated.
+- Commands warn when their prerequisite gate is not approved; `run.enforce_gates: true` makes
+  them refuse.
+- The policies and answered decisions are injected at the top of the shared conversion and test
+  context, with customer-specific precedence.
+
+### 3.2 The review site
+
+`./dbmig review` (`scripts/dbmig/review/`) reads a migration folder into one data model
+(`collect.py`) and writes static HTML (`build.py`): overview, gates, decisions and the VERIFY
+ledger, a code browser, a test browser, rendered documents and follow-ups. Markdown and SQL are
+rendered in Python with every artifact value escaped; pages carry a strict Content-Security-Policy
+and load only the local `assets/` (a small JavaScript file for filters and live reload).
+`--serve` binds 127.0.0.1 only, checks the Host header and answers GET/HEAD only. The site is
+read-only: approvals and decisions go through the CLI or chat.
+
 ---
 
 ## 4. The conversion hand-off (how Kiro is "called")
@@ -322,3 +361,7 @@ target.
   database.
 - Production cutover and data movement are high-risk: confirmed step by step, with backups
   verified before the point of no return.
+- The review site is local and read-only (no write endpoints; `--serve` is loopback-only with a
+  Host-header check), but a copied or zipped site contains customer DDL, code and sample data.
+- Questionnaires collect environment-variable or Secrets Manager **names**, never passwords; the
+  apply step writes `${VAR}` references only and masks password fields in its diff output.

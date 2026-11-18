@@ -181,7 +181,14 @@ In Kiro, say:
 The **`db-migration-orchestrator`** skill takes over: it runs the intake interview, tests
 connectivity, and walks you through the four phases, stopping at a **human approval gate**
 after each. Kiro runs the `dbmig` commands for you and performs the conversion step itself.
-Approve each phase to advance.
+Approve each phase to advance; Kiro records each approval in `project.yaml`
+(`./dbmig gate approve … --via chat`) and can open the review site (`./dbmig review --open`).
+
+Prefer to answer everything up front? Say *"start an Oracle to PostgreSQL migration with a
+questionnaire"*: Kiro writes `migrations/<project>/00-intake/questionnaire.md` (connections,
+scope, and Oracle → PostgreSQL conversion policies such as `''`/NULL handling, NUMBER mapping,
+packages, Oracle Text), waits until you have filled it in, and asks only about missing or
+"Other" answers. See [docs/questionnaire.md](../docs/questionnaire.md).
 
 ### Option B — Drive the CLI yourself
 
@@ -190,6 +197,8 @@ The full pipeline, phase by phase:
 ```bash
 # Phase 1 — Inception: assess the source
 ./dbmig inventory       --schema APP --project myproject
+./dbmig gate status     --project myproject                  # blockers before each approval
+./dbmig gate approve    inception --project myproject        # confirm on the terminal
 
 # Phase 2 — Construction: extract object-units + build prompt bundles
 ./dbmig convert-schema  --schema APP --project myproject
@@ -200,14 +209,23 @@ The full pipeline, phase by phase:
 ./dbmig convert-code    --schema APP --project myproject
 #   ↳ Kiro converts the code prompts
 ./dbmig apply-schema    --schema APP --project myproject --code
+./dbmig gate approve    construction --project myproject
 
 # Phase 3 — Validation: load test data, apply deferred FKs + triggers, then reconcile
 ./dbmig migrate-data    --schema APP --workers 8 --project myproject
 ./dbmig apply-schema    --schema APP --project myproject --post-data
 ./dbmig compare         --schema APP --project myproject
+#   ... gen-tests / run-tests (section 7), then
+./dbmig gate approve    validation --project myproject [--ack <kind>]
 
 # Phase 4 — Operations: cutover/rollback/monitoring (plan via the operations skill)
+./dbmig gate approve    operations --project myproject
+./dbmig review          --project myproject --open           # read-only review site
 ```
+
+Each gate is recorded in `migrations/myproject/project.yaml`; `gate status` lists what still
+blocks it (and goes **stale** when approved artifacts change). Open decisions (`./dbmig
+decision list --open`) block their gate until answered with `./dbmig decision answer`.
 
 #### 5.1 The conversion hand-off (how Kiro converts)
 
@@ -427,6 +445,11 @@ migrations/myproject/
 | `compare` | Reconcile source vs target row counts | `--schema`, `--project`, `--tables`, `--mode` |
 | `reset-identity` | Sync identity/serial/AUTO_INCREMENT counters to `MAX(key)` from the live catalog and verify; writes the cutover-runbook step (`04-operations/identity-reset-<S>.md`). Dry-run unless `--apply` | `--schema`, `--project`, `--target-schema`, `--tables`, `--apply` |
 | `mark` | Set manifest unit statuses (helper for the Kiro conversion loop) | `--schema`, `--project`, `--status`, `--code`/`--tests`, `--tables`, `--only-existing-output` |
+| `gate status\|approve\|reject` | Gate records in `project.yaml`: blockers, acknowledgements, staleness; record an approval/rejection | `--project`/`--dir`, `--ack KIND`, `--ack-all`, `--note`, `--reason`, `--approved-by`, `--via chat` |
+| `decision list\|raise\|answer\|withdraw` | Decision queue (ambiguities that need the user's choice) | `--project`, `--open`, `--kind`, `--objects`, `--choice`, `--rationale` |
+| `questionnaire new\|check` | Optional markdown intake: round 1 (intake + policies), round 2 (open decisions) | `--project`, `--pair`, `--round 1\|2`, `--apply`, `--overwrite` |
+| `review` | Read-only review site (gates, decisions, code and test browsers, documents) | `--project`/`--dir`, `--out`, `--open`, `--watch`, `--serve`, `--port` |
+| `project init` | Create `project.yaml` for a new or existing workspace | `--project`/`--dir` |
 
 Global flags (before the command): `--conn <path>` (connections file) and `--config <path>`
 (migration config) — they override `CONN_FILE` / `MIGRATION_CONFIG`.

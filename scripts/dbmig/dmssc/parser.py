@@ -1,6 +1,6 @@
 """Read a local DMS SC project directory into an :class:`ImportResult`.
 
-Three passes, mirroring the reference ``S3LoaderService``:
+Three passes:
 
 1. **Source pass** — every node file under an ``s-<id>/`` directory; skip container
    meta-types; key an object map on the node ``id`` (uppercased) so overloaded routines

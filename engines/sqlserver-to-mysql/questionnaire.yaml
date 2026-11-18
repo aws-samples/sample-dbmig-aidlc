@@ -1,0 +1,73 @@
+# Round 1 policy questions for SQL Server -> MySQL (field reference: engines/_common/questionnaire.yaml).
+version: 1
+sections:
+  - id: "7"
+    title: Conversion policies — SQL Server to MySQL
+    note: >-
+      These answers set conversion defaults so fewer questions come up later. Leave a
+      question blank to take the recommended option. Anything not covered here is still
+      asked when it is found.
+    questions:
+      - id: Q7.1
+        key: case_insensitive
+        optional: true
+        text: "SQL Server compares strings case-insensitively by default (_CI_ collations). On MySQL:"
+        options:
+          - {id: A, recommended: true, label: "Case-insensitive utf8mb4_0900_ai_ci (keeps the source behaviour)",
+             guidance: "Use utf8mb4 with collation utf8mb4_0900_ai_ci for _CI_ columns (the MySQL 8.0 default).",
+             resolves: {case_insensitive_collation: ci}}
+          - {id: B, label: "Case-sensitive utf8mb4_0900_as_cs; the application adapts",
+             guidance: "Use utf8mb4_0900_as_cs; record comparisons that relied on case-insensitivity in the conversion log.",
+             resolves: {case_insensitive_collation: cs}}
+        writes_to: [policy]
+      - id: Q7.2
+        key: datetime
+        optional: true
+        text: datetime / datetime2 columns
+        options:
+          - {id: A, recommended: true, label: "DATETIME(3) (datetime has ~3 ms precision)",
+             guidance: "Map datetime to DATETIME(3), datetime2(n) to DATETIME(min(n,6)), smalldatetime to DATETIME, datetimeoffset to DATETIME(6) in UTC plus an offset column only if the application needs the offset."}
+          - {id: B, label: "DATETIME(6)", guidance: "Map datetime and datetime2 to DATETIME(6)."}
+        writes_to: [policy]
+      - id: Q7.3
+        key: money
+        optional: true
+        text: money / smallmoney columns
+        options:
+          - {id: A, recommended: true, label: "DECIMAL(19,4)", guidance: "Map money to DECIMAL(19,4) and smallmoney to DECIMAL(10,4)."}
+        writes_to: [policy]
+      - id: Q7.4
+        key: uniqueidentifier
+        optional: true
+        text: uniqueidentifier columns
+        options:
+          - {id: A, recommended: true, label: "CHAR(36) (readable; simple)", guidance: "Map uniqueidentifier to CHAR(36); NEWID() to UUID()."}
+          - {id: B, label: "BINARY(16) with UUID_TO_BIN / BIN_TO_UUID (compact; the load must convert the values — AWS DMS transformation or a custom load, not the dbmig dev loader)",
+             guidance: "Map uniqueidentifier to BINARY(16); convert with UUID_TO_BIN()/BIN_TO_UUID(); NEWID() to UUID_TO_BIN(UUID())."}
+        writes_to: [policy]
+      - id: Q7.5
+        key: result_sets
+        optional: true
+        text: Procedures that return result sets
+        options:
+          - {id: A, recommended: true, label: "Keep them as procedures (MySQL procedures can return result sets)",
+             guidance: "Keep result-set procedures as MySQL procedures ending in SELECT; callers read the result sets in order."}
+        writes_to: [policy]
+      - id: Q7.6
+        key: cross_database
+        optional: true
+        text: Cross-database references (OtherDb.dbo.Table)
+        options:
+          - {id: A, recommended: true, label: "Separate MySQL databases on the same cluster (otherdb.table)",
+             guidance: "Treat OtherDb.dbo.X as database otherdb on the same MySQL cluster (otherdb.x)."}
+        writes_to: [policy]
+      - id: Q7.7
+        key: agent_jobs
+        optional: true
+        text: SQL Server Agent jobs
+        options:
+          - {id: A, recommended: true, label: "MySQL Event Scheduler (event_scheduler=ON in the parameter group)",
+             guidance: "Convert SQL Agent jobs to MySQL EVENTs calling the converted procedures; the parameter group needs event_scheduler=ON."}
+          - {id: B, label: "External scheduler (for example Amazon EventBridge Scheduler)",
+             guidance: "Do not convert SQL Agent jobs into the database; list each job and its steps in the conversion log for an external scheduler."}
+        writes_to: [policy]

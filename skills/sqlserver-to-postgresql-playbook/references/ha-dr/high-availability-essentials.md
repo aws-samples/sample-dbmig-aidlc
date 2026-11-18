@@ -8,6 +8,8 @@
 
 > **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): PostgreSQL port 5432 (playbook showed 3306), 128/256 TiB volume and 32 TiB table limit, Global Database, targeted failover, synchronous-quorum durability, custom endpoints.
 
+> **Content security review** (2026-11-18): the Global Database lag figure now cites the AWS documentation.
+
 ## SQL Server
 
 SQL Server offers several HA/DR solutions: Always On Failover Cluster Instances (FCI), Always On Availability Groups, Database Mirroring, and Log Shipping. SQL Server 2017 added read-scale availability groups without a cluster, the Minimum Replica Commit setting, and cross-OS (Windows–Linux) support. SQL Server 2019 added database snapshots of memory-optimized filegroups and secondary-to-primary read/write connection redirection for Always On AGs.
@@ -119,7 +121,7 @@ Aurora recovers from crashes near-instantly, performing recovery asynchronously 
 ### Example — add a reader / a secondary Region (AWS Console)
 1. AWS Console → **RDS** → select the cluster.
 2. Same Region: **Actions** → **Add reader** (Aurora Replica, failover target).
-3. Another Region: **Actions** → **Add AWS Region** (creates an **Aurora Global Database** secondary cluster; typical lag under 1 second; `switchover-global-cluster` / `failover-global-cluster` for DR).
+3. Another Region: **Actions** → **Add AWS Region** (creates an **Aurora Global Database** secondary cluster; lag typically under one second, per [Using Amazon Aurora Global Database](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-global-database.html); `switchover-global-cluster` / `failover-global-cluster` for DR).
 
 After creation, run reads/writes on the primary and read-only operations on the replica.
 

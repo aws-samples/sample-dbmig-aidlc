@@ -88,6 +88,14 @@ movement use AWS DMS (`testing.data_load: dms`).
 The SQL Server source DDL is reconstructed from the system catalogs by the `SQLServerEngine`
 adapter (see the [SQL Server → PostgreSQL guide](sqlserver-to-postgresql.md) §3 for details).
 
+
+**Gates, decisions, questionnaire, review site.** Work the same for every pair: each phase
+ends with `./dbmig gate status` / `gate approve <phase>` (recorded in `project.yaml`),
+ambiguities are `./dbmig decision` items, `./dbmig review --open` builds the read-only
+review site, and an optional markdown questionnaire (`./dbmig questionnaire new --pair
+sqlserver-to-mysql`) collects the intake and the SQL Server → MySQL conversion policies up front.
+See [docs/questionnaire.md](../docs/questionnaire.md) and [docs/gates-and-review.md](../docs/gates-and-review.md).
+
 ## 4. SQL Server → MySQL specifics to expect
 
 The conversion (Kiro, using the SQL Server→MySQL playbook + datatype map) accounts for these;

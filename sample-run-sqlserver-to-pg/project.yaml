@@ -1,0 +1,176 @@
+# dbmig project file. Gate records and decisions are written by `./dbmig gate`
+# and `./dbmig decision`; do not approve by hand-editing. Settings live in
+# migration-config.yaml.
+version: 1
+project: sample-run-sqlserver-to-pg
+createdAt: '2026-11-17T15:10:42Z'
+entryPath: fresh
+pair: sqlserver-to-postgresql
+schemas:
+- DBO
+strategy: full
+gates:
+  inception:
+    status: approved
+    history:
+    - status: approved
+      by: framework owner (release test)
+      at: '2026-11-17T15:10:42Z'
+      via: cli
+      note: assessment and plan approved
+    by: framework owner (release test)
+    at: '2026-11-17T15:10:42Z'
+    via: cli
+    acknowledged: []
+    fingerprint:
+      algo: sha256
+      digest: 7da126b3683c4abe2202db78ea39f5483b7dd44d09c9512473dcf143ff37d77f
+      files:
+        01-assessment/inventory-DBO.json: a23edd8e224a2d8120f987b1fbaa85a7a4499dea7568f1f544905f92310ccf9b
+        01-assessment/inventory-DBO.yaml: af0cf58928b58d077ac9dc3d158191bc11f826a9c4307236b3445688f2719f35
+        01-assessment/migration-plan.md: f235b7c78c4762c2ae33a56239a1c2e4da40c985b7ecb0bb8b3abd8db0002d9f
+    note: assessment and plan approved
+  construction:
+    status: approved
+    history:
+    - status: approved
+      by: framework owner (release test)
+      at: '2026-11-17T15:10:42Z'
+      via: cli
+      note: 20 tables, 25 code objects applied
+    by: framework owner (release test)
+    at: '2026-11-17T15:10:42Z'
+    via: cli
+    acknowledged: []
+    fingerprint:
+      algo: sha256
+      digest: a2cfb1e0b18bbb045287019d156041a29d177aeb1ddf8bccd10933ef9cfc60b6
+      files:
+        02-construction/apply_report-DBO.yaml: fe32e27af67b3479a9e5a7af8eff9b61825251303956bb262b3ee282d54131d7
+        02-construction/apply_report_code-DBO.yaml: 1da9197317a1654a623f45110dac987a0ac014dbf14b81fd41e4083a721f3258
+        02-construction/code/dbo/function__ufncalculatecustomerlifetimevalue.sql: ddf3a6d230d82d85f712f7b4e5d3fba500fc4b33d15c4c7d77c835db9e49f353
+        02-construction/code/dbo/function__ufngetaccountingenddate.sql: 611972a60ecf28e812a1e5310109499d1702a6f1d3d62dfc175f6b09d0136c45
+        02-construction/code/dbo/function__ufngetaccountingstartdate.sql: 972a348d5180b9feea729bd7b830a37ba66a7d2a517863598b0c625605a0bdf1
+        02-construction/code/dbo/function__ufngetdocumentstatustext.sql: c18d35b895a6b38a09452ca1b6d7aa8c8f712e2fb137fbbba912234969d94dc5
+        02-construction/code/dbo/function__ufngetpurchaseorderstatustext.sql: 9c82b7ba014dba69b00c7271861102bda8de544d7234f62eacedcfae3a857349
+        02-construction/code/dbo/function__ufngetsalesorderstatustext.sql: 186d7a5cb160af669da0688d16653fb664e5b848a443ff292eb25df9da084d9f
+        02-construction/code/dbo/function__ufnleadingzeros.sql: 505c9ba54ec81dad2e66dbfdebc6f1e1a670718d0f880f2b62dbdf2bebecad9d
+        02-construction/code/dbo/procedure__uspdeleteauthor.sql: e2aeffb673b87cd4b21f2e14842a061224379f1d173be196918e4e3fe0145706
+        02-construction/code/dbo/procedure__uspdeleteoldcoupons.sql: cf7218835ca4bdac746984a9de76fc05aeedd0c916e0cfaa9eb83bc53212763e
+        02-construction/code/dbo/procedure__uspgetauthormanagers.sql: b0f433b0da785153e83ec7a851e6abd00dc839a5d8a8bc2265bf26f7d82dacc7
+        02-construction/code/dbo/procedure__uspgetbillofmaterials.sql: 5329410c2464f6303eedd3262c11481cfbc5b93f0753280e36e78d488a29a4cd
+        02-construction/code/dbo/procedure__uspgetmanagerauthors.sql: 1e83f62ce2980e473cd91cd850a1c66c587a5f2309a3b6cdafbaa439964a9e16
+        02-construction/code/dbo/procedure__uspgetproductdata.sql: f8c9e9f5b6b57e3b828d052b488f97765f3d66247d2add620ffd6002ab551959
+        02-construction/code/dbo/procedure__uspgettopregion.sql: e049a63386b4e918c52dabcb6c7204f5c3b42a0029d4810decba55355f1db206
+        02-construction/code/dbo/procedure__uspgetwhereusedproductid.sql: fe9f0ef3f1cb145b3ee57ca9b3c38e1a9f0c4fd1c9673dbbe83fb85e7d77334b
+        02-construction/code/dbo/procedure__usplogerror.sql: 10f37379167fe3b6db06f8e31839bb4d756bc69ff5e20973aba73ad2c7549355
+        02-construction/code/dbo/procedure__uspprinterror.sql: ed2bcb088ee7a15950de4416db478aad8d3ad9079ab4494d29e6c191c7ed9ba1
+        02-construction/code/dbo/procedure__uspprocessrefunds.sql: bf5d7d6520a7ed785e0f815e8a2e972ce81689abcc88ec70bc0c6496e5b98ba3
+        02-construction/code/dbo/procedure__uspshoppinglevelamount.sql: 1bb14ee2135add09b4c50033e16993be6e1f1c0e8951dbd3f928454fd05c3a8f
+        02-construction/code/dbo/procedure__uspupdateauthorlogin.sql: 0314efa8913aa1e67b8b6d2e1e18d1038743f20fd5e6f1599296b6f879b55626
+        02-construction/code/dbo/procedure__uspupdateauthorpersonalinfo.sql: 95b96386180fa547aee424d20ca6ffd9d3d4125fc6224ce9fd5722db8444ae85
+        02-construction/code/dbo/view__vwcustomershopping.sql: e46a1cd0ac2cb36d50be1036bd21bcc3291c16f57e562bfa18b3aa073d3c2054
+        02-construction/code/dbo/view__vwopencoupons.sql: 840dcdefabc71351a4e719b70dca3598f8bdb3fa1c6f96215ae45874ca1a4c56
+        02-construction/code/dbo/view__vwregionalsales.sql: 5ce7b1828cec7e138b0cd31d48a49c6fa4bcb3bc1c69d09cc0ac24d34b33e5aa
+        02-construction/code/dbo/view__vwtopmembers.sql: 450a1f9f3e285963b5338396d12d4eb9e0f9b0e9ebbb3febefc7af710d7587d4
+        02-construction/code-manifest-DBO.yaml: 5c9d559e63f08e7b2fc9fb7cc979e1f14e6a13620a9136893acd2384e7d49b98
+        02-construction/conversion-log.md: 9c84bbc0f0e99c5391bf69fe6a7e39f0250e3b102060befd0d0d5ed08a07e7cf
+        02-construction/ddl/dbo/address.sql: 8ccc9665e07b4de9c88c6e3b5f7bd924074d8c363e53b775ccd6b0b543ed2927
+        02-construction/ddl/dbo/author.sql: 6a99bb7ec59f1033662d7eca3c46056d1ea30847b5f29bf8be300c70d5ef1eb0
+        02-construction/ddl/dbo/billofmaterials.sql: b186497c9f894b4e132a133d56a1af9d75620a9e4b9242ffd2d4686faf7e0a1b
+        02-construction/ddl/dbo/book.sql: f61c34e4bbefe4eefbadc6b7e5f741637d6953f2f17af2f9c433b80df2a8532b
+        02-construction/ddl/dbo/coupons.sql: 5c9b877ed7a27188e1ae6928b5de53043838234b6ce6aefbb0ff4c2abe114292
+        02-construction/ddl/dbo/customer.sql: de2f32d6491a5c693c4f226cb34235ae5d880efb8a71906377cfbb31d9cf368d
+        02-construction/ddl/dbo/databaselog.sql: 5c751c1072999a0027ec1edc13e56e12a1a5b9d691e3a339c9d5818fe9dcb6ca
+        02-construction/ddl/dbo/errorlog.sql: 3d84b0f2bd6fae83b158f609f6673ec61d4b51d821a5acb5cfdf4afbf4028443
+        02-construction/ddl/dbo/members.sql: 2eb1f908d46ee6db6ee109ac954f5c70767104d597356c294196605ac136baaf
+        02-construction/ddl/dbo/offer.sql: 492c7bd6bf07cf5cb507a0d994fdac12f804b223c063e43e88c76dbc3d2273e1
+        02-construction/ddl/dbo/order.sql: 2fda1bae2914d363e7e68b6712fc436cb3c22081ff1332f83b954cb0182ab924
+        02-construction/ddl/dbo/orderitem.sql: 6e27f6e9c23cf921968147274fb17511cbb0b67be346ffd41c3d197e8b36014d
+        02-construction/ddl/dbo/person.sql: 446f5654a0283b438ebd4ca52240d983682ba7f39086ab6f4987a491084e9914
+        02-construction/ddl/dbo/product.sql: 7fd380034670cc4917cfd2c2b27acec0cccbb106d998a35c0419cb9b99ea809e
+        02-construction/ddl/dbo/productsaleregions.sql: d3e879d0dd0133fe3de554ffab82d510fdf429330b865de84a33cd1dfff53dfc
+        02-construction/ddl/dbo/productsales.sql: fb5202856ac84b22d5ed039eef147ca1af0263982234a074a364cf3015ab1660
+        02-construction/ddl/dbo/referencedata.sql: 6530064a4adb6b5f2e896811888d55570c2bba7a6da5345986db8265eff60e01
+        02-construction/ddl/dbo/shopping.sql: 36513b7de7ef4ce75672e1b24f29eff732f8c13750d8aff88dcfc81395e06e78
+        02-construction/ddl/dbo/shoppingcart.sql: 94a0b66f36c702b797b007fe611e40e2662e61cbc8e031534be624872ff746aa
+        02-construction/ddl/dbo/shoppingcartitem.sql: e6002ebb85b79e62087221342781f6fc8477ceb0a252e3bbd5640daafd3800ee
+        02-construction/manifest-DBO.yaml: 255921b7bc4c577ebe9a5f19eae844e3b9be11a551f9e835937cde59371905ad
+    note: 20 tables, 25 code objects applied
+  validation:
+    status: approved
+    history:
+    - status: approved
+      by: framework owner (release test)
+      at: '2026-11-17T15:10:42Z'
+      via: cli
+      note: reconcile and equivalence tests passed
+    by: framework owner (release test)
+    at: '2026-11-17T15:10:42Z'
+    via: cli
+    acknowledged: []
+    fingerprint:
+      algo: sha256
+      digest: cf5df830fd6a1cfe9275ab335767f020679bfd983479ec33619a6dcd87418ebc
+      files:
+        03-validation/equivalence-report-DBO.md: 464c77fc1efb65c051a44bd869e8d999f7b605e466e4e7e82df9cf554a997ce3
+        03-validation/equivalence-report-DBO.yaml: fe84d3a64e97a5add5020e5c6bc6da0a6d460db5bbfbe94d575eb8de6ceab378
+        03-validation/reconcile_report-DBO.yaml: ef6b1a7a5061789b65079922fde277999d940076ccaeec11ebbf7204331e9fae
+        03-validation/test-manifest-DBO.yaml: cfd8cfb8f67e59d5813d3a689320f4e94ffca1a5d881e78347827c3361500795
+        03-validation/test_prompts/DBO/batch_0001.prompt.md: 31f926d6a62f6e677198729173774fafb90a8698410f8abfe795f4d51a8f0365
+        03-validation/test_prompts/DBO/batch_0002.prompt.md: b49e5895204fa605efe5d6d9f9e7cec2292652d2dbd512496d31bae7b2fff1de
+        03-validation/test_prompts/DBO/batch_0003.prompt.md: 8f7737bf6e08469a92c74990b05415ef707601793dcab3115cccd43209223f1a
+        03-validation/test_prompts/DBO/batch_0004.prompt.md: 3808f8e7e4771137c6cb82fa786c4377d2d419b3c33f14ebff1c9918b720ca05
+        03-validation/test_prompts/DBO/batch_0005.prompt.md: 79b24a7da5411c227dfeba3321bf23cf3381e59fcf80308c23134b845a2b7226
+        03-validation/tests/DBO/function__ufncalculatecustomerlifetimevalue.test.yaml: bd4399de3399d76bf79c5e876cfa0bbbfb3e740d69a9a728ae5d0d7760cc2f32
+        03-validation/tests/DBO/function__ufngetaccountingenddate.test.yaml: 26d80745f510af94c8f3ccfa4cb3c84912c1e3fd6d11e1a0cd622137130324d9
+        03-validation/tests/DBO/function__ufngetaccountingstartdate.test.yaml: 5d1dffb1e1d51f1c50a9dac119fd00fd1fcfc16818fccaf84dbec0d78ce0ff88
+        03-validation/tests/DBO/function__ufngetdocumentstatustext.test.yaml: 11790cff523f3c690b46569ec15d6fed072e4f03e491f6213410812943937689
+        03-validation/tests/DBO/function__ufngetpurchaseorderstatustext.test.yaml: 525f2c484901e6488a690b982404572f32299791e8066350a04253f1bdac166b
+        03-validation/tests/DBO/function__ufngetsalesorderstatustext.test.yaml: bcd8774d194f049bee9c339d827d3ee3b28c7e5428b556faea4bc072ae95352f
+        03-validation/tests/DBO/function__ufnleadingzeros.test.yaml: 14de5972996a17c2e64c772b886732bbe18923aa3ea1bb8c09c1c7ab0ad1dc5b
+        03-validation/tests/DBO/procedure__uspdeleteauthor.test.yaml: 31a3135789fca0d237db0441a1ab2e98078848e7651a06e2421d9f44a1131717
+        03-validation/tests/DBO/procedure__uspdeleteoldcoupons.test.yaml: 7928bab4ff597769b45e32efc84f046f9d2b227831fd1a2e90b6707ef6c2d839
+        03-validation/tests/DBO/procedure__uspgetauthormanagers.test.yaml: 8d36720c4c154a5c6e07f86c2d901a59ebf94ea8fd7f24022a704c0392670fb6
+        03-validation/tests/DBO/procedure__uspgetbillofmaterials.test.yaml: 62c5ded79ebcb489492ccdc8c599ee1b5a6d4a06ec4273aa8d8bd0655c9877e9
+        03-validation/tests/DBO/procedure__uspgetmanagerauthors.test.yaml: e66c367dc0a0516a1b77c1d9b28e250240d537b2c09d1e2a14174546d384b2e7
+        03-validation/tests/DBO/procedure__uspgetproductdata.test.yaml: 95561e31d63399f37cb8b6530c4c39ea0c2406f77745d9f023e6577b2a5471e8
+        03-validation/tests/DBO/procedure__uspgettopregion.test.yaml: 4b0bda7b1de000e7d802b667945f66bb31cdcc675143c7df667dd1ec688c888a
+        03-validation/tests/DBO/procedure__uspgetwhereusedproductid.test.yaml: 139d4d805d1f8fda0ece68485187d020c8be6f7ccfb550e6b26f5f631f8a0b6b
+        03-validation/tests/DBO/procedure__usplogerror.test.yaml: b24514dbd236c3cef72db8ec00c0865e3e3d47f419950300904343987d83a8f7
+        03-validation/tests/DBO/procedure__uspprinterror.test.yaml: 20b5b008af69e81c49f1e5f3faf224a1b59d5dacdf21c3c38f9b3b7faedbada5
+        03-validation/tests/DBO/procedure__uspprocessrefunds.test.yaml: 3a78ab257d271b26faa2e9bafded14ab93d7607d325ae2917e4c295ef22fa033
+        03-validation/tests/DBO/procedure__uspshoppinglevelamount.test.yaml: 45185ac258ae9189237ea18b6d71919baecc273027abfc9f31de7051cf859d1a
+        03-validation/tests/DBO/procedure__uspupdateauthorlogin.test.yaml: b5f66240302246d7476b81085fe42713440378461a6d17333de1cf7ddef2a6be
+        03-validation/tests/DBO/procedure__uspupdateauthorpersonalinfo.test.yaml: a1deced74caa87eccf0f44f7d85b8687539b6b4be383cd0420e3d84637f6db76
+        03-validation/tests/DBO/view__vwcustomershopping.test.yaml: a3674cecc01e5ec7cc57f3006bfbaa3a01c8205bdecd4de0264eca4958d7a675
+        03-validation/tests/DBO/view__vwopencoupons.test.yaml: e7708e38bfa27eacb1b5b37bdf14730ce71a3a2a3c200b98bd1198912bd827ff
+        03-validation/tests/DBO/view__vwregionalsales.test.yaml: 250fa4dda39723377075aa8e9e6294c275b68b9fdfa088320753b80b4ba606c3
+        03-validation/tests/DBO/view__vwtopmembers.test.yaml: 0b5ea5cf28d6364ef7e79ab5af25a289c7f13a5ab597e06c55201a67e7b40b49
+        03-validation/validation-summary.md: c17b4e2905fba50edf009749e71ed985b3d672f2161de9e9ce2e3a0aa41f35d0
+        data/migrate_report-DBO.yaml: 321af44ae398191720e9c1d7dddc4be5185e92ad90f22cc50648940daacc337e
+        02-construction/apply_report_postdata-DBO.yaml: 8608a32533facbc69fabc0155d0c94c50bd37b047ba56e674f9c3f04f31cad41
+    note: reconcile and equivalence tests passed
+  operations:
+    status: approved
+    history:
+    - status: approved
+      by: framework owner (release test)
+      at: '2026-11-17T15:10:42Z'
+      via: cli
+      note: cutover plan approved
+    by: framework owner (release test)
+    at: '2026-11-17T15:10:42Z'
+    via: cli
+    acknowledged: []
+    fingerprint:
+      algo: sha256
+      digest: d9c43e214a5722282fe4dbc9649568eb459ff8a81883c2dfb3c82e678fcc3f50
+      files:
+        04-operations/cutover-runbook.md: e33695ff5a43fa8e585c06d8649c2c3be49839406d150b38b7514564a0ebd94f
+        04-operations/monitoring.md: a7ada4afc9dffb82e134b7050c5c39c7baf4da21d71b05bcb3df1711dfbd1b05
+        04-operations/rollback-plan.md: f56c450247c578a6f9f3a36a56393eab0aa727590943132efd370ce3f241fa06
+    note: cutover plan approved
+decisions: []
+sample: 'Framework validation run: gates were approved by the framework owner for the release test, not
+  by a customer. In a real migration each gate is an explicit human approval.'

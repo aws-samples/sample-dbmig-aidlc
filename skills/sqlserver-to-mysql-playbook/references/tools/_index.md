@@ -26,7 +26,7 @@ Distilled reference notes for the AWS tools and services used to migrate Microso
 - **AWS DMS** — moves the data (full load + optional ongoing CDC) while the source stays operational. Can create target tables/PKs or rely on SCT-created schema.
 
 ## Aurora MySQL target features referenced
-- **RDS Proxy** — connection pooling, up to 66% faster failover ([AWS RDS Proxy](https://aws.amazon.com/rds/proxy/)), Secrets Manager/IAM auth.
+- **RDS Proxy** — connection pooling, up to 66% faster failover ([Amazon RDS Proxy FAQs](https://aws.amazon.com/rds/proxy/faqs/)), Secrets Manager/IAM auth.
 - **Aurora Serverless v2** — on-demand autoscaling capacity in ACUs (v1 is retired).
 - **Aurora Backtrack** — rewind the cluster in minutes (Aurora MySQL 2, 3 and 8.4; 72 h window).
 - **Aurora Parallel Query** — storage-layer push-down for analytics; off by default; not with I/O-Optimized.

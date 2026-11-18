@@ -8,6 +8,8 @@
 
 > **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): 8.4/auth check, session-pinning list for converted T-SQL, AWS driver wrappers.
 
+> **Content security review** (2026-11-18): the 66% failover figure now cites the RDS Proxy FAQs and the AWS Database Blog measurements.
+
 ## SQL Server
 N/A on the source side. RDS Proxy is a target-side architectural enhancement; the playbook presents it as a benefit available after migrating to Aurora/RDS MySQL.
 
@@ -16,13 +18,13 @@ Amazon RDS Proxy is a fully managed, highly available database proxy for Amazon 
 
 ## Conversion notes
 - **Connection pooling:** Lets applications (incl. serverless) pool and share connections, avoiding exhaustion of database memory/compute from many or rapidly cycling connections.
-- **Faster failover:** Reduces failover times for Aurora and RDS databases by up to **66%** by connecting to a new DB instance while preserving application connections.
+- **Faster failover:** RDS Proxy reduces failover times by up to **66%** for Amazon RDS and Aurora Multi-AZ databases, because it bypasses DNS caches and keeps application connections open while it connects to the new instance ([Amazon RDS Proxy FAQs](https://aws.amazon.com/rds/proxy/faqs/); measured client recovery times: [Improving application availability with Amazon RDS Proxy](https://aws.amazon.com/blogs/database/improving-application-availability-with-amazon-rds-proxy/)).
 - **Security:** Manage database credentials, authentication, and access via AWS Secrets Manager and AWS IAM.
 - **No code changes:** Can be enabled for most applications with no code changes; fully compatible with supported engine protocols.
 - **Fully managed:** No additional infrastructure to provision/manage or patch.
 - **Highly available:** Deployed across multiple Availability Zones to protect against infrastructure failure.
 - **Pricing:** Pay per vCPU of the database instance for which the proxy is enabled.
-- **Benefits summary:** Improved application performance, increased availability (66% faster failover), centralized security via Secrets Manager, fully managed, fully compatible, available and durable across AZs.
+- **Benefits summary:** Improved application performance, increased availability (up to 66% faster failover, see above), centralized security via Secrets Manager, fully managed, fully compatible, available and durable across AZs.
 - Confirm RDS Proxy supports Aurora MySQL 8.4 and `caching_sha2_password` clients before go-live.
 - Converted T-SQL that keeps **session state** — `#temp` tables emulated as temporary tables, `SET` options (`sql_mode`, isolation), user variables, `GET_LOCK` (for `sp_getapplock`), prepared statements — **pins** connections and removes most pooling benefit.
 - Alternative without a proxy: AWS Advanced JDBC/Python/Go wrappers with fast failover.

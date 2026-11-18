@@ -100,9 +100,14 @@ reaches end of life on 2026-07-31). Take the specifics from the monitoring and
 performance-tuning files listed under Inputs.
 
 ## Gate
-Present the runbook, rollback plan, and monitoring checklist. **Stop at the gate: "Approve
-the cutover & rollback plan?"** Cutover execution itself is a high-risk, production action —
-only proceed under explicit user direction, step by step, never unattended.
+Present the runbook, rollback plan, and monitoring checklist (rendered on the review site's
+*Documents* page: `./dbmig review --project <P> --open`). `./dbmig gate status` blocks this
+gate when a document is missing or does not start with the required disclaimer. **Stop at
+the gate: "Approve the cutover & rollback plan?"** After the user's explicit approval, record
+it (`./dbmig gate approve operations --project <P> --approved-by "<name>" --via chat`).
+`reset-identity --apply` warns (or, with `run.enforce_gates: true`, refuses) until this gate
+is approved. Cutover execution itself is a high-risk, production action — only proceed under
+explicit user direction, step by step, never unattended.
 
 ## Safety
 - Production cutover and data movement are high-risk. Confirm each destructive/irreversible

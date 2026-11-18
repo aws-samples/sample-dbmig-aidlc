@@ -13,6 +13,15 @@ project: my-migration          # default workspace name under migrations/<projec
 # Override per command with --mode, or the DBMIG_MODE env var.
 run:
   mode: silent
+  # Gates (./dbmig gate): later-phase commands WARN when their prerequisite gate is not
+  # approved. true = they REFUSE instead (e.g. convert-schema before inception is approved).
+  enforce_gates: false
+
+# Intake: conversational (default; the assistant asks as it goes and mentions the
+# questionnaire once) or questionnaire (the assistant generates a markdown questionnaire —
+# ./dbmig questionnaire new — and waits for the answers before continuing).
+intake:
+  mode: conversational
 
 # What to migrate
 scope:

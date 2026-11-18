@@ -38,7 +38,11 @@ packages = [
     "dbmig.commands",
     "dbmig.conversion",
     "dbmig.dmssc",
+    "dbmig.review",
 ]
+
+[tool.setuptools.package-data]
+"dbmig.review" = ["assets/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -143,7 +143,13 @@ exact error), enforcing `llm.max_retries` (default 3) per unit. Follow this loop
    (units that hit `max_retries` are marked `needs_human`).
 4. Only on `MAX_RETRIES_EXHAUSTED` bring the human in: summarize the `needs_human` units and
    their `last_error`, and propose options (redesign, a `customer-specific/` override, or
-   skipping the object).
+   skipping the object). `apply-schema` records one **`needs_human` decision** per unit
+   (options `fix` / `rule` / `skip`); after the user chooses, run
+   `./dbmig decision answer <id> --choice <fix|rule|skip> --approved-by "<name>" --via chat
+   [--rationale "<guidance>"]`. The answer moves the unit on in the manifest: `fix` → re-apply
+   your hand-corrected file, `rule` → re-convert using the rationale, `skip` → left out
+   (documented). The construction gate stays blocked until every `needs_human` unit has an
+   answered decision.
 
 Override the cap with `--max-retries N`, or target units with `--tables ORDERS,CUSTOMERS`.
 Use `--code` to run the same loop for code objects.
@@ -182,7 +188,17 @@ whether that underscore-join is unique and **warns + records `naming_conflict` i
 `BOOK_PKG.GET_X` and `BOOK.PKG_GET_X` both → `book_pkg_get_x`, or a package routine shadowing
 a standalone). Resolve flagged collisions by using a distinct separator (e.g. the AWS SCT
 `<package>$<subprogram>` style) or an explicit rename — see the pair's
-`checks/package-naming.md`.
+`checks/package-naming.md`. Each collision is also recorded as a **`naming_conflict`
+decision**; a questionnaire `packages` policy may already answer it. Check
+`./dbmig decision list --project <P>` and apply the recorded choice.
+
+## Customer decisions come first
+The shared context (`_context-schema.md` / `_context-code.md`) starts with a **CUSTOMER
+DECISIONS** block when `project.yaml` holds questionnaire policies or answered decisions (for
+example how `''` behaves, NUMBER mapping, package layout). Apply them with the same precedence
+as the customer-specific rules, and cite the policy key or decision id in the conversion log.
+Before converting an object with an open decision (`./dbmig decision list --open`), get the
+user's answer first.
 
 ## Holistic, object-unit conversion (why)
 Converting a table with its indexes, constraints, and triggers together lets you make
@@ -199,5 +215,8 @@ the unit as a whole.
 ## Gate
 When the planned units are converted and applied, summarize: units converted/applied by
 status (from the manifest + apply report), anything deferred/blocked, and where the DDL
-lives. **Stop at the gate: "Approve the converted schema + code?"** Then hand off to
-`db-migration-validation`.
+lives, plus the blockers from `./dbmig gate status --project <P>`. Point reviewers to the code
+browser (`./dbmig review --project <P> --open`). **Stop at the gate: "Approve the converted
+schema + code?"** After the user's explicit approval, record it (`./dbmig gate approve
+construction --project <P> --approved-by "<name>" --via chat [--ack <kind>]`). Then hand off
+to `db-migration-validation`.

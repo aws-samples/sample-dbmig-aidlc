@@ -1,0 +1,200 @@
+# Round 1 questionnaire — questions common to every engine pair.
+# Pair-specific policy questions live in engines/<pair>/questionnaire.yaml and are
+# added to the file once the source and target engines are answered.
+#
+# Fields per question:
+#   id          stable id shown in the file (Q<section>.<n>); answers are matched on it
+#   key         answer key (used by applies_when and the writers)
+#   type        choice | text | list | int          (default: choice when options exist)
+#   options     [{id, label, value?, recommended?, guidance?, resolves?}]
+#   optional    true -> a blank answer means the recommended option / default
+#   default     default for optional text/int questions
+#   applies_when  "key == v", "key != v", "key in [a, b]" joined by " and "
+#   writes_to   list of: config:<dotted.path>  connections:<side>.<field>  intake
+#   validate    env_var | identifier
+#   help        one line shown under the question
+version: 1
+sections:
+  - id: "1"
+    title: Project and starting point
+    questions:
+      - id: Q1.1
+        key: project
+        type: text
+        text: Project name (the workspace folder under migrations/)
+        help: "Letters, digits, dot, dash and underscore. Example: billing-ora2pg-2026q4"
+        writes_to: [config:project]
+      - id: Q1.2
+        key: entry_path
+        text: Where does this migration start?
+        options:
+          - {id: A, value: fresh, recommended: true,
+             label: "Fresh conversion from the source database (dbmig-aidlc converts the schema and code)"}
+          - {id: B, value: dms-sc,
+             label: "AWS DMS Schema Conversion (DMS SC) has already converted the schema and it is applied to the target"}
+        writes_to: [intake]
+      - id: Q1.3
+        key: dms_sc_dir
+        type: text
+        text: Local folder of the DMS SC project (copied from its S3 bucket)
+        applies_when: entry_path == dms-sc
+        writes_to: [intake]
+
+  - id: "2"
+    title: Engines
+    questions:
+      - id: Q2.1
+        key: source_engine
+        text: Source engine
+        options:
+          - {id: A, value: oracle, label: Oracle (11.2 or later)}
+          - {id: B, value: sqlserver, label: SQL Server (2008 or later)}
+        writes_to: [connections:source.engine]
+      - id: Q2.2
+        key: source_version
+        type: text
+        optional: true
+        text: Source version (blank = detect from the server)
+        help: "Example: 19c, 12.2, 2019. Oracle 11.2 needs Oracle Instant Client (thick mode)."
+        writes_to: [connections:source.version]
+      - id: Q2.3
+        key: target_engine
+        text: Target engine
+        options:
+          - {id: A, value: postgresql, recommended: true, label: Amazon Aurora PostgreSQL / Amazon RDS for PostgreSQL}
+          - {id: B, value: mysql, label: Amazon Aurora MySQL / Amazon RDS for MySQL}
+        writes_to: [connections:target.engine]
+      - id: Q2.4
+        key: target_version
+        type: text
+        text: Target engine version
+        help: "Example: 17.7 (PostgreSQL) or 8.0 (Aurora MySQL 3). Version-specific defaults depend on it."
+        writes_to: [connections:target.version]
+
+  - id: "3"
+    title: Connections (no passwords in this file)
+    note: >-
+      Never write a password here. Give the NAME of the environment variable that will hold
+      it, and optionally the AWS Secrets Manager secret it comes from. The assistant reads the
+      secret at run time and never writes the value to disk.
+    questions:
+      - {id: Q3.1, key: source_host, type: text, text: Source host name or IP, writes_to: [connections:source.host]}
+      - {id: Q3.2, key: source_port, type: int, text: Source port, optional: true,
+         default_by: {source_engine: {oracle: 1521, sqlserver: 1433}}, writes_to: [connections:source.port]}
+      - id: Q3.3
+        key: source_service_name
+        type: text
+        text: Oracle service name (or SID, prefixed with "sid:")
+        help: "Example: ORCLPDB1, or sid:ORCL"
+        applies_when: source_engine == oracle
+        writes_to: [connections:source.service_name]
+      - {id: Q3.4, key: source_database, type: text, text: SQL Server database name,
+         applies_when: source_engine == sqlserver, writes_to: [connections:source.database]}
+      - {id: Q3.5, key: source_username, type: text, text: Source user (read-only is enough),
+         help: "See guides/database-users-and-permissions.md", writes_to: [connections:source.username]}
+      - {id: Q3.6, key: source_password_env, type: text, validate: env_var, optional: true,
+         default_by: {source_engine: {oracle: ORA_PASSWORD, sqlserver: MSSQL_PASSWORD}},
+         text: Environment variable NAME that holds the source password, writes_to: [connections:source.password]}
+      - {id: Q3.7, key: source_secret, type: text, optional: true,
+         text: "AWS Secrets Manager secret for the source (name or ARN; blank = none)", writes_to: [intake]}
+      - {id: Q3.8, key: target_host, type: text, text: Target endpoint (writer), writes_to: [connections:target.host]}
+      - {id: Q3.9, key: target_port, type: int, optional: true,
+         default_by: {target_engine: {postgresql: 5432, mysql: 3306}}, text: Target port, writes_to: [connections:target.port]}
+      - {id: Q3.10, key: target_database, type: text, text: Target database name, writes_to: [connections:target.database]}
+      - {id: Q3.11, key: target_username, type: text, text: Target user (read-write on the target schemas),
+         writes_to: [connections:target.username]}
+      - {id: Q3.12, key: target_password_env, type: text, validate: env_var, optional: true,
+         default_by: {target_engine: {postgresql: PG_PASSWORD, mysql: MYSQL_PASSWORD}},
+         text: Environment variable NAME that holds the target password, writes_to: [connections:target.password]}
+      - {id: Q3.13, key: target_secret, type: text, optional: true,
+         text: "AWS Secrets Manager secret for the target (name or ARN; blank = none)", writes_to: [intake]}
+      - {id: Q3.14, key: aws_profile_region, type: text, optional: true,
+         text: "AWS CLI profile and Region for those secrets (example: myprofile us-east-1; blank = no secrets)",
+         writes_to: [intake]}
+      - id: Q3.15
+        key: target_sslmode
+        optional: true
+        text: Target TLS
+        options:
+          - {id: A, value: require, recommended: true, label: "Encrypt (require); no certificate setup"}
+          - {id: B, value: verify-full, label: "Encrypt and verify the server certificate and host name (needs the RDS CA bundle)"}
+        writes_to: [connections:target.sslmode]
+
+  - id: "4"
+    title: Scope
+    questions:
+      - {id: Q4.1, key: schemas, type: list, text: Source schemas to migrate (comma-separated),
+         help: "Oracle owners or SQL Server schemas, e.g. APP, BILLING", writes_to: [config:scope.schemas]}
+      - {id: Q4.2, key: include, type: list, optional: true, default: [],
+         text: "Only these objects (LIKE patterns, comma-separated; blank = all)", writes_to: [config:scope.include]}
+      - {id: Q4.3, key: exclude, type: list, optional: true, default: [],
+         text: "Exclude these objects (LIKE patterns, e.g. %_TMP, %_BAK; blank = none)", writes_to: [config:scope.exclude]}
+      - id: Q4.4
+        key: identifier_case
+        optional: true
+        text: Identifier case on the target
+        options:
+          - {id: A, value: lower_case, recommended: true, label: "Fold to lower case (no quoting needed in SQL)"}
+          - {id: B, value: preserve, label: "Preserve source case (every identifier must be double-quoted)"}
+        writes_to: [config:strategy.identifier_case]
+
+  - id: "5"
+    title: Strategy and testing
+    questions:
+      - id: Q5.1
+        key: strategy
+        optional: true
+        text: What should be migrated?
+        options:
+          - {id: A, value: full, recommended: true, label: Schema, code and data}
+          - {id: B, value: schema_only, label: Schema and code only (no data)}
+          - {id: C, value: data_only, label: Data only (the target schema exists)}
+        writes_to: [config:strategy.mode]
+      - id: Q5.2
+        key: data_load
+        optional: true
+        text: How does test data reach the target?
+        options:
+          - {id: A, value: framework, recommended: true, label: "dbmig loads it (dev/test loader, sample or full)"}
+          - {id: B, value: dms, label: "We load it with AWS DMS (or another tool); dbmig tests what is loaded"}
+        writes_to: [config:testing.data_load]
+      - id: Q5.3
+        key: data_volume
+        optional: true
+        applies_when: data_load != dms
+        text: How much data should dbmig load for testing?
+        options:
+          - {id: A, value: sample, recommended: true, label: A sample per table (sample_rows_per_table)}
+          - {id: B, value: full, label: Every row (dev/test volumes only)}
+        writes_to: [config:testing.data_volume]
+      - id: Q5.4
+        key: data_method
+        optional: true
+        applies_when: data_load != dms and target_engine == postgresql
+        text: How should dbmig move the data?
+        options:
+          - {id: A, value: toolkit, recommended: true, label: "Through the machine running dbmig (simplest)"}
+          - {id: B, value: fdw, label: "Target reads the source directly via oracle_fdw / tds_fdw (fast across a slow VPN)"}
+        writes_to: [config:testing.data_method]
+      - id: Q5.5
+        key: run_mode
+        optional: true
+        text: When a conversion or test fails during a run
+        options:
+          - {id: A, value: silent, recommended: true, label: "Log it to follow-up.yaml and continue; review at the gate"}
+          - {id: B, value: interactive, label: Stop and ask me each time}
+        writes_to: [config:run.mode]
+
+  - id: "6"
+    title: Governance
+    questions:
+      - {id: Q6.1, key: approvers, type: text, optional: true,
+         text: "Who approves the phase gates? (names; blank = whoever runs the migration)", writes_to: [intake]}
+      - id: Q6.2
+        key: enforce_gates
+        optional: true
+        text: Should dbmig refuse later-phase commands until the previous gate is approved?
+        options:
+          - {id: A, value: false, recommended: true, label: "No, warn only"}
+          - {id: B, value: true, label: "Yes, refuse (run.enforce_gates: true)"}
+        writes_to: [config:run.enforce_gates]

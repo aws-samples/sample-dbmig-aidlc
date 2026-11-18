@@ -55,6 +55,12 @@ def _check_naming_conflicts(routines, project: str) -> None:
                        "involves_standalone": c["involves_standalone"]})
         console.info(f"Recorded {len(collisions)} naming conflict(s) to follow-up; "
                      "resolve before relying on the converted code.")
+        from .. import decisions as dec
+        for c in collisions:
+            dec.auto_raise(project, phase="construction", kind="naming_conflict",
+                           objects=[str(s).upper() for s in c["sources"]],
+                           raised_by="step:convert-code",
+                           detail=f"all flatten to '{c['flattened']}'")
 
     if overloads:
         console.warn(

@@ -8,6 +8,8 @@
 
 > **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): Storage limit 256 TiB (was 64 TiB), delayed replication only via binlog replicas (8.4 procedure name verified), Global Database and write forwarding, replica-lag views, failover clients.
 
+> **Content security review** (2026-11-18): the Global Database lag figure now cites the AWS documentation.
+
 ## SQL Server
 
 SQL Server provides several HA/DR solutions: Always On Failover Cluster Instances (FCI),
@@ -215,8 +217,8 @@ After creation, run reads/writes on the primary and read-only operations on the 
 - Up to 15 Aurora replicas (vs. 8 SQL Server secondaries) for read scale-out, addressable via
   the reader endpoint.
 - **Cross-Region DR** (SQL Server distributed AGs / log shipping to another site) → **Aurora Global
-  Database** (supported on 3 and 8.4, verified): storage-level replication with typically sub-second
-  lag, managed switchover and failover. Prefer it over binlog cross-Region read replicas.
+  Database** (supported on 3 and 8.4, verified): storage-level replication with lag typically under one second
+  ([Using Amazon Aurora Global Database](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-global-database.html)), managed switchover and failover. Prefer it over binlog cross-Region read replicas.
 - **Readable secondaries with writes** (AG read-write redirect) → Aurora **local/global write
   forwarding**, controlled by `aurora_replica_read_consistency`.
 - Replica lag: `information_schema.replica_host_status` and the `AuroraReplicaLag` metric (verified

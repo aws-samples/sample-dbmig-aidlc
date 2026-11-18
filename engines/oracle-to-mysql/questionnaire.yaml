@@ -1,0 +1,100 @@
+# Round 1 policy questions for Oracle -> MySQL (field reference: engines/_common/questionnaire.yaml).
+version: 1
+sections:
+  - id: "7"
+    title: Conversion policies — Oracle to MySQL
+    note: >-
+      These answers set conversion defaults so fewer questions come up later. Leave a
+      question blank to take the recommended option. Anything not covered here is still
+      asked when it is found.
+    questions:
+      - id: Q7.1
+        key: empty_string
+        optional: true
+        text: Oracle stores '' as NULL. How should empty strings behave on MySQL?
+        options:
+          - {id: A, recommended: true, label: "Keep Oracle behaviour: treat '' as NULL",
+             guidance: "Keep Oracle semantics for empty strings: where converted code assigns, concatenates or compares strings that can be '', use NULLIF(x, '') so '' behaves as NULL. Note CONCAT() returns NULL if any argument is NULL, unlike Oracle ||; use CONCAT_WS or IFNULL."}
+          - {id: B, label: "Use MySQL behaviour: '' and NULL are different",
+             guidance: "Use native MySQL semantics: '' and NULL are distinct; do not add NULLIF wrappers. Flag code that relied on '' IS NULL in the conversion log."}
+        writes_to: [policy]
+      - id: Q7.2
+        key: number_without_precision
+        optional: true
+        text: Columns declared NUMBER without precision
+        options:
+          - {id: A, recommended: true, label: "DECIMAL(38,10) (exact; bounded scale)",
+             guidance: "Map NUMBER without precision/scale to DECIMAL(38,10)."}
+          - {id: B, label: "BIGINT when the column only holds integers (keys, counters); DECIMAL(38,10) otherwise",
+             guidance: "Map NUMBER without precision to BIGINT when it is a key or counter column (PK/FK/identity or name ending _ID/_COUNT/_NO), DECIMAL(38,10) otherwise. Note each choice in the conversion log."}
+        writes_to: [policy]
+      - id: Q7.3
+        key: oracle_date
+        optional: true
+        text: Oracle DATE (always carries a time part)
+        options:
+          - {id: A, recommended: true, label: "DATETIME — keeps the time part",
+             guidance: "Map Oracle DATE to DATETIME; SYSDATE to NOW()."}
+          - {id: B, label: "DATE — the application never stores a time part",
+             guidance: "Map Oracle DATE to DATE (the customer confirmed no time part is stored)."}
+        writes_to: [policy]
+      - id: Q7.4
+        key: packages
+        optional: true
+        text: PL/SQL packages (MySQL has no packages)
+        options:
+          - {id: A, recommended: true, label: "Flatten to pkg_routine in the target database",
+             guidance: "Flatten package routines to <package>_<routine>; package state variables become session user variables (@pkg_var) or a session-keyed table."}
+          - {id: B, label: "Flatten with a distinct separator (pkg$routine) to avoid name collisions",
+             guidance: "Flatten package routines to <package>$<routine> (quoted where needed); package state variables become session user variables.",
+             resolves: {naming_conflict: separator}}
+        writes_to: [policy]
+      - id: Q7.5
+        key: autonomous_transactions
+        optional: true
+        text: PRAGMA AUTONOMOUS_TRANSACTION (e.g. error logging)
+        options:
+          - {id: A, recommended: true, label: "Redesign: the application logs through a separate connection",
+             guidance: "MySQL has no autonomous transactions: convert the body as normal code and record each original autonomous block in the conversion log for an application-side redesign."}
+          - {id: B, label: "Log to a non-transactional table (MyISAM) inside the routine",
+             guidance: "Emulate autonomous logging by writing to a MyISAM log table (not rolled back); note this in the conversion log."}
+        writes_to: [policy]
+      - id: Q7.6
+        key: scheduler_jobs
+        optional: true
+        text: DBMS_SCHEDULER / DBMS_JOB jobs
+        options:
+          - {id: A, recommended: true, label: "MySQL Event Scheduler (event_scheduler=ON in the parameter group)",
+             guidance: "Convert scheduler jobs to MySQL EVENTs calling the converted procedures; the parameter group needs event_scheduler=ON."}
+          - {id: B, label: "External scheduler (for example Amazon EventBridge Scheduler)",
+             guidance: "Do not convert scheduler jobs into the database; list each job, schedule and called procedure in the conversion log for an external scheduler."}
+        writes_to: [policy]
+      - id: Q7.7
+        key: fulltext
+        optional: true
+        text: Oracle Text (CONTEXT / CTXCAT indexes), if any
+        options:
+          - {id: A, recommended: true, label: "MySQL FULLTEXT index (MATCH ... AGAINST)",
+             resolves: {fulltext_redesign: native}}
+          - {id: B, label: "Move search to an external engine (for example Amazon OpenSearch Service)",
+             resolves: {fulltext_redesign: external}}
+          - {id: C, label: "Not used, or decide when it is found"}
+        writes_to: [policy]
+      - id: Q7.8
+        key: sequences
+        optional: true
+        text: Sequences filled by BEFORE INSERT triggers
+        options:
+          - {id: A, recommended: true, label: "AUTO_INCREMENT where the sequence serves one table",
+             guidance: "Where a sequence only feeds one table's key through a BEFORE INSERT trigger, use AUTO_INCREMENT and drop the trigger; emulate other sequences with a sequence table and a function."}
+          - {id: B, label: "Emulate every sequence with a sequence table and a function",
+             guidance: "Emulate every Oracle sequence with a one-row-per-sequence table and a nextval function; keep trigger-filled keys."}
+        writes_to: [policy]
+      - id: Q7.9
+        key: char_columns
+        optional: true
+        text: CHAR(n) columns (MySQL strips trailing blanks from CHAR on read)
+        options:
+          - {id: A, recommended: true, label: "Keep CHAR(n)", guidance: "Keep CHAR(n) as CHAR(n)."}
+          - {id: B, label: "VARCHAR(n)", guidance: "Convert CHAR(n) to VARCHAR(n) and trim trailing blanks in the data load."}
+        writes_to: [policy]

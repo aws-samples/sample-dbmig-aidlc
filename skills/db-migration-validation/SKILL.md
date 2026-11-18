@@ -117,9 +117,15 @@ the application carry-forward (the app's code paths over those tables are untest
   fix loops back to `db-migration-construction` (re-convert), then re-run the affected tests.
 
 ## Gate
-Summarize pass/fail counts, `LOW_COVERAGE` objects, and open follow-up items. **Stop at the gate: "Approve the
-equivalence test results?"** Proceeding with open follow-up items is allowed (silent mode)
-but must be explicitly acknowledged. On approval, hand off to `db-migration-operations`.
+Summarize pass/fail counts, `LOW_COVERAGE` objects, and open follow-up items, plus
+`./dbmig gate status --project <P>` (blockers and the item kinds that need acknowledgement:
+open follow-ups, failed test cases, row-count mismatches, failed DMS SC VERIFY items). Point
+reviewers to the test browser (`./dbmig review --project <P> --open`, *Tests* page). **Stop at
+the gate: "Approve the equivalence test results?"** Proceeding with open follow-up items is
+allowed (silent mode) but must be explicitly acknowledged: record the approval with
+`./dbmig gate approve validation --project <P> --approved-by "<name>" --via chat --ack <kind>
+...`, passing only the kinds the user accepted. On approval, hand off to
+`db-migration-operations`.
 
 ## Safety
 - Test data loads and procedure tests write to the target — gated actions. Prefer a

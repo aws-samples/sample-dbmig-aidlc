@@ -1,3 +1,4 @@
+from dbmig.conversion import ddl_split
 from dbmig.conversion.ddl_split import (
     split_statements, is_post_data, partition_ddl)
 
@@ -130,3 +131,43 @@ def test_create_table_without_inline_fk_unchanged():
     pre, post = partition_ddl(ddl)
     assert post == ""
     assert "CREATE TABLE t" in pre and "numeric(10,2)" in pre and "UNIQUE (id)" in pre
+
+
+def test_mysql_compound_trigger_kept_whole_and_deferred():
+    sql = """CREATE TABLE d.emp (id BIGINT NOT NULL, salary DECIMAL(10,2), PRIMARY KEY (id));
+ALTER TABLE d.emp ADD CONSTRAINT fk_emp_dept FOREIGN KEY (dept_id) REFERENCES d.dept (dept_id);
+CREATE TRIGGER d.trg AFTER UPDATE ON d.emp FOR EACH ROW
+BEGIN
+  IF COALESCE(NEW.salary, -1) <> COALESCE(OLD.salary, -1) THEN
+    INSERT INTO d.audit (emp_id) VALUES (NEW.id);
+  END IF;
+END;
+"""
+    pre, post = ddl_split.partition_ddl(sql)
+    assert "END IF" not in pre and "TRIGGER" not in pre
+    assert post.count("CREATE TRIGGER") == 1 and "END IF;\nEND;" in post
+
+
+def test_mysql_routines_with_nested_blocks_split_per_definition():
+    sql = """CREATE PROCEDURE d.p(IN x INT)
+BEGIN
+  DECLARE v INT;
+  CASE x WHEN 1 THEN SET v = 1; ELSE SET v = 2; END CASE;
+  WHILE v > 0 DO SET v = v - 1; END WHILE;
+  BEGIN SELECT CASE WHEN v = 0 THEN 'a' ELSE 'b' END; END;
+END;
+CREATE FUNCTION d.f(p INT) RETURNS INT READS SQL DATA
+BEGIN
+  RETURN p + 1;
+END;
+CREATE VIEW d.v AS SELECT CASE WHEN 1 = 1 THEN 1 END AS c;
+"""
+    stmts = ddl_split.split_statements(sql)
+    assert len(stmts) == 3
+    assert stmts[0].startswith("CREATE PROCEDURE") and stmts[0].rstrip().endswith("END;")
+    assert stmts[1].startswith("CREATE FUNCTION") and stmts[2].startswith("CREATE VIEW")
+
+
+def test_identifiers_containing_begin_or_end_do_not_nest():
+    sql = "CREATE TABLE t (begin_date date, end_date date);\nCREATE INDEX i ON t (end_date);"
+    assert len(ddl_split.split_statements(sql)) == 2

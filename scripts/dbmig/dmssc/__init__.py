@@ -6,9 +6,8 @@ target ``t-<id>/`` tree) plus catalogs under ``action-items/`` and apply results
 produces a normalized object model that the ``import-dms-sc`` command turns into dbmig
 manifests, a mapping sidecar, and an ACCEPT/VERIFY/MANUAL classification report.
 
-See ``docs/dms-sc-import-design.md``. Parsing conventions follow the reference
-implementation in ``sample-mma-test-manager`` (``S3LoaderService``): match source<->target
-by source node id via ``synchronization_object``, key objects by node id (so overloaded
+See ``docs/dms-sc-continuation.md``. Parsing conventions: match source<->target by
+source node id via ``synchronization_object``, key objects by node id (so overloaded
 routines stay distinct), and skip container/folder meta-types.
 """
 from .model import ActionItem, DmsScObject, ImportResult

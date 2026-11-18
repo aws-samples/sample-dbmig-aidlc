@@ -61,6 +61,38 @@ a connections file is passed explicitly with `--conn`.
 
 ## Step 1 — Intake interview
 
+**Two ways to collect the intake.** Conversational (below) is the default. A customer may
+prefer to answer a **markdown questionnaire** instead (typical AI-DLC style: answered up front,
+possibly by several people, fewer questions later):
+
+- **Default (conversational) mode:** at the start of the intake, mention it **once**, in one
+  sentence, and continue without waiting: *"If you prefer, I can generate a questionnaire file
+  you (or your DBA/app owner) fill in instead (`./dbmig questionnaire new`); otherwise I'll ask
+  as we go."* Never block on it.
+- **Questionnaire mode** — when the user asks for it ("start with a questionnaire"), or
+  `intake.mode: questionnaire` is set in `migration-config.yaml`:
+  1. `./dbmig questionnaire new [--project <P>] [--pair <source>-to-<target>]` — pass `--pair`
+     when the request already names the engines. Tell the user the file path and **stop**
+     until they say it is answered.
+  2. `./dbmig questionnaire check [--project <P>]` — lists missing / invalid answers and
+     **"Other" free-text answers**. Ask the user only about those (principle 4: clarify each
+     "Other" answer; never interpret it silently). The first check may add questions that
+     depend on the engines (e.g. the pair's conversion policies); tell the user.
+  3. When clean, confirm the summary with the user, then
+     `./dbmig questionnaire check --apply [--overwrite]`. It writes `migration-config.yaml`,
+     the password-free fields of `connections.yaml`, `project.yaml` **policies**, and
+     `00-intake/intake.md`. It never overwrites existing values without `--overwrite`; show
+     the listed differences and ask first.
+  4. Continue with Step 2. Passwords still come from the env vars / Secrets Manager secrets
+     named in the answers (see 3 below).
+- **An answered questionnaire already exists** (either mode: `questionnaire.md` at the repo
+  root or `migrations/<P>/00-intake/questionnaire.md`): run `questionnaire check`, use its
+  valid answers, and ask only for what is missing or unclear. Do not re-ask answered items.
+
+Policies recorded from the questionnaire answer later decisions automatically
+(`via: questionnaire`) and are injected into the conversion context. **Gates are never
+pre-approved by a questionnaire.**
+
 Confirm these inputs, asking only for what is missing. Echo back a summary before proceeding.
 
 1. **Source engine & version** — Oracle or SQL Server (supported sources).
@@ -138,6 +170,20 @@ environment** (`.venv/`), never from the user's global Python:
 - If connectivity fails, surface the actionable error and stop. Do not proceed to Inception
   with a broken connection.
 
+## Step 2b — Project record
+
+Create the project record once the project name is known (also done automatically by the
+gate/decision commands):
+
+```bash
+./dbmig project init --project <P>
+```
+
+`migrations/<P>/project.yaml` holds the **gate records, decisions and questionnaire
+policies**; settings stay in `migration-config.yaml`. **Resuming a session:** run
+`./dbmig gate status --project <P>` and `./dbmig decision list --open --project <P>` and pick
+up from the next gate — do not rely on memory of an earlier conversation.
+
 ## Step 3 — Route through the phases
 
 **Alternate entry (DMS SC already run):** if intake #8 was "yes", route Inception +
@@ -156,21 +202,50 @@ gate** for approval.
 | 4 | `db-migration-operations` | "Approve the cutover & rollback plan?" |
 
 At each gate:
-- Summarize what was produced and where (paths under `migrations/<project>/`).
+- Run `./dbmig gate status --project <P>` and summarize what was produced and where (paths
+  under `migrations/<project>/`), the **blockers**, and the open items that need an
+  **acknowledgement**. A gate with blockers cannot be approved: resolve them first (or loop
+  back into the phase).
 - Surface risks, unconverted objects, and failed tests honestly.
-- Wait for explicit "approved" / "go" before continuing. If the user wants changes, loop
-  back into that phase rather than advancing.
+- Offer the read-only review site for browsing the artifacts:
+  `./dbmig review --project <P> --open` (code browser, test browser, rendered documents).
+- Wait for the user's explicit "approved" / "go". **Never approve on the user's behalf and
+  never infer approval** from silence or from a question. Then record it:
+  ```bash
+  ./dbmig gate approve <phase> --project <P> --approved-by "<user's name>" --via chat \
+      --note "<what the user said / conditions>" [--ack <kind> ...]
+  ```
+  Pass `--ack <kind>` only for the kinds the user explicitly accepted (gate status lists them).
+  If the user rejects: `./dbmig gate reject <phase> --project <P> --approved-by "<name>"
+  --via chat --reason "<why>"`, then loop back into that phase.
+- A gate turns **stale** when its artifacts change after approval (gate status shows the
+  changed files). Re-present and re-approve it before the next gate.
+- Later-phase commands warn when their gate is not approved (they refuse when
+  `run.enforce_gates: true`). Do not work around the warning; get the approval.
+
+**Decisions.** Every ambiguity that needs the user's choice is recorded, not kept only in
+chat: `inventory`, `apply-schema`, `convert-code` and `diff-target` raise standard decisions
+automatically; raise others with `./dbmig decision raise`. Present each open decision with its
+options and recommendation, and after the user chooses record it with
+`./dbmig decision answer <id> --choice <option> --approved-by "<name>" --via chat
+[--rationale "..."]`. In questionnaire mode, after `inventory` (Inception) generate the
+**round-2** file for the open decisions with `./dbmig questionnaire new --round 2 --project <P>`
+and stop until it is answered (`questionnaire check --round 2 --apply`); decisions raised
+later in the run are asked in chat.
 
 ## Workspace layout (artifacts)
 
 ```
 migrations/<project>/
-├── 00-intake/          # resolved inputs, engine pair, decisions
+├── project.yaml        # gate records, decisions, questionnaire policies (./dbmig gate / decision)
+├── 00-intake/          # resolved inputs (intake.md), questionnaire.md (questionnaire mode)
 ├── 01-assessment/      # inventory, compatibility assessment, migration plan
 ├── 02-construction/    # prompts, converted DDL + stored code, manifest, apply/retry reports
 ├── data/               # data-migration report + resume watermarks
 ├── 03-validation/      # reconcile + equivalence test reports
 ├── 04-operations/      # cutover plan, rollback plan, monitoring notes
+├── review/             # generated read-only review site (./dbmig review; git-ignored)
+├── SIGN-OFF.md         # generated from the gate records
 └── follow-up.yaml      # logged conversion/test failures (silent mode)
 ```
 

@@ -13,7 +13,7 @@ reworking what the conversion flagged. You still finish through the normal
 
 All the deterministic work is done by the `dbmig` toolkit (`./dbmig …`); you (the AI assistant)
 review the triage, drive the gates, and perform any MANUAL reconversion via the construction
-skill. See `docs/dms-sc-import-design.md`.
+skill. See `docs/dms-sc-continuation.md`.
 
 ## When this applies
 
@@ -88,7 +88,11 @@ the disposition is still the user's call.
 
 **Present the triage and stop.** Summarize ACCEPT/VERIFY/MANUAL counts and the awareness
 items (especially objects DMS SC failed to apply). The `migration-report.md` Inception
-section is written for the human. Wait for approval.
+section is written for the human. Wait for approval, then record it
+(`./dbmig gate approve inception --project <P> --approved-by "<name>" --via chat`); the gate
+is blocked until every scoped schema has an import (`dms-sc-map-<S>.json`). A disposition the
+user wants changed is a decision: raise it (`./dbmig decision raise --phase inception --kind
+disposition_change ...`) and record the answer.
 
 ## Step 3 — Reconcile against the live target (Construction)  →  GATE
 
@@ -106,6 +110,11 @@ foreign keys). Review `01-assessment/dms-sc-diff-<S>.md`. Resolve conflicts expl
 ```
 
 Always re-diff against live and let the human choose which version to keep on any conflict.
+A report-only run with MISSING objects records one **`diff_conflict` decision** per schema
+(options `apply-ours` / `keep-live` / `reconvert`). Present it, record the user's answer with
+`./dbmig decision answer <id> --choice <option> --approved-by "<name>" --via chat`, then run
+`diff-target --resolve <choice>` accordingly. The construction gate stays blocked while it is
+open, and while MANUAL units are `needs_human` without an answered decision.
 
 ## Step 4 — Reconvert MANUAL objects (Construction)
 
@@ -173,12 +182,15 @@ Then record VERIFY verdicts so the work is not repeated:
 ```
 
 The migration report's Validation section shows verified/pending counts and the outstanding
-list.
+list. The validation gate is blocked while VERIFY objects are `pending`; `failed` verdicts
+need an explicit acknowledgement (`--ack verify_failed`). The review site's *Decisions* page
+shows the ledger.
 
 ## Step 7 — Operations
 
 Hand off to `db-migration-operations` for the cutover, rollback, and monitoring plan
-(unchanged).
+(unchanged). Gates are recorded the same way as in the standard path
+(`./dbmig gate status|approve`, see the orchestrator).
 
 ## Traceability
 

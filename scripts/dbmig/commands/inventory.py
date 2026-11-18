@@ -59,5 +59,9 @@ def run(args) -> int:
     for d in decisions:
         console.warn(f"DECISION REQUIRED [{d['kind']}] {d['object']}: {d['summary']}")
         console.info(f"  app impact: {d['app_impact']}")
+        from .. import decisions as dec
+        dec.auto_raise(args.project, phase="inception", kind=d["kind"],
+                       objects=[str(d["object"]).upper()], raised_by="step:inventory",
+                       detail=f"{d['summary']} App impact: {d['app_impact']}")
     console.ok(f"Inventory written to {outdir}/{inv_yaml} (+ .json)")
     return 0

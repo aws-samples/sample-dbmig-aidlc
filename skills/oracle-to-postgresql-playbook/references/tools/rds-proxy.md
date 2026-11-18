@@ -8,19 +8,21 @@
 
 > **Reviewed for Aurora PostgreSQL 18** (validated on 18.6, 2026-10-29): version check, session-pinning caveat for converted code, IAM and reader endpoints.
 
+> **Content security review** (2026-11-18): the 66% failover figure now cites the RDS Proxy FAQs and the AWS Database Blog measurements.
+
 ## Oracle
 Not an Oracle feature. Conceptually comparable to connection-pooling middleware used in front of Oracle (e.g., application-side pools), but RDS Proxy is a fully managed AWS service.
 
 ## PostgreSQL
 Amazon RDS Proxy is a fully managed, highly available database proxy for Amazon RDS that makes applications more scalable, more resilient to database failures, and more secure. It is generally available for **Aurora MySQL, Aurora PostgreSQL, Amazon RDS for MySQL, and Amazon RDS for PostgreSQL**.
 
-Applications (especially serverless) that open/close many connections at a high rate can exhaust database memory and compute. RDS Proxy lets applications **pool and share** connections, improving efficiency and scalability. It reduces failover times for Aurora and RDS by up to **66%**, and integrates with **AWS Secrets Manager** and **AWS IAM** for credential, authentication, and access management.
+Applications (especially serverless) that open/close many connections at a high rate can exhaust database memory and compute. RDS Proxy lets applications **pool and share** connections, improving efficiency and scalability. It reduces failover times by up to **66%** for Amazon RDS and Aurora Multi-AZ databases, because it bypasses DNS caches and keeps application connections open while it connects to the new instance ([Amazon RDS Proxy FAQs](https://aws.amazon.com/rds/proxy/faqs/); measured client recovery times: [Improving application availability with Amazon RDS Proxy](https://aws.amazon.com/blogs/database/improving-application-availability-with-amazon-rds-proxy/)), and integrates with **AWS Secrets Manager** and **AWS IAM** for credential, authentication, and access management.
 
 Can be enabled for most applications with **no code changes**; no additional infrastructure to provision or manage. Pricing is per vCPU of the database instance for which the proxy is enabled.
 
 **Benefits:**
 - **Improved performance** — connection pooling reduces stress on DB compute/memory from frequent new connections; supports large numbers/frequency of connections.
-- **Increased availability** — automatically connects to a new DB instance while preserving application connections, cutting failover time by ~66%.
+- **Increased availability** — automatically connects to a new DB instance while preserving application connections, cutting failover time by up to 66% (see above).
 - **Managed security** — centrally manage DB credentials via AWS Secrets Manager.
 - **Fully managed** — no patching/managing your own proxy server.
 - **Fully compatible** — speaks the supported engines' native protocols; no application code changes.

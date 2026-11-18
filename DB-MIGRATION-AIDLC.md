@@ -106,6 +106,13 @@ to deployment. The framework realizes this as:
   executes them against both engines inside rolled-back transactions.
 - **Traceability** — inventory → manifest entry → prompt bundle → converted DDL → apply
   report → reconciliation → equivalence report, all persisted in the workspace.
+- **Recorded human decisions** — each gate approval (who, when, channel, note, acknowledged
+  open items) and each decision on an ambiguity is written to `project.yaml`, with a fingerprint
+  of the approved artifacts; a later change makes the gate stale until it is re-approved.
+  `./dbmig review` renders all of it, with the code and test browsers, as a read-only site.
+- **Continuous clarification, front-loaded when preferred** — conversational by default; an
+  optional two-round markdown questionnaire collects intake and conversion policies up front,
+  in the AI-DLC style, and asks only about what no answer covered.
 
 ## A worked example
 

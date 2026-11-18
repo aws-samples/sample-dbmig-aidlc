@@ -193,3 +193,47 @@ def test_reimport_keeps_hand_reconverted_code(tmp_path, monkeypatch):
     (u2,) = yaml.safe_load(mpath.read_text())["units"]
     assert out.read_text() == "-- hand reconversion\n"
     assert u2["status"] == "applied" and u2["reconverted"] is True
+
+
+def _project_with_failed_apply(tmp_path):
+    """A DMS SC project: an ACCEPT table whose export to the target FAILED, and a
+    package container without DDL of its own (its routines are separate nodes)."""
+    s, t = tmp_path / "s-SRC", tmp_path / "t-TGT"
+    s.mkdir(parents=True)
+    t.mkdir()
+    sid = "Servers.SRC.Schemas.APP.Tables.EMP"
+    _node(s / "Schemas.APP.Tables.EMP",
+          {"meta-type": "TABLE", "id": sid, "name": "EMP",
+           "locator": {"schema-name": "APP", "table-name": "EMP"}, "sql": "CREATE TABLE EMP (id int)"})
+    _node(t / "Schemas.app.Tables.emp",
+          {"meta-type": "TABLE", "id": "Servers.TGT.Schemas.app.Tables.emp", "name": "emp",
+           "locator": {"schema-name": "app", "table-name": "emp"},
+           "synchronization_object": {"name": sid}, "sql": "CREATE TABLE app.emp (id int)"})
+    ar = tmp_path / "apply-result"
+    ar.mkdir()
+    (ar / "ar-1.csv").write_text('"Full Path","Timestamp","Status","Error"\n'
+                                 '"Servers.TGT.Schemas.app.Tables.emp","2026-11-17 14:08:17","ERROR",'
+                                 '"generation expression is not immutable"\n')
+    return tmp_path
+
+
+def test_apply_failed_objects_become_code_units(tmp_path, monkeypatch):
+    import yaml
+    from types import SimpleNamespace
+    from dbmig.commands import import_dms_sc
+
+    proj_dir = _project_with_failed_apply(tmp_path / "dms")
+    monkeypatch.setenv("DBMIG_MIGRATIONS_DIR", str(tmp_path / "migrations"))
+    args = SimpleNamespace(dms_sc_dir=str(proj_dir), schema=None, project="p")
+    assert import_dms_sc.run(args) == 0
+    m = yaml.safe_load((tmp_path / "migrations" / "p" / "02-construction" / "code-manifest-APP.yaml").read_text())
+    (u,) = [x for x in m["units"] if x["name"] == "emp"]
+    # ACCEPT conversion, but the export failed: it is not on the target and needs a fix
+    assert u["disposition"] == "accept" and u["status"] == "needs_human"
+    assert "not immutable" in u["dms_apply_error"]
+    # a unit the user skipped (needs_human decision) survives a re-import
+    u["status"] = "skipped"
+    (tmp_path / "migrations" / "p" / "02-construction" / "code-manifest-APP.yaml").write_text(yaml.safe_dump(m))
+    assert import_dms_sc.run(args) == 0
+    m = yaml.safe_load((tmp_path / "migrations" / "p" / "02-construction" / "code-manifest-APP.yaml").read_text())
+    assert [x["status"] for x in m["units"] if x["name"] == "emp"] == ["skipped"]

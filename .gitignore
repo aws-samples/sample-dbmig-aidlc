@@ -3,6 +3,8 @@ connections.yaml
 migration-config.yaml
 *.connections.yaml
 *.local.yaml
+# Round-1 questionnaire answered before the project name is known (may hold host names)
+/questionnaire.md
 
 # Per-run migration workspaces (artifacts, extracted DDL, data, reports)
 migrations/

@@ -13,7 +13,7 @@ finds, produces the dbmig artifacts that let the normal pipeline continue:
 
 Each object is classified **ACCEPT** (keep DMS SC output), **VERIFY** (keep, but prove
 with equivalence tests) or **MANUAL** (must be reconverted). See
-``docs/dms-sc-import-design.md``.
+``docs/dms-sc-continuation.md``.
 """
 from __future__ import annotations
 
@@ -271,7 +271,11 @@ def _emit_schema(args, ws_root: Path, schema: str, objs: List[DmsScObject],
         # Code objects also get a construction manifest unit + output file. So do
         # MANUAL storage objects (e.g. a table whose computed column DMS SC could not
         # convert): their reconversion is construction work too and must be tracked.
-        if o.category == "code" or o.disposition == MANUAL:
+        # So does any object whose DMS SC apply FAILED (it is not on the target, even
+        # when its conversion had no action items, e.g. a generated column DMS SC
+        # emitted with a non-immutable expression): it needs a fix and a re-apply.
+        apply_failed = (o.apply_status or "").upper() == "ERROR"
+        if o.category == "code" or o.disposition == MANUAL or apply_failed:
             code_dir.mkdir(parents=True, exist_ok=True)
             out_rel = f"code/{target_schema.lower()}/{base}.sql"
             out_path = constr / out_rel
@@ -286,7 +290,9 @@ def _emit_schema(args, ws_root: Path, schema: str, objs: List[DmsScObject],
                 "schema": schema,
                 "prompt_file": "",
                 "output_file": out_rel,
-                "status": _status_for(o.disposition),
+                "status": ("needs_human" if apply_failed
+                           else "empty" if not o.target_ddl and o.disposition != MANUAL
+                           else _status_for(o.disposition)),
                 "origin": "dms_sc",
                 "disposition": o.disposition,
                 "source_id": o.source_id,
@@ -300,7 +306,9 @@ def _emit_schema(args, ws_root: Path, schema: str, objs: List[DmsScObject],
                 unit["needs_verification"] = True
             if o.disposition == MANUAL:
                 unit["needs_manual_conversion"] = True
-            if prior is not None and (edited or prior.get("status") == "applied"):
+            if apply_failed:
+                unit["dms_apply_error"] = (o.apply_error or "")[:2000]
+            if prior is not None and (edited or prior.get("status") in ("applied", "skipped")):
                 for k in ("status", "post_status", "reconverted", "error"):
                     if k in prior:
                         unit[k] = prior[k]

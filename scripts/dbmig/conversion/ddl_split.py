@@ -22,19 +22,42 @@ import re
 from typing import List, Tuple
 
 _DOLLAR_TAG = re.compile(r"\$[A-Za-z0-9_]*\$")
+# A routine/trigger definition whose body is a BEGIN ... END block that is NOT
+# dollar-quoted (MySQL compound statements, PostgreSQL ``BEGIN ATOMIC``). Inside such
+# a body, ``;`` ends inner statements, not the definition.
+_ROUTINE_HEAD = re.compile(
+    r"^CREATE\s+(?:OR\s+REPLACE\s+)?(?:DEFINER\s*=\s*\S+\s+)?"
+    r"(?:TRIGGER|PROCEDURE|FUNCTION|EVENT)\b", re.IGNORECASE)
+_END_NOT_BLOCK = {"IF", "LOOP", "WHILE", "REPEAT"}
+
+
+def _word_at(sql: str, i: int) -> str:
+    j = i
+    while j < len(sql) and (sql[j].isalnum() or sql[j] in "_$#"):
+        j += 1
+    return sql[i:j]
+
+
+def _next_word(sql: str, i: int) -> str:
+    while i < len(sql) and sql[i].isspace():
+        i += 1
+    return _word_at(sql, i).upper()
 
 
 def split_statements(sql: str) -> List[str]:
     """Split a SQL script into individual statements on top-level ``;``.
 
-    Semicolons inside string literals, quoted identifiers, comments, or
-    dollar-quoted bodies do not terminate a statement.
+    Semicolons inside string literals, quoted identifiers, comments,
+    dollar-quoted bodies, or the ``BEGIN ... END`` body of a routine/trigger
+    definition (MySQL compound statements, PostgreSQL ``BEGIN ATOMIC``) do not
+    terminate a statement.
     """
     stmts: List[str] = []
     buf: List[str] = []
     i, n = 0, len(sql)
     in_squote = in_dquote = in_line = in_block = False
     dollar = None  # active dollar-quote tag, e.g. "$$" or "$body$"
+    depth = 0      # BEGIN/CASE ... END nesting inside a routine body
 
     while i < n:
         ch = sql[i]
@@ -95,6 +118,29 @@ def split_statements(sql: str) -> List[str]:
             dollar = m.group(0)
             buf.append(dollar)
             i += len(dollar)
+        elif (ch.isalpha() or ch == "_") and (i == 0 or not (sql[i - 1].isalnum() or sql[i - 1] in "_$#")):
+            word = _word_at(sql, i)
+            up = word.upper()
+            if up in ("BEGIN", "CASE") and (depth or _ROUTINE_HEAD.match(
+                    _strip_leading_comments("".join(buf)).lstrip())):
+                depth += 1
+            elif up == "END" and depth and _next_word(sql, i + len(word)) not in _END_NOT_BLOCK:
+                depth -= 1
+            buf.append(word)
+            i += len(word)
+            if up == "END" and depth >= 0:
+                # consume the qualifier of END CASE / END IF / END LOOP / ... so it is
+                # not read as the start of a new CASE block
+                j = i
+                while j < n and sql[j].isspace():
+                    j += 1
+                if _word_at(sql, j).upper() in _END_NOT_BLOCK | {"CASE"}:
+                    q = _word_at(sql, j)
+                    buf.append(sql[i:j] + q)
+                    i = j + len(q)
+        elif ch == ";" and depth:
+            buf.append(ch)
+            i += 1
         elif ch == ";":
             buf.append(ch)
             stmt = "".join(buf).strip()

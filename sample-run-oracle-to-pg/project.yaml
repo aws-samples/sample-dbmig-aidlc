@@ -1,0 +1,176 @@
+# dbmig project file. Gate records and decisions are written by `./dbmig gate`
+# and `./dbmig decision`; do not approve by hand-editing. Settings live in
+# migration-config.yaml.
+version: 1
+project: sample-run-oracle-to-pg
+createdAt: '2026-11-17T15:10:41Z'
+entryPath: fresh
+pair: oracle-to-postgresql
+schemas:
+- DEMO
+strategy: full
+gates:
+  inception:
+    status: approved
+    history:
+    - status: approved
+      by: framework owner (release test)
+      at: '2026-11-17T15:10:41Z'
+      via: cli
+      note: fulltext_redesign decided as tsvector + GIN
+    by: framework owner (release test)
+    at: '2026-11-17T15:10:41Z'
+    via: cli
+    acknowledged: []
+    fingerprint:
+      algo: sha256
+      digest: eb2d6cfea8ddaa1a4ce89464f9092ee9133f0b6f216d0d4ff5c042c0f257b8d0
+      files:
+        01-assessment/inventory-DEMO.json: cdca7235cc65dad936c32876ac68802bfe9a54f2167cc03ccd3c0714398f580d
+        01-assessment/inventory-DEMO.yaml: 22455aa877bcca4f400469ba21a36adbcde81ad22289903cf6e02ddec869fde1
+        01-assessment/inventory.md: 479704f43294c643384812a612444c63d1fcf6ddbe5c76be9dffbf0d6ea28aed
+        01-assessment/migration-plan.md: 1f80931091eadc6688f71b4688b715c36617d2ed4ad0c04d2a91d02f10396cd4
+        01-assessment/preflight.md: 8b6f195a464c408322c5204d6b76f20ba33e145b483071f0c43f6a0e1e6354cc
+    note: fulltext_redesign decided as tsvector + GIN
+  construction:
+    status: approved
+    history:
+    - status: approved
+      by: framework owner (release test)
+      at: '2026-11-17T15:10:41Z'
+      via: cli
+      note: 14/14 tables, 15/15 code objects applied first pass
+    by: framework owner (release test)
+    at: '2026-11-17T15:10:41Z'
+    via: cli
+    acknowledged: []
+    fingerprint:
+      algo: sha256
+      digest: 3045d9132a00c591877b3019d496d6f643edd81d4664ccb3e79019796a1282be
+      files:
+        02-construction/apply_report-DEMO.yaml: ef68da72ebe3d14d3b302f1e280fe9bfc1a72d11fc8da3e89d4fdbd8b0ce27c2
+        02-construction/apply_report_code-DEMO.yaml: 6d1732bb76c4b456bfaaf7480cc0ac78f0b289a222848e2bc03553be2fc827fc
+        02-construction/code/demo/function__calculate_discount_pct.sql: d608e410e04e1d994f48b2012588a45f8ac8032816a2d6f85eecd58fbe4b3b13
+        02-construction/code/demo/function__get_condition_name.sql: 67c2261ecb9dbe4263a0c818b9dc3c3426ab044bab0cd656453db2974727cd0b
+        02-construction/code/demo/function__get_customer_full_name.sql: 02400729d63f968f1142e9f107a9a60339e059b8e11d1103612e96d372edd802
+        02-construction/code/demo/function__get_customer_lifetime_value.sql: 8d94c837fbaf9c2fe7ea3759269f5c328f97535c4b73329aad8e18caa5971462
+        02-construction/code/demo/function__get_genre_name.sql: c6ddb9841ee7f8e7f43f175b65d2aa965fb5e0e829595ac574d5e76b74bff9a2
+        02-construction/code/demo/package__book_pkg.sql: a68fd448c539febfd0a668c6b9a329e361f742f1ab58d7648a517de948338722
+        02-construction/code/demo/package__inventory_pkg.sql: d3d1b4a651053b6683c1337d284bf1e19f096d693e1248dbc859075b5d1d2aec
+        02-construction/code/demo/package__order_pkg.sql: 5a79621e5f7f3fb5bab8d00439f8a23aa86fb52d92dcc1b850435f227c2adf83
+        02-construction/code/demo/package__reporting_pkg.sql: ad736a4f610c33ec86b896f9fb56c28ddc305742afa18aaa520ce088a5c69f4e
+        02-construction/code/demo/package__validation_pkg.sql: 6219ac3c409883a251fab10410702abcd55e37b442a866af84d0d67c5c052d22
+        02-construction/code/demo/procedure__archive_old_orders.sql: 5cdef6ef75820ccb3042bd4f756a4e86f06ca089ace72dee8cf2368e8a30aa14
+        02-construction/code/demo/procedure__clear_shopping_cart.sql: 06724f49b926c47c969d8a8b3481c9b5704eff9fb6d8554022f9b2254489020a
+        02-construction/code/demo/procedure__generate_sales_report.sql: 92133cd587784d728e64f428dce064c639ece932ec4a927ba15bff0cc10d756b
+        02-construction/code/demo/procedure__process_customer_offer.sql: 130bc5fa79f0e818ce7b86a803490fc6286953f0ee74d7c2e97f9c27c2e835d9
+        02-construction/code/demo/procedure__set_book_featured.sql: ff31f3f2a63a036a7ad02713ba902efb47140daead2492555e80cfbb8333482a
+        02-construction/code-manifest-DEMO.yaml: 6def0a015c588052e1a802ba9dd96920cd7c2931e8b696209fb73e5e0b58b126
+        02-construction/conversion-log.md: 27848e059716ed1f5aae965656d1dc1c0c62a9e21b4b229576762ef7510e5d2b
+        02-construction/ddl/demo/addresses.sql: 09dffdfbb3c70254a0adcbde0a8a7446d10e3e12d359f912ccd4549aa40bb7b1
+        02-construction/ddl/demo/book_types.sql: c58bd2ea8d78243f9bbeaadc13fa8be8987399be927baf8c28576371188b9b2d
+        02-construction/ddl/demo/books.sql: 906c4eb5c6d20c92b136420aa44e5eade8fc11b598a06f7823198d7e4410f93e
+        02-construction/ddl/demo/books_cover.sql: bd536cc89e6f6474840d6a3b0c01cd903489438c900253ebea0b2bd9bfa49727
+        02-construction/ddl/demo/conditions.sql: e3ff14be5231545ec048561e9a643b671a7c2de2da69e39a8ac53821374ae37a
+        02-construction/ddl/demo/customers.sql: dbfcd65df86f1a871d1eeca440897e6ba20303705c624706c7e7e2bfbe325329
+        02-construction/ddl/demo/genres.sql: 9a9382c027cbbf2966b4e457ecf9bd5d06ac0cbbba5dcc288cbc960ad72b3af0
+        02-construction/ddl/demo/listings.sql: 5fbdb32489e61f2f4c8a251fbed719e310ec5eba0c82682532149784888ff669
+        02-construction/ddl/demo/order_items.sql: bc5799f526c8312dc6d2fa5a24baed247de016f9011e8a685c4007855cd3cae3
+        02-construction/ddl/demo/orders.sql: a5f566967ec7b526ed3ecf35019577e9895e17de2bf915bfbd08cac654302a81
+        02-construction/ddl/demo/password_reset_tokens.sql: f16523e675fb978124859b7b09b1d6423fd55bae6f4c77b2452c5d3d0956d157
+        02-construction/ddl/demo/persistent_logins.sql: b725ce3133815cc07c73e304a7518a653cf704a1c8b22c3fcb90b5b24395d285
+        02-construction/ddl/demo/publishers.sql: ae09bda49bab63ffb5ab35c4aa5aea7e99e8e6d60b371e38f47382b0292d24bd
+        02-construction/ddl/demo/shopping_cart_items.sql: 7000e778dd6132a4f8efa71ccb6704f9eb2205902e77b3f9ffcb3cdbca95734c
+        02-construction/manifest-DEMO.yaml: e0c348addd0281c3f0388a128387984090431196bebd59e83f4c184193c2ad21
+    note: 14/14 tables, 15/15 code objects applied first pass
+  validation:
+    status: approved
+    history:
+    - status: approved
+      by: framework owner (release test)
+      at: '2026-11-17T15:10:41Z'
+      via: cli
+      note: 14/14 reconcile, 58/58 tests, 4 LOW_COVERAGE objects
+    by: framework owner (release test)
+    at: '2026-11-17T15:10:41Z'
+    via: cli
+    acknowledged: []
+    fingerprint:
+      algo: sha256
+      digest: 589812f2c5963b07ef5b0583746a06bb69cb0f7b8f6fc50fe2a735af02b4f17b
+      files:
+        03-validation/equivalence-report-DEMO.md: d59fff9ee2dd0ae6547149cdb63cabbf2e26af7679ebc5a24df7eced21383454
+        03-validation/equivalence-report-DEMO.yaml: f8e727deea4ccb1a335e767f94425424d32972b08946cbac527f578e479609da
+        03-validation/reconcile_report-DEMO.yaml: b96991e076cbe3d2ca1f328ee8d474e6dfb2cf76ee084438e69185fbbc1f8989
+        03-validation/test-manifest-DEMO.yaml: 8366f4a6b7909eebfcbf23ff718bcc8f722d4da5c8ed251883b8f9b972a38093
+        03-validation/test_prompts/DEMO/batch_0001.prompt.md: e083e176eb2742e8758f9153321c6486ca4b088996947d789368468b6ef95c59
+        03-validation/test_prompts/DEMO/batch_0002.prompt.md: df85ebd7b5aaaee0669b5b627f604412856b39869e26884103cea15ea745d635
+        03-validation/test_prompts/DEMO/batch_0003.prompt.md: a46c4288c43860ef55bcd6bc89295e11f5bdbd85a37736a7220c40660b4fabbb
+        03-validation/test_prompts/DEMO/procedure__set_book_featured.prompt.md: 90f39028e7c9a446b9abd08861b5dabdad0e97e6409a853415a0a60df04bc1dd
+        03-validation/tests/DEMO/function__calculate_discount_pct.test.yaml: 76427c17551f4ddea18668274293c1b1ca636ca6e3a60d604ff0d009023f97f8
+        03-validation/tests/DEMO/function__get_condition_name.test.yaml: 1b33c20c03aad27aaee822def72787a37666258117634f71cce06cd2567516e2
+        03-validation/tests/DEMO/function__get_customer_full_name.test.yaml: 54f963ee0f496947509929a6de29e7feb3d5138d642f2982fd1a3f8c20bd08e4
+        03-validation/tests/DEMO/function__get_customer_lifetime_value.test.yaml: 397926371f5f31d0b50cd3a50a5ed30b9b1c0f416c7780dc9fde071e0382b2c0
+        03-validation/tests/DEMO/function__get_genre_name.test.yaml: 911976a904904860df8b2116c483a75575d8e8f4107def0642755ebccd7f1d73
+        03-validation/tests/DEMO/package__book_pkg.test.yaml: 134c99f0bfb2b0578ae1c2e448a2cefd3c2005de44e77898b11b6a751e657a20
+        03-validation/tests/DEMO/package__inventory_pkg.test.yaml: ec477e245285c366dab98b680d10b5c7b62b7396b735b7b43baf7a61e46acb2b
+        03-validation/tests/DEMO/package__order_pkg.test.yaml: 8e52f80367fe07e25c4cd40e5979c9956f4a4cd508b88121a2139bff37523815
+        03-validation/tests/DEMO/package__reporting_pkg.test.yaml: 68a00261523be6297cd184558ea48832c590d21f20ec6e8ed5b3e7e52a158509
+        03-validation/tests/DEMO/package__validation_pkg.test.yaml: c6ba858579301ab2e1e44a6273fe2c36c00c27303e9c8b3b5cee6108af223961
+        03-validation/tests/DEMO/procedure__archive_old_orders.test.yaml: 4f26d493ed12740f348edfbe5d566da9e6659091b26ae5aca4f29fd296948fbc
+        03-validation/tests/DEMO/procedure__clear_shopping_cart.test.yaml: df2e70c2b41e81f02e746d2f082e2eb0633e3040439a72ae76ad1ffacdcaf3f4
+        03-validation/tests/DEMO/procedure__generate_sales_report.test.yaml: bf8aa5bb9e67966d1f9f69ce6f0fdd25e833edd59e14fcb0b1656660de316acf
+        03-validation/tests/DEMO/procedure__process_customer_offer.test.yaml: 51423b3cc6c9fe0eaefdd70ff43604e4298f9282706d413b76aef5fcfc803cd7
+        03-validation/tests/DEMO/procedure__set_book_featured.test.yaml: 27d5cefcda43426a0476c20645b2563729cd63dbc737310580f174876c494372
+        03-validation/validation-summary.md: 4eabb33c34621b2d16fc978c6d8e64055fee5e9479d20fa344ef830c54b5a362
+        data/migrate_report-DEMO.yaml: a0026eb28c0ddbb238a749a409c356f1ac34c4a7d35fc6060b163020139c0114
+        02-construction/apply_report_postdata-DEMO.yaml: bb61dac0584e2e7b53b2f1cb9e6ca75f40d8e292466b2fbbfad2495f4ac839b4
+    note: 14/14 reconcile, 58/58 tests, 4 LOW_COVERAGE objects
+  operations:
+    status: approved
+    history:
+    - status: approved
+      by: framework owner (release test)
+      at: '2026-11-17T15:10:42Z'
+      via: cli
+      note: runbook/rollback/monitoring with the AI-generated disclaimer
+    by: framework owner (release test)
+    at: '2026-11-17T15:10:42Z'
+    via: cli
+    acknowledged: []
+    fingerprint:
+      algo: sha256
+      digest: 163158659432bd187ace8bb6cde7577890be4f3de5be166f22d20e5a467ee32a
+      files:
+        04-operations/cutover-runbook.md: 1380b70c3296499bcc14b956f7c1d79fd98d14c95cf115c3f1fb39704334a48d
+        04-operations/monitoring.md: a4a9fb579914c394acf9f40fc596dc34cee6c05b709ad4abce121e5960467022
+        04-operations/rollback-plan.md: e3ad461717a77c7205cb395d6aecc1dd1fa08bbb520105e4d4f2a2534dddb791
+    note: runbook/rollback/monitoring with the AI-generated disclaimer
+decisions:
+- id: D-001
+  phase: inception
+  kind: fulltext_redesign
+  objects:
+  - DEMO.BOOKS
+  question: How should the Oracle Text (CONTEXT/CTXCAT) index be redesigned on the target?
+  options:
+  - id: native
+    label: 'Native full-text search: generated tsvector column + GIN index'
+    recommended: true
+  - id: trigram
+    label: Substring search with pg_trgm GIN index
+  - id: external
+    label: Move search to an external engine (e.g. Amazon OpenSearch Service); drop the index from the
+      migration
+  - id: drop
+    label: Drop the index; the application no longer needs it
+  raisedBy: step:inventory
+  raisedAt: '2026-11-17T15:10:41Z'
+  status: decided
+  choice: native
+  by: framework owner (release test)
+  at: '2026-11-17T15:10:41Z'
+  via: cli
+  rationale: option A in migration-plan.md (tsvector + GIN); requires owner sign-off
+sample: 'Framework validation run: gates were approved by the framework owner for the release test, not
+  by a customer. In a real migration each gate is an explicit human approval.'

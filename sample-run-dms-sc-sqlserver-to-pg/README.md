@@ -134,5 +134,5 @@ data/migrate_report-<SCHEMA>.yaml         # data-load results
 ```
 
 All values are masked; see `sample_connections.yaml` and `sample_migration-config.yaml` for
-the configuration shape. Design and command reference:
-[`docs/dms-sc-import-design.md`](../docs/dms-sc-import-design.md).
+the configuration shape. Guide and command reference:
+[`docs/dms-sc-continuation.md`](../docs/dms-sc-continuation.md).

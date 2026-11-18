@@ -448,6 +448,12 @@ def write_shared_context(ws: Path, phase: str, repo_root: Optional[Path] = None,
     Each prompt then carries a one-line reference instead of the full block.
     Returns the path relative to the run workspace (e.g. ``02-construction/_context-code.md``)."""
     body = build_context(repo_root, pair=pair, phase=phase)
+    # Customer decisions (questionnaire policies + answered decisions in project.yaml)
+    # go first: they have the same precedence as the customer-specific rules.
+    from ..questionnaire import policies_block
+    decided = policies_block(ws.parent)
+    if decided:
+        body = decided + "\n\n---\n\n" + body
     ws.mkdir(parents=True, exist_ok=True)
     name = shared_context_name(phase)
     (ws / name).write_text(

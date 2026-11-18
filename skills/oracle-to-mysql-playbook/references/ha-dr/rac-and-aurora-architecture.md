@@ -8,6 +8,8 @@
 
 > **Reviewed for Aurora MySQL 8.4 and 3** (validated on 8.4.8 and 3.13.0, 2026-10-29): One writer per cluster on 3 / 8.4 (multi-master retired), local write forwarding, custom endpoints for RAC services, AWS driver wrappers / RDS Proxy for FAN/TAF.
 
+> **Content security review** (2026-11-18): the failover figure now cites the Aurora MySQL handbook.
+
 ## Oracle
 
 Oracle Real Application Clusters (RAC) lets multiple Oracle instances access a single database in Active-Active mode, providing high availability, scalability, and load balancing.
@@ -44,7 +46,7 @@ Each cluster can have:
 - One primary handling writes and reads.
 - Up to **15 read replicas**, used for read scalability and HA (failover nodes, each in any of the three AZs).
 
-Storage: the Aurora volume is made of 10 GB segments, six copies across three AZs. Replicas share the same underlying volume as the primary. Replica promotion usually completes in **under 30 seconds with no data loss**. For a durable write, the primary sends redo to six storage nodes (two per AZ) and waits for four of six to acknowledge. No database pages are written from the DB tier to the storage tier; the storage volume applies redo to generate pages asynchronously.
+Storage: the Aurora volume is made of 10 GB segments, six copies across three AZs. Replicas share the same underlying volume as the primary. A failover to a replica typically happens **within 30 seconds** ([Amazon Aurora MySQL Database Administrator's Handbook](https://docs.aws.amazon.com/whitepapers/latest/amazon-aurora-mysql-db-admin-handbook/designing-for-fault-tolerance-and-quick-recovery.html)), with no loss of committed data because replicas share the cluster volume. These are typical values from AWS documentation; measure failover and lag on your own workload. For a durable write, the primary sends redo to six storage nodes (two per AZ) and waits for four of six to acknowledge. No database pages are written from the DB tier to the storage tier; the storage volume applies redo to generate pages asynchronously.
 
 ### High availability and scale-out endpoints
 
